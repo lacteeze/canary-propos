@@ -1,0 +1,165 @@
+html:has(.cland2),
+html:has(.cland2) body {
+  margin: 0;
+  padding: 0;
+  background: #f6f1e7;
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+.cland2 {
+  --bg: #f6f1e7;
+  --panel: #fdfbf6;
+  --elev: #ffffff;
+  --hover: #f1e9da;
+  --border: #e6dcc9;
+  --border2: #d5c8ad;
+  --text: #2b251d;
+  --dim: #7d7263;
+  --faint: #a4988a;
+  --accent: #c96343;
+  --accent-hi: #b5573a;
+  --accent-text: #fff6f0;
+  --yellow: #f0c445;
+  --yellow-hi: #e5b52e;
+  --yellow-text: #33270a;
+  --green: #6d9866;
+  --ink: #211c15;
+  --ink2: #2c261d;
+  --ink-border: #3f382c;
+  --ink-text: #f4efe6;
+  --ink-dim: #a89a84;
+  --shadow: 0 18px 50px rgba(70, 55, 35, 0.14), 0 2px 8px rgba(70, 55, 35, 0.08);
+  box-sizing: border-box;
+}
+
+.cland2 *,
+.cland2 *::before,
+.cland2 *::after {
+  box-sizing: border-box;
+}
+
+.cland2 input,
+.cland2 button,
+.cland2 select {
+  font-family: var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif;
+  font-size: inherit;
+  color: inherit;
+}
+
+.cland2 ::placeholder {
+  color: var(--faint);
+}
+
+@keyframes cl2up {
+  from {
+    opacity: 0;
+    transform: translateY(34px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cl2fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes cl2cue {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translateY(9px);
+    opacity: 0.4;
+  }
+}
+
+@keyframes cl2marq {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.cland2.cl2-dark {
+  --bg: #171310;
+  --panel: #1e1a15;
+  --elev: #262019;
+  --hover: #2e2720;
+  --border: #332c23;
+  --border2: #463c2e;
+  --text: #f0e9dd;
+  --dim: #a39683;
+  --faint: #786c5c;
+  --ink: #100d0a;
+  --ink2: #1a1611;
+  --ink-border: #332c22;
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.cland2 .cl2-swipe {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.cland2 a:hover .cl2-swipe {
+  opacity: 1;
+}
+
+.cland2 .cl2-burger {
+  display: none;
+}
+
+.cland2 .cl2-nav-link:hover,
+.cland2 .cl2-btn-yellow:hover,
+.cland2 .cl2-btn-hero:hover,
+.cland2 .cl2-btn-ink:hover,
+.cland2 .cl2-btn-outline:hover,
+.cland2 .cl2-big-row:hover,
+.cland2 .cl2-card:hover,
+.cland2 .cl2-step:hover,
+.cland2 .cl2-search-result:hover,
+.cland2 .cl2-suggestion:hover,
+.cland2 .cl2-portal-link:hover,
+.cland2 .cl2-lang-btn:hover {
+  transition: all 0.2s ease;
+}
+
+@media (max-width: 920px) {
+  .cland2 .cl2-nav,
+  .cland2 .cl2-searchwrap,
+  .cland2 .cl2-hdrctl {
+    display: none !important;
+  }
+
+  .cland2 .cl2-burger {
+    display: grid !important;
+  }
+
+  .cland2 .cl2-grid2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .cland2 .cl2-sticky {
+    position: static !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cland2 * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

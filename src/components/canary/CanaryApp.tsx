@@ -7,6 +7,7 @@ import React, { useCallback, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { deleteDraftListing, saveDraftListing, savePaymentEntry } from '@/app/actions/canary'
+import CanaryImport from './CanaryImport'
 import type { CanaryDb, CanaryDraft, CanaryLease, CanaryPayment, CanaryPerson, CanaryPortfolio, CanaryProject, CanaryProperty, CanaryRole } from '@/lib/canary/types'
 import './canary.css'
 
@@ -96,6 +97,7 @@ const ICONS: Record<string, string[]> = {
   portfolios: ['M3 7h18v13H3z', 'M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'],
   payments: ['M12 1v22', 'M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'],
   projects: ['M9 11l3 3L22 4', 'M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'],
+  import: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M7 10l5 5 5-5', 'M12 15V3'],
 }
 
 const monoLabel: React.CSSProperties = { fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--dim)' }
@@ -362,6 +364,7 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
     { key: 'portfolios', label: 'Portfolios', hideFor: ['Tenant', 'Vendor'] },
     { key: 'payments', label: 'Payments', hideFor: ['Vendor'] },
     { key: 'projects', label: 'Projects' },
+    { key: 'import', label: 'Import', privOnly: true },
   ]
   const navItems = allNav
     .filter((n) => !(n.privOnly && !priv))
@@ -1295,6 +1298,9 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
               )}
             </section>
           )}
+
+          {/* ============ IMPORT ============ */}
+          {view === 'import' && priv && <CanaryImport />}
 
           {/* ============ GENERIC TABLE VIEW ============ */}
           {showTable && pdef && (

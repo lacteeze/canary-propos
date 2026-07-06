@@ -6,9 +6,6 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import {
   Form,
   FormControl,
@@ -55,34 +52,17 @@ export default function SignUpPage() {
   }
 
   return (
-    <Card className="w-full max-w-[400px] shadow-sm">
-      <CardHeader className="pb-4 text-center">
-        <div className="mx-auto mb-2 flex items-center gap-1.5">
-          <span className="text-xl font-semibold" style={{ color: '#D97706' }}>
-            Canary
-          </span>
-          <span className="text-xl font-semibold text-stone-700">PropOS</span>
-        </div>
-        <h1
-          className="text-[1.75rem] font-semibold leading-tight text-stone-900"
-          style={{ lineHeight: '1.2' }}
-        >
-          Create your account
-        </h1>
-        <p className="text-sm text-stone-500">
-          Start your free property management workspace.
-        </p>
-      </CardHeader>
+    <div className="auth-card">
+      <p className="auth-kicker">Get started</p>
+      <h1 className="auth-title">Create your account</h1>
+      <p className="auth-sub">Start your free property management workspace.</p>
 
-      <CardContent className="space-y-5">
+      <div className="space-y-5">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             {error && (
-              <div
-                role="alert"
-                className="rounded-md border border-red-200 bg-red-50 p-3"
-              >
-                <p className="text-sm text-red-700">{error}</p>
+              <div role="alert" className="auth-alert auth-alert-error">
+                {error}
               </div>
             )}
 
@@ -93,8 +73,9 @@ export default function SignUpPage() {
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input
+                    <input
                       type="email"
+                      className="auth-input"
                       placeholder="you@example.com"
                       autoFocus
                       autoComplete="email"
@@ -114,18 +95,18 @@ export default function SignUpPage() {
                   <FormLabel>Password</FormLabel>
                   <FormControl>
                     <div className="relative">
-                      <Input
+                      <input
                         type={showPassword ? 'text' : 'password'}
+                        className="auth-input pr-11"
                         placeholder="Min. 8 characters"
                         autoComplete="new-password"
-                        className="pr-10"
                         {...field}
                       />
                       <button
                         type="button"
                         aria-label={showPassword ? 'Hide password' : 'Show password'}
                         title={showPassword ? 'Hide password' : 'Show password'}
-                        className="absolute inset-y-0 right-0 flex items-center px-3 text-stone-400 hover:text-stone-600"
+                        className="auth-eye"
                         onClick={() => setShowPassword((v) => !v)}
                       >
                         {showPassword ? (
@@ -141,35 +122,26 @@ export default function SignUpPage() {
               )}
             />
 
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="min-h-11 w-full font-semibold"
-              style={{ backgroundColor: '#D97706', color: '#ffffff' }}
-            >
+            <button type="submit" disabled={isLoading} className="auth-btn">
               {isLoading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                   Creating account...
                 </>
               ) : (
                 'Create your organization'
               )}
-            </Button>
+            </button>
           </form>
         </Form>
 
-        <p className="text-center text-sm text-stone-500">
+        <p className="auth-muted">
           Already have an account?{' '}
-          <Link
-            href="/login"
-            className="font-medium underline-offset-4 hover:underline"
-            style={{ color: '#D97706' }}
-          >
+          <Link href="/login" className="auth-link">
             Sign in
           </Link>
         </p>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

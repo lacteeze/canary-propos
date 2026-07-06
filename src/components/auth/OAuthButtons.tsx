@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 
 // Google SVG logo
@@ -68,46 +67,45 @@ export function OAuthButtons() {
 
   return (
     <div className="space-y-3">
-      <Button
+      <button
         type="button"
-        variant="outline"
-        className="min-h-11 w-full border border-stone-300 bg-white text-stone-900 hover:bg-stone-50"
+        className="auth-btn-outline"
         onClick={() => handleOAuth('google')}
         disabled={loadingProvider !== null}
         aria-label="Continue with Google"
       >
         {loadingProvider === 'google' ? (
           <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             Redirecting to Google...
           </>
         ) : (
           <>
             <GoogleLogo />
-            <span className="ml-2">Continue with Google</span>
+            Continue with Google
           </>
         )}
-      </Button>
+      </button>
 
-      <Button
+      <button
         type="button"
-        className="min-h-11 w-full bg-black text-white hover:bg-stone-900"
+        className="auth-btn-outline"
         onClick={() => handleOAuth('apple')}
         disabled={loadingProvider !== null}
         aria-label="Continue with Apple"
       >
         {loadingProvider === 'apple' ? (
           <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             Redirecting to Apple...
           </>
         ) : (
           <>
             <AppleLogo />
-            <span className="ml-2">Continue with Apple</span>
+            Continue with Apple
           </>
         )}
-      </Button>
+      </button>
     </div>
   )
 }

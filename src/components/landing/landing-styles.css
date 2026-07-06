@@ -8,6 +8,9 @@ html:has(.cland2) body {
 }
 
 .cland2 {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
   --bg: #f6f1e7;
   --panel: #fdfbf6;
   --elev: #ffffff;
@@ -17,9 +20,9 @@ html:has(.cland2) body {
   --text: #2b251d;
   --dim: #7d7263;
   --faint: #a4988a;
-  --accent: #c96343;
-  --accent-hi: #b5573a;
-  --accent-text: #fff6f0;
+  --accent: #4d6b46;
+  --accent-hi: #415a3b;
+  --accent-text: #f2f6f0;
   --yellow: #f0c445;
   --yellow-hi: #e5b52e;
   --yellow-text: #33270a;
@@ -29,6 +32,8 @@ html:has(.cland2) body {
   --ink-border: #3f382c;
   --ink-text: #f4efe6;
   --ink-dim: #a89a84;
+  --str-pill: #ff5a5f;
+  --str-pill-text: #ffffff;
   --shadow: 0 18px 50px rgba(70, 55, 35, 0.14), 0 2px 8px rgba(70, 55, 35, 0.08);
   box-sizing: border-box;
 }
@@ -102,6 +107,9 @@ html:has(.cland2) body {
   --text: #f0e9dd;
   --dim: #a39683;
   --faint: #786c5c;
+  --accent: #8aab7e;
+  --accent-hi: #9dbc90;
+  --accent-text: #1a2217;
   --ink: #100d0a;
   --ink2: #1a1611;
   --ink-border: #332c22;
@@ -115,6 +123,39 @@ html:has(.cland2) body {
 
 .cland2 a:hover .cl2-swipe {
   opacity: 1;
+}
+
+.cland2 .cl2-str-pill {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: var(--str-pill);
+  color: var(--str-pill-text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 5px 11px;
+  border-radius: 999px;
+}
+
+.cland2 .cl2-homes-browse.cnry-browse {
+  --bg: var(--bg);
+  --panel: var(--panel);
+  --elev: var(--elev);
+  --hover: var(--hover);
+  --border: var(--border);
+  --border2: var(--border2);
+  --text: var(--text);
+  --dim: var(--dim);
+  --faint: var(--faint);
+  --accent: var(--accent);
+  --accent-text: var(--accent-text);
+  --ink: var(--ink);
+  --ink-text: var(--ink-text);
+  --input: var(--panel);
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
 }
 
 .cland2 .cl2-burger {
@@ -136,6 +177,122 @@ html:has(.cland2) body {
   transition: all 0.2s ease;
 }
 
+.cland2 .cl2-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 18px;
+  min-width: 0;
+}
+
+.cland2 .cl2-services-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.cland2 .cl2-check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 9px 20px;
+  min-width: 0;
+}
+
+.cland2 .cl2-fee-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.cland2 .cl2-big-row {
+  display: flex;
+  align-items: baseline;
+  gap: 26px;
+  text-decoration: none;
+  color: var(--ink-text);
+  border-top: 1px solid var(--ink-border);
+  padding: 30px 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.cland2 .cl2-big-num {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  color: var(--ink-dim);
+  flex: none;
+  width: 36px;
+}
+
+.cland2 .cl2-big-word {
+  font-size: clamp(42px, 7vw, 96px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  flex: none;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 4px;
+}
+
+.cland2 .cl2-big-title {
+  flex: none;
+}
+
+.cland2 .cl2-big-word em {
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--yellow);
+  font-size: 0.55em;
+  margin-left: 0;
+  line-height: 1.15;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cland2 .cl2-big-sub {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.cland2 .cl2-big-sub-text {
+  color: var(--ink-dim);
+  font-size: 14px;
+  text-align: right;
+  max-width: 32ch;
+  line-height: 1.45;
+}
+
+.cland2 .cl2-big-arrow {
+  font-size: 26px;
+  color: var(--yellow);
+  flex: none;
+}
+
+.cland2 .cl2-big-section {
+  width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+}
+
+.cland2 .cl2-big-inner {
+  max-width: 1380px;
+  margin: 0 auto;
+  padding: 90px clamp(16px, 4vw, 26px);
+  width: 100%;
+  min-width: 0;
+}
+
 @media (max-width: 920px) {
   .cland2 .cl2-nav,
   .cland2 .cl2-searchwrap,
@@ -149,10 +306,99 @@ html:has(.cland2) body {
 
   .cland2 .cl2-grid2 {
     grid-template-columns: 1fr !important;
+    min-width: 0;
   }
 
   .cland2 .cl2-sticky {
     position: static !important;
+  }
+
+  .cland2 .cl2-big-row {
+    display: grid !important;
+    grid-template-columns: 32px minmax(0, 1fr);
+    grid-template-areas:
+      'num word'
+      'sub sub';
+    gap: 8px 12px;
+    align-items: start;
+    padding: 22px 0 !important;
+  }
+
+  .cland2 .cl2-big-num {
+    grid-area: num;
+    align-self: start;
+    padding-top: 6px;
+  }
+
+  .cland2 .cl2-big-word {
+    grid-area: word;
+    font-size: clamp(28px, 9vw, 48px) !important;
+    line-height: 1.08 !important;
+    column-gap: 8px;
+  }
+
+  .cland2 .cl2-big-word em {
+    font-size: 0.44em !important;
+    line-height: 1.15;
+  }
+
+  .cland2 .cl2-big-sub {
+    grid-area: sub;
+    margin-left: 0 !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    flex: unset !important;
+  }
+
+  .cland2 .cl2-big-sub-text {
+    text-align: left !important;
+    max-width: none !important;
+    font-size: 13.5px !important;
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .cland2 .cl2-big-row {
+    gap: 6px 10px;
+    padding: 18px 0 !important;
+  }
+
+  .cland2 .cl2-big-word {
+    font-size: clamp(26px, 8.5vw, 40px) !important;
+  }
+
+  .cland2 .cl2-services-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cland2 .cl2-step {
+    flex-direction: column;
+    gap: 12px !important;
+    padding: 20px 18px !important;
+  }
+
+  .cland2 .cl2-step > span:first-child {
+    width: auto !important;
+    font-size: 40px !important;
+  }
+
+  .cland2 .cl2-homes-browse .cnry-browse select.ml-auto {
+    margin-left: 0 !important;
+    width: 100%;
+  }
+
+  .cland2 .cl2-homes-browse .cnry-browse > div:last-child {
+    gap: 8px;
+  }
+
+  .cland2 .cl2-homes-browse .cnry-browse > div:last-child > * {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 }
 

@@ -1,0 +1,98 @@
+/* CanaryApp theme — ported from CanaryApp.dc design */
+.cnry {
+  --bg: #181512;
+  --panel: #211d19;
+  --elev: #2a251f;
+  --hover: #322c25;
+  --border: #373028;
+  --border2: #443b31;
+  --text: #f0e9dd;
+  --dim: #a39683;
+  --faint: #786c5c;
+  --accent: #f0c445;
+  --accent-hi: #f5d06a;
+  --accent-text: #33270a;
+  --green: #8aac84;
+  --green-text: #1d2a1c;
+  --amber: #d9ac66;
+  --amber-text: #2e2312;
+  --red: #c96a52;
+  --red-text: #2e130c;
+  --blue: #8494cf;
+  --gray: #5d554a;
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --input: #16130f;
+}
+
+.cnry[data-theme='light'] {
+  --bg: #f3efe7;
+  --panel: #fbf9f4;
+  --elev: #ffffff;
+  --hover: #f0eadf;
+  --border: #e4dcce;
+  --border2: #d5cab6;
+  --text: #2b251d;
+  --dim: #7d7263;
+  --faint: #a4988a;
+  --accent: #e0ad25;
+  --accent-hi: #c9971a;
+  --accent-text: #33270a;
+  --green: #6d9866;
+  --green-text: #f2f7f0;
+  --amber: #c1913f;
+  --amber-text: #fdf7ec;
+  --red: #bb5741;
+  --red-text: #fdf1ec;
+  --blue: #5d70b8;
+  --gray: #b9ad9c;
+  --shadow: 0 18px 50px rgba(70, 55, 35, 0.16), 0 2px 8px rgba(70, 55, 35, 0.1);
+  --input: #ffffff;
+}
+
+.cnry input,
+.cnry select,
+.cnry textarea,
+.cnry button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+.cnry ::placeholder {
+  color: var(--faint);
+}
+
+.cnry ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.cnry ::-webkit-scrollbar-thumb {
+  background: var(--border2);
+  border-radius: 6px;
+  border: 2px solid var(--panel);
+}
+.cnry ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* hover helpers (design used style-hover attributes) */
+.cnry .cy-hov:hover {
+  background: var(--hover);
+}
+.cnry .cy-hov-card:hover {
+  border-color: var(--border2) !important;
+  background: var(--hover);
+}
+.cnry .cy-hov-border:hover {
+  border-color: var(--border2) !important;
+}
+.cnry .cy-accent-btn:hover {
+  background: var(--accent-hi) !important;
+}
+.cnry .cy-sug:hover {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+.cnry .cy-col-head:hover {
+  color: var(--text) !important;
+}

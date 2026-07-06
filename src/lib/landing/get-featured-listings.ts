@@ -1,6 +1,7 @@
 import { createPublicClient } from '@/lib/supabase/public'
 import { getOrgBySlug } from '@/lib/orgs'
 import { CARD_PHOTOS, type LandingListing } from './content'
+import { deriveTermTypeFromHighlights } from './listing-term'
 
 function formatCAD(amount: number): string {
   return new Intl.NumberFormat('en-CA', {
@@ -67,8 +68,7 @@ export async function getFeaturedListings(
       beds: String(unit?.bedrooms ?? '—'),
       baths: String(unit?.bathrooms ?? '—').replace(/\.0$/, ''),
       extra: petFriendly ? '🐾 pet friendly' : (property?.city ?? ''),
-      isNew: Boolean(listing.available_from && new Date(listing.available_from) > new Date(Date.now() - 14 * 86400000)),
-      term: 'LONG TERM',
+      termType: deriveTermTypeFromHighlights(listing.highlights),
       photo: photoFromStorage,
       href: `/listings/${listing.id}${orgQuery}`,
     }

@@ -5,15 +5,16 @@ import type { ReactNode } from 'react'
 
 export default function PublicLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-white">
-      <header className="border-b border-stone-200 bg-white">
-        <div className="mx-auto max-w-5xl px-4 py-4">
-          <span className="text-lg font-semibold text-stone-800 tracking-tight">
-            Rentals
+    <div className="min-h-screen bg-[#f3efe7]">
+      <header className="sticky top-0 z-40 border-b border-[#e4dcce] bg-[#fbf9f4]">
+        <div className="mx-auto flex max-w-[1180px] items-center gap-3 px-5 py-3.5">
+          <span className="text-[17px] font-bold tracking-tight text-[#2b251d]">
+            Canary
           </span>
+          <span className="text-[13.5px] font-semibold text-[#7d7263]">Listings</span>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
+      <main className="mx-auto max-w-[1180px] px-5 py-8">{children}</main>
     </div>
   )
 }

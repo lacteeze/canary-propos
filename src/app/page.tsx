@@ -1,8 +1,12 @@
 import type { Metadata } from 'next'
 import { Instrument_Sans, Instrument_Serif, IBM_Plex_Mono } from 'next/font/google'
 import { LandingPage } from '@/components/landing/landing-page'
-import { getDefaultStays } from '@/lib/landing/content'
-import { getFeaturedListings } from '@/lib/landing/get-featured-listings'
+import { getHospitableStays } from '@/lib/landing/get-hospitable-stays'
+import { getPublishedListings } from '@/lib/landing/get-published-listings'
+import { getLandingStats } from '@/lib/landing/get-landing-stats'
+
+/** Listings and rates change in Supabase — always fetch fresh on each request. */
+export const dynamic = 'force-dynamic'
 
 const instrumentSans = Instrument_Sans({
   subsets: ['latin'],
@@ -36,8 +40,13 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   const orgSlug = process.env.NEXT_PUBLIC_DEFAULT_ORG_SLUG ?? 'canary'
-  const featured = await getFeaturedListings(orgSlug)
+  const stays = await getHospitableStays()
+  const [listings, stats] = await Promise.all([
+    getPublishedListings(orgSlug),
+    getLandingStats(orgSlug, stays.length),
+  ])
   const listingsHref = orgSlug ? `/listings?org=${orgSlug}` : '/listings'
+  const staysHref = orgSlug ? `/?org=${orgSlug}#stays` : '/#stays'
 
   return (
     <div className={`${instrumentSans.variable} ${instrumentSerif.variable} ${ibmPlexMono.variable}`} style={{ fontFamily: 'var(--font-instrument-sans), system-ui, sans-serif' }}>
@@ -68,7 +77,13 @@ export default async function HomePage() {
           }),
         }}
       />
-      <LandingPage featured={featured} stays={getDefaultStays()} listingsHref={listingsHref} />
+      <LandingPage
+        listings={listings}
+        stays={stays}
+        listingsHref={listingsHref}
+        totalHomes={stats.totalHomes}
+        staysHref={staysHref}
+      />
     </div>
   )
 }

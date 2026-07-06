@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { LandingHomesBrowse } from '@/components/landing/LandingHomesBrowse'
 import {
   HERO_IMAGES,
   REVIEWS,
@@ -11,15 +12,19 @@ import {
   answerFaqQuestion,
   getLandingCopy,
   type LandingLang,
-  type LandingListing,
   type LandingStay,
 } from '@/lib/landing/content'
+import { DEFAULT_STAYS_HREF } from '@/lib/hospitable/map-property-to-stay'
+import type { BrowseListing } from '@/lib/listings/browse-types'
 import './landing-styles.css'
 
 interface LandingPageProps {
-  featured: LandingListing[]
+  listings: BrowseListing[]
   stays: LandingStay[]
   listingsHref: string
+  totalHomes: number
+  staysHref: string
+  staysCtaHref?: string
 }
 
 function isQuestion(text: string) {
@@ -31,7 +36,7 @@ function isQuestion(text: string) {
   )
 }
 
-function matchListings(query: string, listings: LandingListing[]) {
+function matchListings(query: string, listings: BrowseListing[]) {
   const q = query.toLowerCase()
   const bedM = q.match(/(\d+)\s*(?:\+\s*)?(?:bedrooms?|bed|br|chambres?|ch\.?)\b/)
   const priceM = q.match(/under\s*\$?\s*([\d,]+)/) || q.match(/\$\s*([\d,]+)/)
@@ -45,16 +50,16 @@ function matchListings(query: string, listings: LandingListing[]) {
 
   return listings
     .filter((listing) => {
-      if (bedM && !((parseFloat(listing.beds) || 0) >= parseFloat(bedM[1]))) return false
+      if (bedM && !(listing.beds >= parseFloat(bedM[1]))) return false
       if (priceM && !(listing.rentN && listing.rentN <= parseFloat(priceM[1].replace(/,/g, '')))) return false
-      if (wantsPets && !/pet|friendly|🐾/i.test(listing.extra)) return false
-      if (free && !listing.short.toLowerCase().includes(free)) return false
+      if (wantsPets && !listing.petFriendly) return false
+      if (free && !`${listing.shortAddress} ${listing.city}`.toLowerCase().includes(free)) return false
       return true
     })
     .slice(0, 6)
 }
 
-export function LandingPage({ featured, stays, listingsHref }: LandingPageProps) {
+export function LandingPage({ listings, stays, listingsHref, totalHomes, staysHref, staysCtaHref = DEFAULT_STAYS_HREF }: LandingPageProps) {
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [lang, setLang] = useState<LandingLang>('en')
   const [langOpen, setLangOpen] = useState(false)
@@ -71,13 +76,12 @@ export function LandingPage({ featured, stays, listingsHref }: LandingPageProps)
   const [carIdx, setCarIdx] = useState(0)
   const [nlEmail, setNlEmail] = useState('')
   const [nlSent, setNlSent] = useState(false)
-  const [cardPhoto, setCardPhoto] = useState<Record<string, number>>({})
 
   const copy = useMemo(() => getLandingCopy(lang), [lang])
   const dark = theme === 'dark'
   const trimmedQ = q.trim()
   const question = trimmedQ ? isQuestion(trimmedQ) : false
-  const results = trimmedQ && !question ? matchListings(trimmedQ, featured) : []
+  const results = trimmedQ && !question ? matchListings(trimmedQ, listings) : []
   const hasAnswer = Boolean(searchAnswer) && !searchBusy
   const hasResults = !searchBusy && !hasAnswer && trimmedQ && !question && results.length > 0
   const showSuggestions = !searchBusy && !hasAnswer && !hasResults
@@ -98,10 +102,6 @@ export function LandingPage({ featured, stays, listingsHref }: LandingPageProps)
       color: index < lit ? 'var(--text)' : dark ? '#584f3e' : '#cfc4ae',
     }
   })
-
-  const bumpPhoto = useCallback((key: string, len: number) => {
-    setCardPhoto((prev) => ({ ...prev, [key]: ((prev[key] || 0) + 1) % len }))
-  }, [])
 
   const submitSearch = useCallback(async () => {
     const text = trimmedQ
@@ -183,9 +183,9 @@ export function LandingPage({ featured, stays, listingsHref }: LandingPageProps)
   const review = REVIEWS[carIdx % REVIEWS.length]
 
   return (
-    <div className={`cland2 ${dark ? 'cl2-dark' : ''}`} id="top" style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif", fontSize: '15.5px', lineHeight: 1.55 }}>
+    <div className={`cland2 ${dark ? 'cl2-dark' : ''}`} id="top" style={{ minHeight: '100vh', width: '100%', maxWidth: '100%', background: 'var(--bg)', color: 'var(--text)', fontFamily: "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif", fontSize: '15.5px', lineHeight: 1.55 }}>
       <header data-screen-label="Header" style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, background: hdr.hdrBg, borderBottom: `1px solid ${hdr.hdrBorder}`, backdropFilter: 'blur(14px)', transition: 'background .3s, border-color .3s' }}>
-        <div style={{ maxWidth: 1380, margin: '0 auto', padding: '12px 26px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ maxWidth: 1380, margin: '0 auto', padding: '12px clamp(16px, 4vw, 26px)', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <a href="#top" title="Canary Property Management — home" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: hdr.hdrText, flex: 'none' }}>
             <span style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--yellow)', display: 'grid', placeItems: 'center', flex: 'none' }}>
               <Image src="/landing/logo-black.png" alt="Canary Property Management logo" width={26} height={26} style={{ objectFit: 'contain' }} />
@@ -253,9 +253,9 @@ export function LandingPage({ featured, stays, listingsHref }: LandingPageProps)
                     {results.map((result) => (
                       <Link key={result.id} href={result.href} className="cl2-search-result" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8, borderRadius: 9, textDecoration: 'none', color: 'inherit' }}>
                         <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--yellow)', flex: 'none' }} />
-                        <span style={{ minWidth: 0, flex: 1, fontWeight: 600, fontSize: '13.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{result.short}</span>
-                        <span style={{ flex: 'none', color: 'var(--dim)', fontSize: '12.5px' }}>{result.beds} bd · {result.baths} ba</span>
-                        <span style={{ flex: 'none', fontWeight: 700, fontSize: 13, color: 'var(--accent)' }}>{result.rent}</span>
+                        <span style={{ minWidth: 0, flex: 1, fontWeight: 600, fontSize: '13.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{result.shortAddress}</span>
+                        <span style={{ flex: 'none', color: 'var(--dim)', fontSize: '12.5px' }}>{result.beds} bd · {result.bathsLabel} ba</span>
+                        <span style={{ flex: 'none', fontWeight: 700, fontSize: 13, color: 'var(--accent)' }}>{result.rentFormatted}</span>
                       </Link>
                     ))}
                   </div>
@@ -377,7 +377,7 @@ export function LandingPage({ featured, stays, listingsHref }: LandingPageProps)
         </div>
         <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'linear-gradient(180deg, rgba(24,19,12,.52) 0%, rgba(24,19,12,.30) 38%, rgba(24,19,12,.44) 62%, rgba(24,19,12,.9) 100%)', pointerEvents: 'none' }} />
 
-        <div style={{ position: 'relative', zIndex: 2, maxWidth: 1380, width: '100%', margin: '0 auto', padding: '140px 26px 46px' }}>
+        <div style={{ position: 'relative', zIndex: 2, maxWidth: 1380, width: '100%', margin: '0 auto', padding: '140px clamp(16px, 4vw, 26px) 46px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18, animation: 'cl2fade .9s ease .2s both' }}>
             <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--yellow)', boxShadow: '0 0 0 4px rgba(240,196,69,.25)' }} />
             <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'rgba(244,239,230,.85)' }}>{copy.tHeroBadge}</span>
@@ -394,7 +394,7 @@ export function LandingPage({ featured, stays, listingsHref }: LandingPageProps)
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 26, flexWrap: 'wrap', borderTop: '1px solid rgba(244,239,230,.22)', marginTop: 38, paddingTop: 20, animation: 'cl2fade 1s ease .75s both' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}><span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, fontSize: 24, letterSpacing: '-.02em' }}>{featured.length || '—'}</span><span style={{ color: 'var(--ink-dim)', fontSize: 13 }}>{copy.tStatHomes}</span></div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}><span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, fontSize: 24, letterSpacing: '-.02em' }}>{totalHomes > 0 ? totalHomes : '—'}</span><span style={{ color: 'var(--ink-dim)', fontSize: 13 }}>{copy.tStatHomes}</span></div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}><span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, fontSize: 24, letterSpacing: '-.02em' }}>24/7</span><span style={{ color: 'var(--ink-dim)', fontSize: 13 }}>{copy.tStatSupport}</span></div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}><span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, fontSize: 24, letterSpacing: '-.02em' }}>{copy.tStatMonthNum}</span><span style={{ color: 'var(--ink-dim)', fontSize: 13 }}>{copy.tStatMonth}</span></div>
             <div aria-hidden="true" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ink-dim)', fontSize: '12.5px', fontFamily: "'IBM Plex Mono', monospace", letterSpacing: '.1em' }}>{copy.tScroll}<span style={{ display: 'inline-block', animation: 'cl2cue 1.8s ease-in-out infinite' }}>↓</span></div>
@@ -415,16 +415,16 @@ export function LandingPage({ featured, stays, listingsHref }: LandingPageProps)
         </div>
       </section>
 
-      <section data-screen-label="Rent Own Stay" style={{ background: 'var(--ink)', color: 'var(--ink-text)' }}>
-        <div style={{ maxWidth: 1380, margin: '0 auto', padding: '90px 26px' }}>
+      <section data-screen-label="Rent Own Stay" className="cl2-big-section" style={{ background: 'var(--ink)', color: 'var(--ink-text)' }}>
+        <div className="cl2-big-inner">
           <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--ink-dim)', marginBottom: 26 }}>{copy.tBigKicker}</div>
           {copy.bigRows.map((row) => (
-            <a key={row.num} href={row.href} className="cl2-big-row" style={{ display: 'flex', alignItems: 'baseline', gap: 26, textDecoration: 'none', color: 'var(--ink-text)', borderTop: '1px solid var(--ink-border)', padding: '30px 6px' }}>
-              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, color: 'var(--ink-dim)', flex: 'none', width: 36 }}>{row.num}</span>
-              <span style={{ fontSize: 'clamp(42px, 7vw, 96px)', fontWeight: 700, letterSpacing: '-.035em', lineHeight: 1, flex: 'none' }}>{row.word}<em style={{ fontFamily: "'Instrument Serif', serif", fontStyle: 'italic', fontWeight: 400, color: 'var(--yellow)', fontSize: '.55em', marginLeft: 14 }}>{row.tail}</em></span>
-              <span style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flex: 1, minWidth: 160 }}>
-                <span style={{ color: 'var(--ink-dim)', fontSize: 14, textAlign: 'right', maxWidth: '32ch' }}>{row.sub}</span>
-                <span aria-hidden="true" style={{ fontSize: 26, color: 'var(--yellow)' }}>→</span>
+            <a key={row.num} href={row.href} className="cl2-big-row">
+              <span className="cl2-big-num">{row.num}</span>
+              <span className="cl2-big-word"><span className="cl2-big-title">{row.word}</span><em>{row.tail}</em></span>
+              <span className="cl2-big-sub">
+                <span className="cl2-big-sub-text">{row.sub}</span>
+                <span className="cl2-big-arrow" aria-hidden="true">→</span>
               </span>
             </a>
           ))}
@@ -437,7 +437,7 @@ export function LandingPage({ featured, stays, listingsHref }: LandingPageProps)
         </div>
       </section>
 
-      <section id="homes" data-screen-label="Available homes" style={{ maxWidth: 1380, margin: '0 auto', padding: '96px 26px 30px' }}>
+      <section id="homes" data-screen-label="Available homes" style={{ maxWidth: 1380, margin: '0 auto', padding: '96px clamp(16px, 4vw, 26px) 30px', width: '100%', minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 8 }}>
           <div>
             <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--faint)', marginBottom: 14 }}>{copy.tHomesKicker}</div>
@@ -445,85 +445,61 @@ export function LandingPage({ featured, stays, listingsHref }: LandingPageProps)
           </div>
           <Link href={listingsHref} className="cl2-btn-outline" style={{ color: 'var(--text)', border: '1.5px solid var(--border2)', borderRadius: 999, padding: '12px 22px', fontWeight: 700, textDecoration: 'none', fontSize: '14.5px', whiteSpace: 'nowrap' }}>{copy.tSeeAllHomes}</Link>
         </div>
-        <p style={{ margin: '0 0 26px', color: 'var(--dim)', maxWidth: '56ch' }}>{copy.tHomesIntro} {copy.countLine(featured.length)}</p>
-        {featured.length > 0 ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 18 }}>
-            {featured.map((item, index) => {
-              const photoIndex = (index + (cardPhoto[`f${index}`] || 0)) % featured.length
-              const photo = item.photo || featured[photoIndex]?.photo
-              return (
-                <Link key={item.id} href={item.href} className="cl2-card" style={{ textDecoration: 'none', color: 'inherit', background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                  <div style={{ height: 190, backgroundImage: `url('${photo}')`, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative' }}>
-                    <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: 6 }}>
-                      <span style={{ background: 'rgba(24,19,12,.6)', color: '#f4efe6', fontSize: 11, fontWeight: 700, letterSpacing: '.05em', padding: '5px 11px', borderRadius: 999, backdropFilter: 'blur(4px)' }}>{item.term}</span>
-                      {item.isNew && <span style={{ background: 'var(--yellow)', color: 'var(--yellow-text)', fontSize: 11, fontWeight: 700, letterSpacing: '.05em', padding: '5px 11px', borderRadius: 999 }}>{copy.tNew}</span>}
-                    </div>
-                    <button type="button" className="cl2-swipe" onClick={(e) => { e.preventDefault(); bumpPhoto(`f${index}`, featured.length) }} aria-label="Next photo" title="Next photo" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 44, border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '0 10px' }}>
-                      <span style={{ width: 28, height: 28, flex: 'none', aspectRatio: '1', borderRadius: '50%', background: 'rgba(24,19,12,.4)', border: '1px solid rgba(255,255,255,.5)', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 15, lineHeight: 1, backdropFilter: 'blur(4px)' }}>→</span>
-                    </button>
-                  </div>
-                  <div style={{ padding: '15px 17px 17px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                      <span style={{ fontWeight: 700, fontSize: 16, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.short}</span>
-                      <span style={{ flex: 'none', fontWeight: 700, fontSize: 16, color: 'var(--accent)' }}>{item.rent}<span style={{ color: 'var(--faint)', fontWeight: 500, fontSize: 12 }}>/mo</span></span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 12, fontSize: 13, color: 'var(--dim)' }}>
-                      <span><b style={{ color: 'var(--text)' }}>{item.beds}</b> {copy.tBed}</span>
-                      <span><b style={{ color: 'var(--text)' }}>{item.baths}</b> {copy.tBath}</span>
-                      <span>{item.extra}</span>
-                    </div>
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-        ) : (
-          <div style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 14, padding: 22, color: 'var(--dim)' }}>
-            Nothing available right this minute — new homes are posted here the moment they&apos;re ready. <a href="mailto:info@canarypm.ca" style={{ color: 'var(--accent)', fontWeight: 600 }}>Join the waitlist</a>.
-          </div>
-        )}
+        <p style={{ margin: '0 0 26px', color: 'var(--dim)', maxWidth: '56ch' }}>{copy.tHomesIntro}</p>
+        <LandingHomesBrowse
+          listings={listings}
+          staysHref={staysHref}
+          copy={{
+            tBed: copy.tBed,
+            tBath: copy.tBath,
+            longTerm: copy.longTerm,
+            midTerm: copy.midTerm,
+          }}
+        />
       </section>
 
-      <section id="stays" data-screen-label="Short-term stays" style={{ maxWidth: 1380, margin: '0 auto', padding: '70px 26px 30px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 8 }}>
-          <div>
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--faint)', marginBottom: 14 }}>{copy.tStaysKicker}</div>
-            <h2 style={{ margin: 0, fontSize: 'clamp(30px, 4.4vw, 54px)', fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.05 }}>{copy.tStays1} <em style={{ fontFamily: "'Instrument Serif', serif", fontStyle: 'italic', fontWeight: 400 }}>{copy.tStays2}</em></h2>
+      <section id="stays" data-screen-label="Short-term stays" style={{ background: 'var(--ink)', color: 'var(--ink-text)' }}>
+        <div style={{ maxWidth: 1380, margin: '0 auto', padding: '70px clamp(16px, 4vw, 26px) 90px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 8 }}>
+            <div>
+              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--ink-dim)', marginBottom: 14 }}>{copy.tStaysKicker}</div>
+              <h2 style={{ margin: 0, fontSize: 'clamp(30px, 4.4vw, 54px)', fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.05 }}>{copy.tStays1} <em style={{ fontFamily: "'Instrument Serif', serif", fontStyle: 'italic', fontWeight: 400 }}>{copy.tStays2}</em></h2>
+            </div>
+            <a href={staysCtaHref} target="_blank" rel="noopener noreferrer" className="cl2-btn-outline" style={{ color: 'var(--ink-text)', border: '1.5px solid rgba(244,239,230,.35)', borderRadius: 999, padding: '12px 22px', fontWeight: 700, textDecoration: 'none', fontSize: '14.5px', whiteSpace: 'nowrap' }}>{copy.tSeeAllStays}</a>
           </div>
-          <a href="https://airbnb.ca/p/canarypm" target="_blank" rel="noopener noreferrer" className="cl2-btn-outline" style={{ color: 'var(--text)', border: '1.5px solid var(--border2)', borderRadius: 999, padding: '12px 22px', fontWeight: 700, textDecoration: 'none', fontSize: '14.5px', whiteSpace: 'nowrap' }}>{copy.tSeeAllStays}</a>
-        </div>
-        <p style={{ margin: '0 0 26px', color: 'var(--dim)', maxWidth: '56ch' }}>{copy.tStaysIntro}</p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 18 }}>
-          {stays.map((stay, index) => (
-            <a key={`${stay.short}-${index}`} href={stay.href} target="_blank" rel="noopener noreferrer" className="cl2-card" style={{ textDecoration: 'none', color: 'inherit', background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-              <div style={{ height: 190, backgroundImage: `url('${stay.photo}')`, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative' }}>
-                <span style={{ position: 'absolute', top: 12, left: 12, background: 'rgba(24,19,12,.6)', color: '#f4efe6', fontSize: 11, fontWeight: 700, letterSpacing: '.05em', padding: '5px 11px', borderRadius: 999, backdropFilter: 'blur(4px)' }}>{copy.tBookDirect}</span>
-              </div>
-              <div style={{ padding: '15px 17px 17px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                  <span style={{ fontWeight: 700, fontSize: 16, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stay.short}</span>
-                  <span style={{ flex: 'none', fontWeight: 700, fontSize: 14, color: 'var(--accent)' }}>{stay.town}</span>
+          <p style={{ margin: '0 0 26px', color: 'var(--ink-dim)', maxWidth: '56ch' }}>{copy.tStaysIntro}</p>
+          <div className="cl2-card-grid">
+            {stays.map((stay, index) => (
+              <a key={`${stay.short}-${index}`} href={stay.href} target="_blank" rel="noopener noreferrer" className="cl2-card" style={{ textDecoration: 'none', color: 'var(--text)', background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                <div style={{ height: 190, backgroundImage: `url('${stay.photo}')`, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative' }}>
+                  <span className="cl2-str-pill">{copy.tBookDirect}</span>
                 </div>
-                <div style={{ display: 'flex', gap: 12, fontSize: 13, color: 'var(--dim)' }}>
-                  <span><b style={{ color: 'var(--text)' }}>{stay.beds}</b> {copy.tBed}</span>
-                  <span><b style={{ color: 'var(--text)' }}>{stay.baths}</b> {copy.tBath}</span>
-                  <span>{stay.extra}</span>
+                <div style={{ padding: '15px 17px 17px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontWeight: 700, fontSize: 16, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stay.short}</span>
+                    <span style={{ flex: 'none', fontWeight: 700, fontSize: 14, color: 'var(--accent)' }}>{stay.town}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, fontSize: 13, color: 'var(--dim)' }}>
+                    <span><b style={{ color: 'var(--text)' }}>{stay.beds}</b> {copy.tBed}</span>
+                    <span><b style={{ color: 'var(--text)' }}>{stay.baths}</b> {copy.tBath}</span>
+                    <span>{stay.extra}</span>
+                  </div>
                 </div>
-              </div>
-            </a>
-          ))}
+              </a>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section id="how" data-screen-label="How it works" style={{ maxWidth: 1380, margin: '0 auto', padding: '100px 26px 60px' }}>
-        <div className="cl2-grid2" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) minmax(300px, 1.6fr)', gap: 40, alignItems: 'start' }}>
+      <section id="how" data-screen-label="How it works" style={{ maxWidth: 1380, margin: '0 auto', padding: '100px clamp(16px, 4vw, 26px) 60px', width: '100%', minWidth: 0 }}>
+        <div className="cl2-grid2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.6fr)', gap: 40, alignItems: 'start', minWidth: 0 }}>
           <div className="cl2-sticky" style={{ position: 'sticky', top: 100 }}>
             <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--faint)', marginBottom: 14 }}>{copy.tOwnKicker}</div>
             <h2 style={{ margin: '0 0 14px', fontSize: 'clamp(30px, 4vw, 50px)', fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.05 }}>{copy.tOwn1}<br /><em style={{ fontFamily: "'Instrument Serif', serif", fontStyle: 'italic', fontWeight: 400 }}>{copy.tOwn2}</em></h2>
             <p style={{ margin: '0 0 22px', color: 'var(--dim)', maxWidth: '38ch' }}>{copy.tOwnSub}</p>
             <a href="mailto:info@canarypm.ca?subject=Management%20inquiry" className="cl2-btn-ink" style={{ display: 'inline-block', textDecoration: 'none', background: 'var(--ink)', color: 'var(--ink-text)', borderRadius: 999, padding: '15px 28px', fontWeight: 700, fontSize: '15.5px' }}>{copy.tOwnCta}</a>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
             {copy.steps.map((step) => (
               <div key={step.num} className="cl2-step" style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 20, padding: '28px 28px 26px', display: 'flex', gap: 24, alignItems: 'flex-start' }}>
                 <span style={{ fontFamily: "'Instrument Serif', serif", fontStyle: 'italic', fontSize: 52, lineHeight: 1, color: 'var(--yellow)', flex: 'none', width: 74 }}>{step.num}</span>
@@ -534,7 +510,7 @@ export function LandingPage({ featured, stays, listingsHref }: LandingPageProps)
               </div>
             ))}
             <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: '.12em', color: 'var(--faint)', margin: '14px 0 -2px' }}>{copy.tFeeKicker}</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
+            <div className="cl2-services-grid">
               {copy.services.map((service) => (
                 <div key={service.name} style={{ background: 'var(--ink)', color: 'var(--ink-text)', borderRadius: 16, padding: '18px 20px' }}>
                   <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>{service.name}</div>
@@ -543,9 +519,9 @@ export function LandingPage({ featured, stays, listingsHref }: LandingPageProps)
                 </div>
               ))}
             </div>
-            <div style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 20, padding: '26px 28px', marginTop: 6 }}>
+            <div style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 20, padding: 'clamp(18px, 4vw, 26px) clamp(16px, 4vw, 28px)', marginTop: 6, minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: '16.5px', marginBottom: 14 }}>{copy.tPlanIncl}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '9px 20px' }}>
+              <div className="cl2-check-grid">
                 {copy.checklist.map((item) => (
                   <div key={item} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: '13.5px', color: 'var(--dim)', lineHeight: 1.4 }}>
                     <span aria-hidden="true" style={{ flex: 'none', color: 'var(--green)', fontWeight: 700, marginTop: 1 }}>✓</span>{item}
@@ -553,7 +529,7 @@ export function LandingPage({ featured, stays, listingsHref }: LandingPageProps)
                 ))}
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+            <div className="cl2-fee-grid">
               <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 20, padding: '22px 24px' }}>
                 <div style={{ fontWeight: 700, fontSize: '15.5px', marginBottom: 8 }}>{copy.tMaintTitle}</div>
                 <div style={{ color: 'var(--dim)', fontSize: '13.5px', lineHeight: 1.55 }}>{copy.tMaintBody}</div>

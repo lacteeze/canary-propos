@@ -4,8 +4,6 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import {
   Form,
   FormControl,
@@ -56,20 +54,14 @@ export function MagicLinkForm({ onSwitchToPassword }: MagicLinkFormProps) {
   if (sentTo) {
     return (
       <div className="space-y-4">
-        <div
-          role="status"
-          className="rounded-md border border-green-200 bg-green-50 p-4"
-        >
-          <p className="text-sm font-semibold text-green-800">Check your email</p>
-          <p className="mt-0.5 text-sm text-green-700">
-            We&apos;ve sent a sign-in link to <strong>{sentTo}</strong>.
-          </p>
+        <div role="status" className="auth-alert auth-alert-success">
+          <span className="auth-alert-heading">Check your email</span>
+          We&apos;ve sent a sign-in link to <strong>{sentTo}</strong>.
         </div>
         <button
           type="button"
           onClick={onSwitchToPassword}
-          className="block w-full text-center text-sm"
-          style={{ color: '#D97706' }}
+          className="auth-link block w-full text-center"
         >
           Back to sign in with password
         </button>
@@ -81,11 +73,8 @@ export function MagicLinkForm({ onSwitchToPassword }: MagicLinkFormProps) {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         {error && (
-          <div
-            role="alert"
-            className="rounded-md border border-red-200 bg-red-50 p-3"
-          >
-            <p className="text-sm text-red-700">{error}</p>
+          <div role="alert" className="auth-alert auth-alert-error">
+            {error}
           </div>
         )}
 
@@ -96,8 +85,9 @@ export function MagicLinkForm({ onSwitchToPassword }: MagicLinkFormProps) {
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input
+                <input
                   type="email"
+                  className="auth-input"
                   placeholder="you@example.com"
                   autoFocus
                   autoComplete="email"
@@ -109,27 +99,21 @@ export function MagicLinkForm({ onSwitchToPassword }: MagicLinkFormProps) {
           )}
         />
 
-        <Button
-          type="submit"
-          disabled={isLoading}
-          className="min-h-11 w-full font-semibold"
-          style={{ backgroundColor: '#D97706', color: '#ffffff' }}
-        >
+        <button type="submit" disabled={isLoading} className="auth-btn">
           {isLoading ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               Sending...
             </>
           ) : (
             'Send magic link'
           )}
-        </Button>
+        </button>
 
         <button
           type="button"
           onClick={onSwitchToPassword}
-          className="block w-full text-center text-sm"
-          style={{ color: '#D97706' }}
+          className="auth-link block w-full text-center"
         >
           Back to sign in with password
         </button>

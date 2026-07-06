@@ -15,14 +15,14 @@ type InviteState =
   | { status: 'submitting' }
   | { status: 'error'; message: string }
 
-// Role → portal route map (D-04 / D-08)
+// All roles land in the CanaryApp portal — role scoping happens inside /app
 const ROLE_REDIRECT: Record<string, string> = {
-  manager: '/dashboard',
-  employee: '/dashboard',
-  tenant: '/my-home',
-  owner: '/portfolio',
-  vendor: '/jobs',
-  admin: '/admin',
+  manager: '/app',
+  employee: '/app',
+  tenant: '/app',
+  owner: '/app',
+  vendor: '/app',
+  admin: '/app',
 }
 
 export default function InvitePage() {
@@ -122,7 +122,7 @@ export default function InvitePage() {
     }
 
     // Redirect to role-appropriate portal (D-08)
-    const redirect = ROLE_REDIRECT[state.role] ?? '/dashboard'
+    const redirect = ROLE_REDIRECT[state.role] ?? '/app'
     router.replace(redirect)
   }
 

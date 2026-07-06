@@ -8,8 +8,7 @@ export interface LandingListing {
   beds: string
   baths: string
   extra: string
-  isNew: boolean
-  term: string
+  termType: 'long' | 'mid'
   photo: string
   href: string
 }
@@ -88,10 +87,10 @@ export function getLandingCopy(lang: LandingLang) {
       tHeroSub: 'Les locataires trouvent des maisons vérifiées qu\'ils aimeront vraiment. Les propriétaires nous confient les appels, les réparations et la paperasse — au mois, sans engagement.',
       tHeroCta1: 'Trouvez votre maison',
       tHeroCta2: 'Je possède un logement',
-      tStatHomes: 'maisons disponibles',
+      tStatHomes: 'maisons affichées',
       tStatSupport: 'soutien aux locataires',
-      tStatMonthNum: '30 jours',
-      tStatMonth: 'au mois, sans engagement',
+      tStatMonthNum: '2300+',
+      tStatMonth: 'clients, locataires et invités satisfaits',
       tScroll: 'DÉFILER',
       tWhyKicker: 'POURQUOI CANARY',
       tBigKicker: 'QU\'EST-CE QUI VOUS AMÈNE?',
@@ -102,7 +101,6 @@ export function getLandingCopy(lang: LandingLang) {
       tHomesIntro: 'Chaque maison est vérifiée par notre équipe et affichée avec des photos exactes.',
       tBed: 'ch.',
       tBath: 'sdb',
-      tNew: 'NOUVEAU',
       tStaysKicker: 'SÉJOURS COURTE DURÉE',
       tStays1: 'Séjournez',
       tStays2: 'une nuit ou un mois',
@@ -219,10 +217,10 @@ export function getLandingCopy(lang: LandingLang) {
     tHeroSub: 'Tenants find verified homes they\'ll actually love. Owners hand off the calls, the repairs, and the paperwork — month to month, no lock-in.',
     tHeroCta1: 'Find your home',
     tHeroCta2: 'I own a rental',
-    tStatHomes: 'homes available now',
+    tStatHomes: 'homes listed now',
     tStatSupport: 'tenant support',
-    tStatMonthNum: '30 days',
-    tStatMonth: 'month-to-month, no lock-in',
+    tStatMonthNum: '2300+',
+    tStatMonth: 'happy clients, tenants & guests',
     tScroll: 'SCROLL',
     tWhyKicker: 'WHY CANARY',
     tBigKicker: 'WHAT BRINGS YOU HERE?',
@@ -233,7 +231,6 @@ export function getLandingCopy(lang: LandingLang) {
     tHomesIntro: 'Every home is verified by our team and listed with accurate photos.',
     tBed: 'bed',
     tBath: 'bath',
-    tNew: 'NEW',
     tStaysKicker: 'SHORT-TERM STAYS',
     tStays1: 'Stay a',
     tStays2: 'night or a month',

@@ -1,0 +1,54 @@
+.cnry-browse {
+  --bg: #f3efe7;
+  --panel: #fbf9f4;
+  --elev: #ffffff;
+  --hover: #f0eadf;
+  --border: #e4dcce;
+  --border2: #d5cab6;
+  --text: #2b251d;
+  --dim: #7d7263;
+  --faint: #a4988a;
+  --accent: #4d6b46;
+  --accent-hi: #415a3b;
+  --accent-text: #f2f6f0;
+  --green: #6d9866;
+  --amber: #c1913f;
+  --ink: #26211a;
+  --ink-text: #ffffff;
+  --shadow: 0 18px 50px rgba(70, 55, 35, 0.16), 0 2px 8px rgba(70, 55, 35, 0.1);
+  --input: #ffffff;
+  color: var(--text);
+  font-family: var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.cnry-browse input,
+.cnry-browse select,
+.cnry-browse button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+.cnry-browse ::placeholder {
+  color: var(--faint);
+}
+
+.cnry-browse-card {
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.cnry-browse-card:hover {
+  border-color: var(--border2);
+  box-shadow: 0 10px 30px rgba(70, 55, 35, 0.12);
+  transform: translateY(-2px);
+}
+
+.cnry-browse-card img {
+  transition: transform 0.3s;
+}
+
+.cnry-browse-card:hover img {
+  transform: scale(1.03);
+}

@@ -124,7 +124,7 @@ export default function OnboardingPage() {
             Your workspace is ready. Let&apos;s add your first property.
           </p>
           <button
-            onClick={() => { window.location.href = '/dashboard' }}
+            onClick={() => { window.location.href = '/app' }}
             disabled={isLoading}
             className="mt-8 inline-flex min-h-11 w-full items-center justify-center rounded-lg px-4 text-sm font-semibold text-white transition-opacity hover:opacity-90"
             style={{ backgroundColor: '#D97706' }}

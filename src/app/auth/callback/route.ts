@@ -3,14 +3,14 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// Role-based redirect map (D-04)
+// All roles land in the CanaryApp portal — role scoping happens inside /app
 const ROLE_REDIRECT_MAP: Record<string, string> = {
-  manager: '/dashboard',
-  employee: '/dashboard',
-  admin: '/admin',
-  tenant: '/my-home',
-  owner: '/portfolio',
-  vendor: '/jobs',
+  manager: '/app',
+  employee: '/app',
+  admin: '/app',
+  tenant: '/app',
+  owner: '/app',
+  vendor: '/app',
 }
 
 export async function GET(request: NextRequest) {
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
         data: { user },
       } = await supabase.auth.getUser()
       const role = user?.app_metadata?.role as string | undefined
-      const redirectPath = ROLE_REDIRECT_MAP[role ?? ''] ?? '/dashboard'
+      const redirectPath = ROLE_REDIRECT_MAP[role ?? ''] ?? '/app'
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? origin  // CR-02 fix: anchor to known origin
       return NextResponse.redirect(new URL(redirectPath, appUrl))
     }

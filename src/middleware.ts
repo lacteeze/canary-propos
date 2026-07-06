@@ -21,6 +21,11 @@ function extractOrgSlug(request: NextRequest): string {
   const parts = hostname.split('.')
   const subdomain = parts.length >= 3 ? parts[0] : null
 
+  // Vercel preview/production default hostnames are not tenant subdomains
+  if (hostname.endsWith('.vercel.app')) {
+    return request.nextUrl.searchParams.get('org') ?? ''
+  }
+
   if (!subdomain || subdomain === 'localhost' || subdomain === 'www' || subdomain === 'app') {
     // Localhost / no-subdomain fallback: read ?org= query param
     return request.nextUrl.searchParams.get('org') ?? ''
@@ -30,6 +35,7 @@ function extractOrgSlug(request: NextRequest): string {
 
 function isProtectedPath(pathname: string): boolean {
   return (
+    pathname.startsWith('/app') ||
     pathname.startsWith('/dashboard') ||
     pathname.startsWith('/my-home') ||
     pathname.startsWith('/portfolio') ||
@@ -91,6 +97,15 @@ export async function middleware(request: NextRequest) {
   // Unauthenticated user accessing a protected path → redirect to /login
   if (!user && isProtectedPath(pathname)) {
     return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  // /app — the CanaryApp portal. Any authenticated user may enter; the page
+  // itself resolves the person + role from the people table (JWT role claims
+  // may be missing on accounts created before the auth hook was enabled).
+
+  // Legacy backend entry — the CanaryApp at /app replaces the old dashboard
+  if (pathname === '/dashboard' && user) {
+    return NextResponse.redirect(new URL('/app', request.url))
   }
 
   // Role guards per portal (D-04)

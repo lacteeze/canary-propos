@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    serverActions: {
+      // Bulk CSV imports post the whole file as text (default limit is 1 MB)
+      bodySizeLimit: "8mb",
+    },
+  },
 };
 
 export default nextConfig;

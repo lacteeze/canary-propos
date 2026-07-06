@@ -569,7 +569,7 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
     people: {
       views: ['list', 'table', 'kanban'],
       rows: qsort(filteredPeople, {
-        name: (p: CanaryPerson) => (p.name || '').toLowerCase(), email: (p: CanaryPerson) => (p.email || '').toLowerCase(), phone: (p: CanaryPerson) => p.phone || '', role: (p: CanaryPerson) => p.role || '', status: (p: CanaryPerson) => p.status || '',
+        name: (p: CanaryPerson) => (p.name || '').toLowerCase(), email: (p: CanaryPerson) => (p.email || '').toLowerCase(), phone: (p: CanaryPerson) => p.phone || '', company: (p: CanaryPerson) => (p.company || '').toLowerCase(), role: (p: CanaryPerson) => p.role || '', status: (p: CanaryPerson) => p.status || '',
       }),
       open: (p: CanaryPerson) => () => setDrawer({ kind: 'person', id: p.id }),
       group: (p: CanaryPerson) => p.role || '—',
@@ -578,6 +578,7 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
         { key: 'name', label: 'Name', flex: '1.6', bold: true, get: (p: CanaryPerson) => p.name || '—' },
         { key: 'email', label: 'Email', flex: '2', dim: true, get: (p: CanaryPerson) => p.email || '—' },
         { key: 'phone', label: 'Phone', flex: '1.2', mono: true, get: (p: CanaryPerson) => p.phone || '—' },
+        { key: 'company', label: 'Company', flex: '1.4', dim: true, get: (p: CanaryPerson) => p.company || '—' },
         { key: 'role', label: 'Role', flex: '0 0 92px', get: (p: CanaryPerson) => p.role || '—' },
         { key: 'status', label: 'Status', flex: '1', dim: true, get: (p: CanaryPerson) => p.status || '—' },
       ],
@@ -779,8 +780,29 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
       if (!p) found = false
       else {
         title = p.name; sub = p.company && p.company !== p.name ? p.company : ''; kindLabel = p.role || 'Person'
-        sections.push({ title: 'Contact', rows: [drawerRow('Email', p.email), drawerRow('Phone', p.phone), drawerRow('Status', p.status)] })
+        sections.push({
+          title: 'Contact',
+          rows: [
+            drawerRow('Email', p.email), drawerRow('Phone', p.phone), drawerRow('Status', p.status),
+            p.company ? drawerRow('Company', p.company) : null,
+            p.address ? drawerRow('Mailing address', p.address) : null,
+            p.website ? drawerRow('Website', p.website) : null,
+            p.services ? drawerRow('Services', p.services) : null,
+            p.rating ? drawerRow('Rating', p.rating + ' / 5') : null,
+          ].filter(Boolean) as DrawerRow[],
+        })
+        if (p.notes) sections.push({ title: 'Notes', rows: [drawerRow('', p.notes)] })
         if (p.role === 'Tenant') {
+          const prefs = [
+            p.minBeds ? drawerRow('Min bedrooms', p.minBeds) : null,
+            p.minBaths ? drawerRow('Min bathrooms', p.minBaths) : null,
+            p.minParking ? drawerRow('Min parking', p.minParking) : null,
+            p.pets ? drawerRow('Pets', p.pets) : null,
+            p.moveIn ? drawerRow('Move-in date', p.moveIn) : null,
+            p.leaseType ? drawerRow('Lease type', p.leaseType) : null,
+            p.maxPrice ? drawerRow('Max price', money(parseFloat(p.maxPrice)) + '/mo') : null,
+          ].filter(Boolean) as DrawerRow[]
+          if (prefs.length) sections.push({ title: 'Looking for', rows: prefs })
           const theirs = db.leases.filter((l) => (l.tenantIds || '').includes(p.id))
           if (theirs.length) sections.push({ title: 'Leases', rows: theirs.map((l) => drawerRow(l.status || '—', short(l.property) + ' · ' + (l.start || '') + ' → ' + (l.end || ''), { onClick: () => setDrawer({ kind: 'lease', id: l.id }) })) })
         }

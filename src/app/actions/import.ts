@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { parseCsvForDataset, type ImportDataset } from '@/lib/canary/import-specs'
 
-const MAX_ROWS = 2000
+const MAX_ROWS = 5000
 const CHUNK = 100
 
 export interface ImportRowError {
@@ -189,10 +189,62 @@ const peopleSchema = z.object({
   role: z.string().min(1, 'is required'),
   first_name: z.string().optional().default(''),
   last_name: z.string().optional().default(''),
+  name: z.string().optional().default(''),
   phone: z.string().optional().default(''),
+  company: z.string().optional().default(''),
+  mailing_address: z.string().optional().default(''),
+  status: z.string().optional().default(''),
+  website: z.string().optional().default(''),
+  services: z.string().optional().default(''),
+  rating: z.string().optional().default(''),
+  notes: z.string().optional().default(''),
+  min_bedrooms: z.string().optional().default(''),
+  min_bathrooms: z.string().optional().default(''),
+  min_parking: z.string().optional().default(''),
+  pets: z.string().optional().default(''),
+  move_in_date: z.string().optional().default(''),
+  lease_type: z.string().optional().default(''),
+  max_price: z.string().optional().default(''),
 })
 
-const VALID_ROLES = ['admin', 'manager', 'employee', 'tenant', 'owner', 'vendor']
+const VALID_ROLES = ['admin', 'manager', 'employee', 'tenant', 'owner', 'vendor', 'realtor', 'accountant', 'contact']
+
+// Friendly / legacy role names → schema roles (AppSheet exports use Client, Cleaner, Admin…)
+const ROLE_ALIASES: Record<string, string> = {
+  client: 'owner',
+  landlord: 'owner',
+  cleaner: 'vendor',
+  contractor: 'vendor',
+  handyman: 'vendor',
+  staff: 'manager',
+  admin: 'manager', // 'admin' is the cross-org platform role; org staff import as managers
+}
+
+// Lenient parsers for messy real-world exports: bad values become null, never a failed row.
+function softNumber(s: string): number | null {
+  if (!s) return null
+  const n = Number(s.replace(/[$,\s]/g, ''))
+  return Number.isNaN(n) ? null : n
+}
+function softInt(s: string): number | null {
+  const n = softNumber(s)
+  return n == null ? null : Math.round(n)
+}
+function softDate(s: string): string | null {
+  if (!s) return null
+  const first = s.split(/[,;]/)[0].trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(first)) return first
+  const d = new Date(first)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10)
+}
+function splitName(d: { first_name: string; last_name: string; name: string }): { first: string | null; last: string | null } {
+  if (d.first_name || d.last_name) return { first: d.first_name || null, last: d.last_name || null }
+  const full = d.name.trim()
+  if (!full) return { first: null, last: null }
+  const parts = full.split(/\s+/)
+  if (parts.length === 1) return { first: parts[0], last: null }
+  return { first: parts.slice(0, -1).join(' '), last: parts[parts.length - 1] }
+}
 
 async function importPeople(ctx: Ctx, records: Record<string, string>[]): Promise<ImportResult> {
   const existing = await loadPeopleByEmail(ctx)
@@ -208,17 +260,24 @@ async function importPeople(ctx: Ctx, records: Record<string, string>[]): Promis
     const d = parsed.data
     const emailKey = normKey(d.email)
     if (existing.has(emailKey) || seenEmails.has(emailKey)) return void skipped++
-    const roles = d.role
-      .split(/[|;,]/)
-      .map((r) => r.trim().toLowerCase())
-      .filter(Boolean)
+    const roles = [
+      ...new Set(
+        d.role
+          .split(/[|;,/]/)
+          .map((r) => r.trim().toLowerCase())
+          .filter(Boolean)
+          .map((r) => ROLE_ALIASES[r] ?? r)
+      ),
+    ]
     const bad = roles.filter((r) => !VALID_ROLES.includes(r))
     if (roles.length === 0 || bad.length > 0) {
       return void errors.push({
         line,
-        message: `role "${d.role}" is invalid — use ${VALID_ROLES.join(', ')}`,
+        message: `role "${d.role}" is invalid — use ${VALID_ROLES.join(', ')} (Client, Cleaner and Admin are mapped automatically)`,
       })
     }
+    const isTenant = roles.includes('tenant')
+    const { first, last } = splitName(d)
     seenEmails.add(emailKey)
     toInsert.push({
       line,
@@ -226,9 +285,24 @@ async function importPeople(ctx: Ctx, records: Record<string, string>[]): Promis
         org_id: ctx.person.org_id,
         email: d.email.trim(),
         role: roles,
-        first_name: d.first_name || null,
-        last_name: d.last_name || null,
+        first_name: first,
+        last_name: last,
         phone: d.phone || null,
+        company: d.company || null,
+        mailing_address: d.mailing_address || null,
+        status: d.status || null,
+        website: d.website || null,
+        services: d.services || null,
+        rating: softNumber(d.rating),
+        notes: d.notes || null,
+        // tenant inquiry preferences — stored only for tenants
+        min_bedrooms: isTenant ? softInt(d.min_bedrooms) : null,
+        min_bathrooms: isTenant ? softNumber(d.min_bathrooms) : null,
+        min_parking: isTenant ? softInt(d.min_parking) : null,
+        pet_preference: isTenant ? d.pets || null : null,
+        move_in_date: isTenant ? softDate(d.move_in_date) : null,
+        lease_type: isTenant ? d.lease_type || null : null,
+        max_price: isTenant ? softNumber(d.max_price) : null,
         active: true,
       },
     })

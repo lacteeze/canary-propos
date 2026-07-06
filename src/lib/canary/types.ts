@@ -69,12 +69,24 @@ export interface CanaryProject {
 export interface CanaryPerson {
   id: string
   name: string
-  role: string // Client | Tenant | Vendor | Admin
+  role: string // Client | Tenant | Vendor | Admin | Realtor | Accountant | Contact
   email: string
   phone: string
   company: string
   status: string
-  address: string
+  address: string // mailing address (billing / legal)
+  website: string
+  services: string
+  rating: string
+  notes: string
+  // Tenant inquiry preferences — only shown in the UI for tenants
+  minBeds: string
+  minBaths: string
+  minParking: string
+  pets: string
+  moveIn: string
+  leaseType: string
+  maxPrice: string
 }
 
 export interface CanaryDraft {

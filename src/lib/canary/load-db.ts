@@ -71,6 +71,8 @@ function personRoleLabel(roles: string[] | null): string {
   if (r === 'employee') return 'Admin'
   if (r === 'manager') return 'Admin'
   if (r === 'admin') return 'Admin'
+  if (r === 'realtor') return 'Realtor'
+  if (r === 'accountant') return 'Accountant'
   return r ? r[0].toUpperCase() + r.slice(1) : 'Contact'
 }
 
@@ -150,7 +152,11 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         .eq('org_id', orgId),
       supabase
         .from('people')
-        .select('id, first_name, last_name, email, phone, role, active')
+        .select(
+          `id, first_name, last_name, email, phone, role, active, company, mailing_address,
+           website, services, rating, notes, status, min_bedrooms, min_bathrooms, min_parking,
+           pet_preference, move_in_date, lease_type, max_price`
+        )
         .eq('org_id', orgId),
       supabase
         .from('listings')
@@ -306,9 +312,20 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
     role: personRoleLabel(p.role as unknown as string[]),
     email: p.email ?? '',
     phone: p.phone ?? '',
-    company: '',
-    status: p.active ? 'Active' : 'Inactive',
-    address: '',
+    company: p.company ?? '',
+    status: p.status || (p.active ? 'Active' : 'Inactive'),
+    address: p.mailing_address ?? '',
+    website: p.website ?? '',
+    services: p.services ?? '',
+    rating: p.rating != null ? String(Number(p.rating)) : '',
+    notes: p.notes ?? '',
+    minBeds: p.min_bedrooms != null ? String(p.min_bedrooms) : '',
+    minBaths: p.min_bathrooms != null ? String(Number(p.min_bathrooms)).replace(/\.0$/, '') : '',
+    minParking: p.min_parking != null ? String(p.min_parking) : '',
+    pets: p.pet_preference ?? '',
+    moveIn: p.move_in_date ?? '',
+    leaseType: p.lease_type ?? '',
+    maxPrice: p.max_price != null ? String(Number(p.max_price)) : '',
   }))
 
   const drafts: CanaryDraft[] = listingRows

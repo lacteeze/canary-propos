@@ -17,6 +17,8 @@ export interface ImportColumn {
   required?: boolean
   note: string
   example: string
+  /** alternate header names (normalized) that map onto this column, e.g. AppSheet exports */
+  aliases?: string[]
 }
 
 export interface ImportSpec {
@@ -33,17 +35,32 @@ export const IMPORT_SPECS: Record<ImportDataset, ImportSpec> = {
     key: 'people',
     label: 'People',
     description:
-      'Contacts: owners, tenants, vendors, and staff. Existing emails are skipped. Imported people can be invited to sign in later.',
+      'Contacts: owners (clients), tenants and inquiries, vendors, realtors, accountants, and staff. Existing emails are skipped. AppSheet export headers (Name, Address, Minimum Bedrooms, …) are recognized automatically. Tenant-preference columns only apply to tenants.',
     columns: [
       { key: 'email', required: true, note: 'Unique per person', example: 'jane@example.com' },
-      { key: 'role', required: true, note: 'admin, manager, employee, tenant, owner or vendor — combine with | for multi-role', example: 'tenant' },
-      { key: 'first_name', note: '', example: 'Jane' },
+      { key: 'role', required: true, note: 'tenant, owner (or client), vendor (or cleaner), realtor, accountant, contact, manager, employee — combine with |', example: 'tenant' },
+      { key: 'first_name', note: 'Or provide a single "name" column instead', example: 'Jane' },
       { key: 'last_name', note: '', example: 'Doe' },
+      { key: 'name', note: 'Full name — used when first/last name are blank', example: 'Jane Doe' },
       { key: 'phone', note: '', example: '709-555-0142' },
+      { key: 'company', note: 'Vendor / business name', example: 'BuildCo Ltd' },
+      { key: 'mailing_address', note: 'Billing / legal address', example: '10 Main St, St. John\u2019s, NL', aliases: ['address'] },
+      { key: 'status', note: 'Lifecycle, e.g. New Inquiry, Still Searching, Current Tenant, Past Client', example: 'New Inquiry' },
+      { key: 'website', note: '', example: 'https://buildco.ca' },
+      { key: 'services', note: 'Vendor services', example: 'Cleaning' },
+      { key: 'rating', note: 'Internal vendor rating 0-5', example: '4' },
+      { key: 'notes', note: 'Free-form notes', example: 'Only servicing east end', aliases: ['other_details'] },
+      { key: 'min_bedrooms', note: 'Tenants only — inquiry preference', example: '2', aliases: ['minimum_bedrooms'] },
+      { key: 'min_bathrooms', note: 'Tenants only', example: '1', aliases: ['minimum_bathrooms'] },
+      { key: 'min_parking', note: 'Tenants only', example: '1', aliases: ['minimum_parking_spots'] },
+      { key: 'pets', note: 'Tenants only, e.g. Cat Friendly, None', example: 'Cat Friendly' },
+      { key: 'move_in_date', note: 'Tenants only — YYYY-MM-DD', example: '2026-09-01', aliases: ['move_in', 'movein_date'] },
+      { key: 'lease_type', note: 'Tenants only, e.g. Long Term (12+ months)', example: 'Long Term (12+ months)' },
+      { key: 'max_price', note: 'Tenants only — max monthly budget', example: '1800' },
     ],
     samples: [
-      ['jane@example.com', 'tenant', 'Jane', 'Doe', '709-555-0142'],
-      ['bob@buildco.ca', 'vendor', 'Bob', 'Smith', '709-555-0987'],
+      ['jane@example.com', 'tenant', 'Jane', 'Doe', '', '709-555-0142', '', '', 'New Inquiry', '', '', '', 'Looking near downtown', '2', '1', '1', 'Cat Friendly', '2026-09-01', 'Long Term (12+ months)', '1800'],
+      ['bob@buildco.ca', 'vendor', 'Bob', 'Smith', '', '709-555-0987', 'BuildCo Ltd', '10 Main St, St. John\u2019s, NL', '', 'https://buildco.ca', 'Plumbing', '4', '', '', '', '', '', '', '', ''],
     ],
   },
   portfolios: {
@@ -224,11 +241,28 @@ export interface ParsedCsv {
   unknownColumns: string[]
 }
 
-/** Parse CSV text and map rows onto a dataset's column keys (header-order independent). */
+function normalizeHeader(h: string): string {
+  return h.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+}
+
+/** Parse CSV text and map rows onto a dataset's column keys (header-order independent, alias-aware). */
 export function parseCsvForDataset(dataset: ImportDataset, text: string): ParsedCsv {
   const spec = IMPORT_SPECS[dataset]
   const rows = parseCsv(text)
-  const header = (rows[0] ?? []).map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'))
+  const rawHeader = (rows[0] ?? []).map(normalizeHeader)
+  const aliasMap = new Map<string, string>()
+  for (const c of spec.columns) {
+    aliasMap.set(c.key, c.key)
+    for (const a of c.aliases ?? []) aliasMap.set(a, c.key)
+  }
+  // Canonical headers win over aliases when both are present in the file.
+  const present = new Set(rawHeader.filter((h) => aliasMap.get(h) === h))
+  const header = rawHeader.map((h) => {
+    const target = aliasMap.get(h)
+    if (!target) return h
+    if (target !== h && present.has(target)) return h // alias shadowed by canonical column
+    return target
+  })
   const known = new Set(spec.columns.map((c) => c.key))
   const missingRequired = spec.columns
     .filter((c) => c.required && !header.includes(c.key))

@@ -10,7 +10,8 @@ import { deleteDraftListing, saveDraftListing, savePaymentEntry } from '@/app/ac
 import CanaryImport from './CanaryImport'
 import EntityDetailDrawer, { type DrawerState } from './EntityDetailDrawer'
 import MessagesView from './MessagesView'
-import type { CanaryDb, CanaryDraft, CanaryLease, CanaryPayment, CanaryPerson, CanaryPortfolio, CanaryProject, CanaryProperty, CanaryRole } from '@/lib/canary/types'
+import type { CanaryDb, CanaryDraft, CanaryLease, CanaryPayment, CanaryPerson, CanaryPortfolio, CanaryProject, CanaryProperty, CanaryRole, CanaryStrBooking, HospitableCalendarData } from '@/lib/canary/types'
+import { resolveToCanaryAddress } from '@/lib/hospitable/property-label'
 import './canary.css'
 
 const MONO = "'IBM Plex Mono', monospace"
@@ -75,6 +76,7 @@ type PayFormState = { date: string; property: string; category: string; descript
 
 interface CanaryAppProps {
   db: CanaryDb
+  hospitableCalendar: HospitableCalendarData
   userRole: CanaryRole
   userPersonId: string
   canSwitchRoles: boolean
@@ -105,7 +107,7 @@ const ICONS: Record<string, string[]> = {
 
 const monoLabel: React.CSSProperties = { fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--dim)' }
 
-export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, userName }: CanaryAppProps) {
+export default function CanaryApp({ db, hospitableCalendar, userRole, userPersonId, canSwitchRoles, userName }: CanaryAppProps) {
   const router = useRouter()
   const [, startTransition] = useTransition()
 
@@ -237,6 +239,23 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
 
   // ---------- KPIs ----------
   const props = scoped.properties
+  const scopedStrBookings = useMemo(() => {
+    if (role === 'Tenant' || role === 'Vendor') return []
+    const bookings = hospitableCalendar.strBookings
+    if (role === 'Owner') {
+      const addrs = new Set(props.map((p) => p.address))
+      return bookings.filter((b) => addrs.has(b.property))
+    }
+    return bookings
+  }, [hospitableCalendar.strBookings, role, props])
+  const strInWindow = useMemo(() => {
+    const today = todayMid.getTime()
+    return scopedStrBookings.filter((b) => {
+      const s = parseDate(b.start)?.getTime()
+      const e = parseDate(b.end)?.getTime()
+      return s != null && e != null && e >= today && s <= today + 90 * DAY
+    }).length
+  }, [scopedStrBookings, todayMid])
   const activeLeases = scoped.leases.filter((l) => l.status === 'Active' || l.status === 'Expiring')
   const occupied = props.filter((p) => p.status === 'Leased' || p.status === 'Airbnb').length
   const hasSuccessor = useCallback((l: CanaryLease) => scoped.leases.some((o) => o !== l && o.property === l.property && (o.status === 'Upcoming' || (() => { const os = parseDate(o.start); const le = parseDate(l.end); return !!os && !!le && os > le })())), [scoped.leases])
@@ -246,6 +265,7 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
     { label: 'Properties', value: String(props.length), color: 'var(--text)' },
     { label: 'Occupancy', value: props.length ? Math.round((occupied / props.length) * 100) + '%' : '—', color: 'var(--green)' },
     { label: 'Active leases', value: String(activeLeases.length), color: 'var(--text)' },
+    { label: 'STR · next 90d', value: hospitableCalendar.connected ? String(strInWindow) : '—', color: 'var(--blue)' },
     { label: 'Expiring · no renewal', value: String(expNoRenew.length), color: 'var(--red)' },
     { label: 'Monthly rent roll', value: money(rentRoll), color: 'var(--text)' },
   ]
@@ -420,26 +440,49 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
   }
   const tlTodayLeft = pct(now).toFixed(2) + '%'
   const tlSliderOffset = Math.round((winStart.getTime() - todayMid.getTime()) / DAY)
-  const fdef: Record<string, boolean> = { active: true, expiring: true, upcoming: true, draft: true, past: false }
+  const fdef: Record<string, boolean> = { active: true, expiring: true, upcoming: true, draft: true, str: true, past: false }
   const filt = { ...fdef, ...tlStatusFilter }
   const filterMeta = [
     { key: 'active', label: 'Active', dot: 'var(--green)' },
     { key: 'expiring', label: 'Expiring', dot: 'var(--red)' },
     { key: 'upcoming', label: 'Upcoming', dot: 'var(--amber)' },
     { key: 'draft', label: 'Drafts', dot: 'var(--accent)' },
+    { key: 'str', label: 'STR stays', dot: 'var(--blue)' },
     { key: 'past', label: 'Past', dot: 'var(--gray)' },
   ]
 
+  const timelineProps = useMemo(() => props.filter(matchProp), [props, q])
+  const timelineAddressFor = useCallback(
+    (address: string) => resolveToCanaryAddress(address, props) ?? address,
+    [props]
+  )
   const leasesByProp = useMemo(() => {
     const m = new Map<string, CanaryLease[]>()
-    scoped.leases.forEach((l) => { const k = l.property; if (!m.has(k)) m.set(k, []); m.get(k)!.push(l) })
+    scoped.leases.forEach((l) => {
+      const k = timelineAddressFor(l.property)
+      if (!m.has(k)) m.set(k, [])
+      m.get(k)!.push(l)
+    })
     return m
-  }, [scoped.leases])
+  }, [scoped.leases, timelineAddressFor])
   const draftsByProp = useMemo(() => {
     const m = new Map<string, CanaryDraft[]>()
-    scoped.drafts.forEach((d) => { const k = d.address; if (!m.has(k)) m.set(k, []); m.get(k)!.push(d) })
+    scoped.drafts.forEach((d) => {
+      const k = timelineAddressFor(d.address)
+      if (!m.has(k)) m.set(k, [])
+      m.get(k)!.push(d)
+    })
     return m
-  }, [scoped.drafts])
+  }, [scoped.drafts, timelineAddressFor])
+  const strByProp = useMemo(() => {
+    const m = new Map<string, CanaryStrBooking[]>()
+    scopedStrBookings.forEach((b) => {
+      const k = timelineAddressFor(b.property)
+      if (!m.has(k)) m.set(k, [])
+      m.get(k)!.push(b)
+    })
+    return m
+  }, [scopedStrBookings, timelineAddressFor])
 
   const catOf = (l: CanaryLease) => {
     if (l.status === 'Upcoming') return 'upcoming'
@@ -450,44 +493,86 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
     return 'past'
   }
 
-  type TlBar = { left: string; width: string; bg: string; color: string; borderStyle: string; label: string; title: string; onClick: () => void }
-  const tlRows = props.filter(matchProp).map((p) => {
-    const ls = leasesByProp.get(p.address) || []
+  type TlBar = { left: string; width: string; bg: string; color: string; borderStyle: string; label: string; title: string; onClick?: () => void; top: number; height: number; interactive: boolean }
+  const buildTimelineRow = (address: string, p: CanaryProperty | undefined, labelAddress?: string) => {
+    const ls = leasesByProp.get(address) || []
     const current = ls.filter((l) => l.status === 'Active' || l.status === 'Expiring')[0]
     const nextEnd = current ? parseDate(current.end) : null
     const bars: TlBar[] = []
+    let hasLeaseBar = false
     ls.forEach((l) => {
       const s = parseDate(l.start), e = parseDate(l.end)
       if (!s || !e || e < winStart || s > winEnd) return
       const cat = catOf(l)
       if (!filt[cat]) return
+      hasLeaseBar = true
       const [bg, color] = cat === 'expiring' ? ['var(--red)', 'var(--red-text)'] : cat === 'upcoming' ? ['var(--amber)', 'var(--amber-text)'] : cat === 'active' ? ['var(--green)', 'var(--green-text)'] : ['var(--gray)', 'var(--bg)']
       bars.push({
         left: pct(s).toFixed(2) + '%', width: Math.max(1.6, pct(e) - pct(s)).toFixed(2) + '%',
         bg, color, borderStyle: 'none', label: tenantNames(l.tenantInfo) || l.status,
         title: l.status + ' · ' + (l.rent || '') + ' · ' + l.start + ' → ' + l.end,
         onClick: () => setDrawer({ kind: 'lease', id: l.id }),
+        top: 12, height: 30, interactive: true,
       })
     })
-    if (filt.draft) (draftsByProp.get(p.address) || []).forEach((d) => {
+    if (filt.draft) (draftsByProp.get(address) || []).forEach((d) => {
       const s = parseDate(d.start)
       const e = parseDate(d.end) || (s ? new Date(s.getTime() + 365 * DAY) : null)
       if (!s || !e || e < winStart || s > winEnd) return
+      hasLeaseBar = true
       bars.push({
         left: pct(s).toFixed(2) + '%', width: Math.max(1.6, pct(e) - pct(s)).toFixed(2) + '%',
         bg: 'transparent', color: 'var(--accent)', borderStyle: '2px dashed var(--accent)',
         label: d.published ? 'Listing · public' : 'Draft lease',
         title: 'Draft · $' + d.rent + '/mo', onClick: () => openDraft(d),
+        top: 12, height: 30, interactive: true,
       })
     })
+    if (filt.str) (strByProp.get(address) || []).forEach((b) => {
+      const s = parseDate(b.start), e = parseDate(b.end)
+      if (!s || !e || e < winStart || s > winEnd) return
+      const pending = b.status === 'request'
+      bars.push({
+        left: pct(s).toFixed(2) + '%', width: Math.max(1.6, pct(e) - pct(s)).toFixed(2) + '%',
+        bg: pending ? 'transparent' : 'var(--blue)',
+        color: pending ? 'var(--blue)' : 'var(--bg)',
+        borderStyle: pending ? '2px dashed var(--blue)' : 'none',
+        label: b.guestLabel,
+        title: `${b.platform} · ${b.guestLabel} · ${b.start} → ${b.end}${b.nights ? ` · ${b.nights}n` : ''}${b.code ? ` · ${b.code}` : ''}`,
+        top: hasLeaseBar ? 36 : 12,
+        height: 24,
+        interactive: false,
+      })
+    })
+    const strCount = (strByProp.get(address) || []).length
+    const displayAddress = labelAddress ?? p?.address ?? address
     return {
-      id: p.id,
-      short: short(p.address),
-      sub: current ? [tenantNames(current.tenantInfo), current.rent ? money(rentNum(current.rent)) + '/mo' : ''].filter(Boolean).join(' · ') : p.status || '',
-      sortKey: nextEnd ? nextEnd.getTime() : 9e15,
+      id: p?.id ?? `str:${displayAddress}`,
+      short: short(displayAddress),
+      sub: p
+        ? (current ? [tenantNames(current.tenantInfo), current.rent ? money(rentNum(current.rent)) + '/mo' : ''].filter(Boolean).join(' · ') : p.status || '')
+        : `STR · ${strCount} booking${strCount === 1 ? '' : 's'}`,
+      sortKey: nextEnd ? nextEnd.getTime() : p ? 9e15 : 9e14,
       bars,
+      strOnly: !p,
     }
-  }).sort((a, b) => a.sortKey - b.sortKey)
+  }
+
+  const managedPropRows = timelineProps.map((p) => buildTimelineRow(p.address, p))
+  const managedAddresses = new Set(timelineProps.map((p) => p.address))
+  const strOnlyAddresses = [...new Set(
+    scopedStrBookings
+      .filter((b) => {
+        const canonical = timelineAddressFor(b.property)
+        if (managedAddresses.has(canonical)) return false
+        return !q || b.property.toLowerCase().includes(q) || b.guestLabel.toLowerCase().includes(q)
+      })
+      .map((b) => b.property)
+  )]
+  const tlRows = [
+    ...managedPropRows,
+    ...strOnlyAddresses.map((address) => buildTimelineRow(timelineAddressFor(address), undefined, address)),
+  ].filter((r) => !r.strOnly || r.bars.length > 0).sort((a, b) => a.sortKey - b.sortKey)
 
   // ---------- filters / lists per page ----------
   const statuses = ['', 'Vacant', 'Leased', 'Airbnb', 'Maintenance', 'Office']
@@ -1008,6 +1093,13 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
                 <button onClick={() => setTlAnchor(winStart.getTime() - spanDays * DAY)} style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', cursor: 'pointer', color: 'var(--dim)' }}>←</button>
                 <button onClick={() => setTlAnchor(winStart.getTime() + spanDays * DAY)} style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', cursor: 'pointer', color: 'var(--dim)' }}>→</button>
               </div>
+              <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 10, border: `1px solid ${hospitableCalendar.connected ? 'var(--border)' : 'var(--amber)'}`, background: hospitableCalendar.connected ? 'var(--elev)' : 'color-mix(in srgb, var(--amber) 12%, var(--panel))', fontSize: 13, color: 'var(--dim)' }}>
+                <span style={{ fontWeight: 650, color: 'var(--text)' }}>Hospitable calendar · </span>
+                {hospitableCalendar.statusMessage}
+                {hospitableCalendar.connected ? (
+                  <span style={{ marginLeft: 8, color: 'var(--faint)' }}>Blue bars = confirmed STR stays · dashed = pending request · gaps = vacant nights</span>
+                ) : null}
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10, marginBottom: 14 }}>
                 {kpis.map((k) => (
                   <div key={k.label} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 14px' }}>
@@ -1030,9 +1122,9 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
                     </div>
                     <div style={{ maxHeight: '62vh', overflowY: 'auto', position: 'relative' }}>
                       {tlRows.map((r) => (
-                        <div key={r.id} style={{ display: 'grid', gridTemplateColumns: 'clamp(150px,20vw,250px) 1fr', borderBottom: '1px solid var(--border)', minHeight: 56 }}>
-                          <div className="cy-hov" onClick={() => setDrawer({ kind: 'property', id: r.id })} style={{ padding: '9px 14px', cursor: 'pointer', borderRight: '1px solid var(--border)', minWidth: 0 }}>
-                            <div style={{ fontWeight: 650, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.short}</div>
+                        <div key={r.id} style={{ display: 'grid', gridTemplateColumns: 'clamp(150px,20vw,250px) 1fr', borderBottom: '1px solid var(--border)', minHeight: r.bars.some((b) => b.top > 20) ? 68 : 56 }}>
+                          <div className="cy-hov" onClick={() => { if (!r.strOnly) setDrawer({ kind: 'property', id: r.id }) }} style={{ padding: '9px 14px', cursor: r.strOnly ? 'default' : 'pointer', borderRight: '1px solid var(--border)', minWidth: 0 }}>
+                            <div style={{ fontWeight: 650, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.short}{r.strOnly ? <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--blue)', letterSpacing: '.04em' }}>STR</span> : null}</div>
                             <div style={{ color: 'var(--dim)', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.sub}</div>
                           </div>
                           <div style={{ position: 'relative', overflow: 'hidden' }}>
@@ -1041,7 +1133,7 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
                             ))}
                             <div style={{ position: 'absolute', top: 0, bottom: 0, left: tlTodayLeft, borderLeft: '2px solid var(--red)', opacity: 0.7 }} />
                             {r.bars.map((b, i) => (
-                              <div key={i} onClick={b.onClick} title={b.title} style={{ position: 'absolute', top: 12, height: 30, left: b.left, width: b.width, background: b.bg, color: b.color, border: b.borderStyle, borderRadius: 8, display: 'flex', alignItems: 'center', padding: '0 10px', fontWeight: 650, fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,.25)' }}>{b.label}</div>
+                              <div key={i} onClick={b.interactive ? b.onClick : undefined} title={b.title} style={{ position: 'absolute', top: b.top, height: b.height, left: b.left, width: b.width, background: b.bg, color: b.color, border: b.borderStyle, borderRadius: 8, display: 'flex', alignItems: 'center', padding: '0 10px', fontWeight: 650, fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', cursor: b.interactive ? 'pointer' : 'default', boxShadow: '0 1px 3px rgba(0,0,0,.25)' }}>{b.label}</div>
                             ))}
                           </div>
                         </div>

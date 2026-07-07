@@ -18,9 +18,11 @@ function ordinalSuffix(n: number): string {
   return n + (s[(v - 20) % 10] ?? s[v] ?? s[0])
 }
 
-function computeDisplayStatus(endDate: string, dbStatus: string): 'Active' | 'Expiring' | 'Expired' {
+function computeDisplayStatus(endDate: string | null, dbStatus: string): 'Active' | 'Expiring' | 'Expired' {
   const today = new Date().toISOString().split('T')[0]
-  if (dbStatus === 'expired' || endDate < today) return 'Expired'
+  if (dbStatus === 'expired') return 'Expired'
+  if (!endDate) return 'Active'
+  if (endDate < today) return 'Expired'
   const daysLeft = Math.ceil((new Date(endDate).getTime() - new Date().getTime()) / 86400000)
   if (daysLeft <= 90) return 'Expiring'
   return 'Active'

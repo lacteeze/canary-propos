@@ -4,6 +4,7 @@
 import { redirect } from 'next/navigation'
 import CanaryApp from '@/components/canary/CanaryApp'
 import { getCaller, loadCanaryDb } from '@/lib/canary/load-db'
+import { loadHospitableCalendar } from '@/lib/canary/load-hospitable-calendar'
 import type { CanaryRole } from '@/lib/canary/types'
 
 export const dynamic = 'force-dynamic'
@@ -24,12 +25,14 @@ export default async function CanaryAppPage() {
   if (caller === 'no-person') redirect('/onboarding')
 
   const db = await loadCanaryDb(caller.orgId)
+  const hospitableCalendar = await loadHospitableCalendar(db.properties)
   const role = toCanaryRole(caller.roles)
   const canSwitchRoles = role === 'Admin' || role === 'Manager'
 
   return (
     <CanaryApp
       db={db}
+      hospitableCalendar={hospitableCalendar}
       userRole={role}
       userPersonId={caller.personId}
       canSwitchRoles={canSwitchRoles}

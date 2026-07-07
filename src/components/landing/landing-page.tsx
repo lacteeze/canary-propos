@@ -1,5 +1,6 @@
 'use client'
 
+import { displayAccentStyle, fontDisplay } from '@/lib/landing/typography'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -21,7 +22,6 @@ import './landing-styles.css'
 interface LandingPageProps {
   listings: BrowseListing[]
   stays: LandingStay[]
-  listingsHref: string
   totalHomes: number
   staysHref: string
   staysCtaHref?: string
@@ -59,7 +59,7 @@ function matchListings(query: string, listings: BrowseListing[]) {
     .slice(0, 6)
 }
 
-export function LandingPage({ listings, stays, listingsHref, totalHomes, staysHref, staysCtaHref = DEFAULT_STAYS_HREF }: LandingPageProps) {
+export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHref = DEFAULT_STAYS_HREF }: LandingPageProps) {
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [lang, setLang] = useState<LandingLang>('en')
   const [langOpen, setLangOpen] = useState(false)
@@ -384,7 +384,7 @@ export function LandingPage({ listings, stays, listingsHref, totalHomes, staysHr
           </div>
           <h1 style={{ margin: '0 0 26px', fontSize: 'clamp(52px, 8.6vw, 124px)', fontWeight: 700, letterSpacing: '-.035em', lineHeight: 0.98, maxWidth: '14ch' }}>
             <span style={{ display: 'block', overflow: 'hidden', paddingBottom: '.14em', marginBottom: '-.14em' }}><span style={{ display: 'block', animation: 'cl2up .9s cubic-bezier(.2,.7,.2,1) .15s both' }}>{copy.tHero1}</span></span>
-            <span style={{ display: 'block', overflow: 'hidden', paddingBottom: '.14em', marginBottom: '-.14em' }}><span style={{ display: 'block', animation: 'cl2up .9s cubic-bezier(.2,.7,.2,1) .3s both' }}><em style={{ fontFamily: "'Instrument Serif', serif", fontStyle: 'italic', fontWeight: 400, color: 'var(--yellow)' }}>{copy.tHero2}</em></span></span>
+            <span style={{ display: 'block', overflow: 'hidden', paddingBottom: '.14em', marginBottom: '-.14em' }}><span style={{ display: 'block', animation: 'cl2up .9s cubic-bezier(.2,.7,.2,1) .3s both' }}><em style={{ ...displayAccentStyle, color: 'var(--yellow)' }}>{copy.tHero2}</em></span></span>
           </h1>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 26, flexWrap: 'wrap', animation: 'cl2fade 1s ease .55s both' }}>
             <p style={{ margin: 0, fontSize: 'clamp(16px, 1.6vw, 20px)', lineHeight: 1.55, maxWidth: '46ch', color: 'rgba(244,239,230,.9)' }}>{copy.tHeroSub}</p>
@@ -438,12 +438,9 @@ export function LandingPage({ listings, stays, listingsHref, totalHomes, staysHr
       </section>
 
       <section id="homes" data-screen-label="Available homes" style={{ maxWidth: 1380, margin: '0 auto', padding: '96px clamp(16px, 4vw, 26px) 30px', width: '100%', minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 8 }}>
-          <div>
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--faint)', marginBottom: 14 }}>{copy.tHomesKicker}</div>
-            <h2 style={{ margin: 0, fontSize: 'clamp(30px, 4.4vw, 54px)', fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.05 }}>{copy.tHomes1} <em style={{ fontFamily: "'Instrument Serif', serif", fontStyle: 'italic', fontWeight: 400 }}>{copy.tHomes2}</em></h2>
-          </div>
-          <Link href={listingsHref} className="cl2-btn-outline" style={{ color: 'var(--text)', border: '1.5px solid var(--border2)', borderRadius: 999, padding: '12px 22px', fontWeight: 700, textDecoration: 'none', fontSize: '14.5px', whiteSpace: 'nowrap' }}>{copy.tSeeAllHomes}</Link>
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--faint)', marginBottom: 14 }}>{copy.tHomesKicker}</div>
+          <h2 style={{ margin: 0, fontSize: 'clamp(30px, 4.4vw, 54px)', fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.05 }}>{copy.tHomes1} <em style={displayAccentStyle}>{copy.tHomes2}</em></h2>
         </div>
         <p style={{ margin: '0 0 26px', color: 'var(--dim)', maxWidth: '56ch' }}>{copy.tHomesIntro}</p>
         <LandingHomesBrowse
@@ -452,6 +449,7 @@ export function LandingPage({ listings, stays, listingsHref, totalHomes, staysHr
           copy={{
             tBed: copy.tBed,
             tBath: copy.tBath,
+            tPark: copy.tPark,
             longTerm: copy.longTerm,
             midTerm: copy.midTerm,
           }}
@@ -463,7 +461,7 @@ export function LandingPage({ listings, stays, listingsHref, totalHomes, staysHr
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 8 }}>
             <div>
               <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--ink-dim)', marginBottom: 14 }}>{copy.tStaysKicker}</div>
-              <h2 style={{ margin: 0, fontSize: 'clamp(30px, 4.4vw, 54px)', fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.05 }}>{copy.tStays1} <em style={{ fontFamily: "'Instrument Serif', serif", fontStyle: 'italic', fontWeight: 400 }}>{copy.tStays2}</em></h2>
+              <h2 style={{ margin: 0, fontSize: 'clamp(30px, 4.4vw, 54px)', fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.05 }}>{copy.tStays1} <em style={displayAccentStyle}>{copy.tStays2}</em></h2>
             </div>
             <a href={staysCtaHref} target="_blank" rel="noopener noreferrer" className="cl2-btn-outline" style={{ color: 'var(--ink-text)', border: '1.5px solid rgba(244,239,230,.35)', borderRadius: 999, padding: '12px 22px', fontWeight: 700, textDecoration: 'none', fontSize: '14.5px', whiteSpace: 'nowrap' }}>{copy.tSeeAllStays}</a>
           </div>
@@ -495,14 +493,14 @@ export function LandingPage({ listings, stays, listingsHref, totalHomes, staysHr
         <div className="cl2-grid2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.6fr)', gap: 40, alignItems: 'start', minWidth: 0 }}>
           <div className="cl2-sticky" style={{ position: 'sticky', top: 100 }}>
             <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--faint)', marginBottom: 14 }}>{copy.tOwnKicker}</div>
-            <h2 style={{ margin: '0 0 14px', fontSize: 'clamp(30px, 4vw, 50px)', fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.05 }}>{copy.tOwn1}<br /><em style={{ fontFamily: "'Instrument Serif', serif", fontStyle: 'italic', fontWeight: 400 }}>{copy.tOwn2}</em></h2>
+            <h2 style={{ margin: '0 0 14px', fontSize: 'clamp(30px, 4vw, 50px)', fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.05 }}>{copy.tOwn1}<br /><em style={displayAccentStyle}>{copy.tOwn2}</em></h2>
             <p style={{ margin: '0 0 22px', color: 'var(--dim)', maxWidth: '38ch' }}>{copy.tOwnSub}</p>
             <a href="mailto:info@canarypm.ca?subject=Management%20inquiry" className="cl2-btn-ink" style={{ display: 'inline-block', textDecoration: 'none', background: 'var(--ink)', color: 'var(--ink-text)', borderRadius: 999, padding: '15px 28px', fontWeight: 700, fontSize: '15.5px' }}>{copy.tOwnCta}</a>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
             {copy.steps.map((step) => (
               <div key={step.num} className="cl2-step" style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 20, padding: '28px 28px 26px', display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-                <span style={{ fontFamily: "'Instrument Serif', serif", fontStyle: 'italic', fontSize: 52, lineHeight: 1, color: 'var(--yellow)', flex: 'none', width: 74 }}>{step.num}</span>
+                <span style={{ fontFamily: fontDisplay, fontStyle: 'normal', fontWeight: 500, fontSize: 52, lineHeight: 1, color: 'var(--yellow)', flex: 'none', width: 74 }}>{step.num}</span>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: 19, marginBottom: 6 }}>{step.title}</div>
                   <div style={{ color: 'var(--dim)', fontSize: '14.5px', maxWidth: '52ch' }}>{step.body}</div>
@@ -545,7 +543,7 @@ export function LandingPage({ listings, stays, listingsHref, totalHomes, staysHr
 
       <section data-screen-label="Reviews" style={{ maxWidth: 1380, margin: '0 auto', padding: '80px 26px 110px' }}>
         <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 26, padding: 'clamp(30px, 5vw, 64px)', position: 'relative', overflow: 'hidden' }}>
-          <div aria-hidden="true" style={{ position: 'absolute', top: -40, right: 20, fontFamily: "'Instrument Serif', serif", fontSize: 280, lineHeight: 1, color: 'var(--hover)', userSelect: 'none' }}>”</div>
+          <div aria-hidden="true" style={{ position: 'absolute', top: -40, right: 20, fontFamily: fontDisplay, fontStyle: 'normal', fontSize: 280, lineHeight: 1, color: 'var(--hover)', userSelect: 'none' }}>”</div>
           <div style={{ position: 'relative' }}>
             <div aria-hidden="true" style={{ color: 'var(--yellow)', fontSize: 17, letterSpacing: 3, marginBottom: 22 }}>★★★★★</div>
             <blockquote style={{ margin: '0 0 26px', fontSize: 'clamp(22px, 2.8vw, 36px)', fontWeight: 600, letterSpacing: '-.02em', lineHeight: 1.3, maxWidth: '30ch', minHeight: '2.6em' }}>&ldquo;{review.quote}&rdquo;</blockquote>
@@ -616,7 +614,7 @@ export function LandingPage({ listings, stays, listingsHref, totalHomes, staysHr
             <div>
               <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10.5px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--ink-dim)', marginBottom: 10 }}>{copy.tExplore}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 }}>
-                <Link href={listingsHref} style={{ color: 'var(--ink-text)', textDecoration: 'none', fontWeight: 600 }}>{copy.tLinkHomes}</Link>
+                <a href="#homes" style={{ color: 'var(--ink-text)', textDecoration: 'none', fontWeight: 600 }}>{copy.tLinkHomes}</a>
                 <a href="https://airbnb.ca/p/canarypm" style={{ color: 'var(--ink-text)', textDecoration: 'none', fontWeight: 600 }}>{copy.tLinkStays}</a>
                 <a href="#faq" style={{ color: 'var(--ink-text)', textDecoration: 'none', fontWeight: 600 }}>{copy.tLinkFaq}</a>
                 <Link href="/login" style={{ color: 'var(--ink-dim)', textDecoration: 'none' }}>{copy.tLinkPortal}</Link>

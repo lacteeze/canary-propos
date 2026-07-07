@@ -264,6 +264,7 @@ function PropertyEditForm({
   const [ownerId, setOwnerId] = useState(property.ownerId)
   const [feeType, setFeeType] = useState(property.mgmtFeeType === 'flat' ? 'flat' : 'percent')
   const [feeValue, setFeeValue] = useState(property.mgmtFeeValue)
+  const [hospitablePropertyId, setHospitablePropertyId] = useState(property.hospitablePropertyId || '')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
 
@@ -277,6 +278,10 @@ function PropertyEditForm({
     if (rentN != null && (Number.isNaN(rentN) || rentN < 0)) return setErr('Invalid asking rent.')
     const feeN = feeValue.trim() === '' ? null : parseFloat(feeValue)
     if (feeN != null && (Number.isNaN(feeN) || feeN < 0)) return setErr('Invalid management fee.')
+    const hospId = hospitablePropertyId.trim()
+    if (hospId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(hospId)) {
+      return setErr('Hospitable property ID must be a UUID (or leave blank).')
+    }
     if (!window.confirm('Save these property changes?')) return
 
     const payload: PropertyDetailsInput = {
@@ -292,6 +297,7 @@ function PropertyEditForm({
       ownerId: ownerId || null,
       managementFeeType: feeType as PropertyDetailsInput['managementFeeType'],
       managementFeeValue: feeN,
+      hospitablePropertyId: hospId || null,
     }
     setSaving(true)
     const res = await updatePropertyDetails(property.unitId, payload)
@@ -374,7 +380,19 @@ function PropertyEditForm({
               <label>{formLabel(feeType === 'percent' ? 'Management fee (%)' : 'Management fee ($)')}
                 <input type="number" min={0} value={feeValue} onChange={(e) => setFeeValue(e.target.value)} style={formFieldStyle} />
               </label>
+              <label style={{ gridColumn: '1 / -1' }}>{formLabel('Hospitable property ID')}
+                <input
+                  type="text"
+                  value={hospitablePropertyId}
+                  onChange={(e) => setHospitablePropertyId(e.target.value)}
+                  placeholder="e.g. 550e8400-e29b-41d4-a716-446655440000"
+                  style={{ ...formFieldStyle, fontFamily: MONO, fontSize: 12 }}
+                />
+              </label>
             </div>
+            <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--dim)', lineHeight: 1.45 }}>
+              Paste the Hospitable property UUID to match STR bookings on the leases timeline. Leave blank for long-term-only units.
+            </p>
           </div>
         )}
 
@@ -553,6 +571,18 @@ export default function EntityDetailDrawer({
               value: canEdit ? (
                 <InlineField value={p.rate != null ? String(p.rate) : ''} label="asking rate" type="number" confirm onSave={wrapSave((v) => updatePropertyField(p.id, 'asking_rent', v))} />
               ) : (p.rate ? money(p.rate) + '/mo' : '—'),
+            },
+            {
+              label: 'Hospitable ID',
+              value: canEdit ? (
+                <InlineField
+                  value={p.hospitablePropertyId || ''}
+                  label="Hospitable property ID"
+                  type="text"
+                  confirm
+                  onSave={wrapSave((v) => updatePropertyField(p.id, 'hospitable_property_id', v))}
+                />
+              ) : (p.hospitablePropertyId || '—'),
             },
             { label: 'Pets', value: p.petFriendly || '—' },
           ]}

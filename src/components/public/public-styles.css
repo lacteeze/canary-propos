@@ -132,3 +132,26 @@
   font-size: 13px;
   color: var(--dim);
 }
+
+.cpub-similar-track {
+  display: flex;
+  gap: 18px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 4px;
+  padding-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) transparent;
+}
+
+.cpub-similar-track > * {
+  flex: 0 0 min(100%, 280px);
+  scroll-snap-align: start;
+}
+
+@media (min-width: 640px) {
+  .cpub-similar-track > * {
+    flex-basis: min(100%, 300px);
+  }
+}

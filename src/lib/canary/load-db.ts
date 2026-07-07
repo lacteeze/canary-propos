@@ -32,14 +32,16 @@ function unitStatusLabel(status: string | null): string {
   return 'Vacant'
 }
 
-function leaseStatusLabel(start: string, end: string, dbStatus: string): string {
+function leaseStatusLabel(start: string, end: string | null, dbStatus: string): string {
   if (dbStatus === 'terminated' || dbStatus === 'expired') return 'Past'
   const now = new Date()
   const s = new Date(start)
-  const e = new Date(end)
-  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return 'Active'
-  if (e < now) return 'Past'
+  if (Number.isNaN(s.getTime())) return 'Active'
   if (s > now) return 'Upcoming'
+  if (!end) return 'Active'
+  const e = new Date(end)
+  if (Number.isNaN(e.getTime())) return 'Active'
+  if (e < now) return 'Past'
   const soon = new Date(now.getTime() + EXPIRY_WINDOW_DAYS * 864e5)
   if (e <= soon) return 'Expiring'
   return 'Active'
@@ -126,7 +128,7 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
       supabase
         .from('units')
         .select(
-          `id, unit_number, bedrooms, bathrooms, status, asking_rent, amenities,
+          `id, unit_number, bedrooms, bathrooms, status, asking_rent, amenities, hospitable_property_id,
            properties!property_id(id, street_address, city, province, property_type, portfolio_id, owner_id, management_fee_type, management_fee_value)`
         )
         .eq('org_id', orgId),
@@ -134,6 +136,12 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         .from('leases')
         .select(
           `id, start_date, end_date, monthly_rent, deposit_amount, status, renewal_status, proposed_rent,
+           utilities_included, rental_credit, rental_credit_expiry, notes, lease_months,
+           insurance_required, insurance_confirmed, policy_expires, insurance_details,
+           management_start_date, management_end_date, management_fee_percent, leasing_fee_percent,
+           termination_reason, days_occupied, pets_policy, bedrooms, bathrooms, parking_spots,
+           appsheet_unique_id, portfolio_appsheet_id, folder_id, previous_lease_appsheet_id,
+           tenant_contacts_raw, appsheet_tenant_ids, appsheet_viewer_ids,
            tenant_id, people!tenant_id(id, first_name, last_name, email, phone),
            units!unit_id(id, unit_number, properties!property_id(street_address, city))`
         )
@@ -234,6 +242,7 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         mgmtFee: feeLabel,
         mgmtFeeType: p.management_fee_type ?? 'percent',
         mgmtFeeValue: p.management_fee_value != null ? String(Number(p.management_fee_value)) : '',
+        hospitablePropertyId: u.hospitable_property_id?.trim() ?? '',
       }
     })
 
@@ -248,16 +257,18 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         ? [tenant.first_name, tenant.last_name].filter(Boolean).join(' ') || tenant.email
         : ''
       const months =
-        l.start_date && l.end_date
-          ? String(
-              Math.max(
-                1,
-                Math.round(
-                  (new Date(l.end_date).getTime() - new Date(l.start_date).getTime()) / (30.44 * 864e5)
+        l.lease_months != null
+          ? String(l.lease_months)
+          : l.start_date && l.end_date
+            ? String(
+                Math.max(
+                  1,
+                  Math.round(
+                    (new Date(l.end_date).getTime() - new Date(l.start_date).getTime()) / (30.44 * 864e5)
+                  )
                 )
               )
-            )
-          : ''
+            : ''
       return {
         id: l.id,
         property: fullAddress(street, prop.city),
@@ -265,15 +276,44 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         start: l.start_date ?? '',
         end: l.end_date ?? '',
         rent: l.monthly_rent != null ? `$${Number(l.monthly_rent).toLocaleString('en-CA')}` : '',
-        tenantInfo: tenant
-          ? [tenantName, tenant.email, tenant.phone].filter(Boolean).join(': ')
-          : '',
+        tenantInfo: l.tenant_contacts_raw?.trim()
+          ? l.tenant_contacts_raw
+          : tenant
+            ? [tenantName, tenant.email, tenant.phone].filter(Boolean).join(': ')
+            : '',
         tenantIds: l.tenant_id ?? '',
         months,
         deposit: l.deposit_amount != null ? `$${Number(l.deposit_amount).toLocaleString('en-CA')}` : '',
         renewal: l.renewal_status ?? '',
-        utilities: '',
-        notes: '',
+        utilities: l.utilities_included?.trim() || '',
+        notes: l.notes?.trim() || '',
+        rentalCredit:
+          l.rental_credit != null ? `$${Number(l.rental_credit).toLocaleString('en-CA')}` : '',
+        rentalCreditExpiry: l.rental_credit_expiry ?? '',
+        utilitiesIncluded: l.utilities_included?.trim() || '',
+        petsPolicy: l.pets_policy?.trim() || '',
+        insuranceRequired: l.insurance_required ? 'TRUE' : 'FALSE',
+        insuranceConfirmed: l.insurance_confirmed ? 'TRUE' : 'FALSE',
+        policyExpires: l.policy_expires ?? '',
+        insuranceDetails: l.insurance_details?.trim() || '',
+        managementStart: l.management_start_date ?? '',
+        managementEnd: l.management_end_date ?? '',
+        managementFeePercent:
+          l.management_fee_percent != null ? `${Number(l.management_fee_percent)}%` : '',
+        leasingFeePercent:
+          l.leasing_fee_percent != null ? `${Number(l.leasing_fee_percent)}%` : '',
+        terminationReason: l.termination_reason?.trim() || '',
+        daysOccupied: l.days_occupied != null ? String(l.days_occupied) : '',
+        appsheetUniqueId: l.appsheet_unique_id?.trim() || '',
+        portfolioAppsheetId: l.portfolio_appsheet_id?.trim() || '',
+        folderId: l.folder_id?.trim() || '',
+        previousLeaseAppsheetId: l.previous_lease_appsheet_id?.trim() || '',
+        tenantContactsRaw: l.tenant_contacts_raw?.trim() || '',
+        appsheetTenantIds: (l.appsheet_tenant_ids ?? []).join(', '),
+        appsheetViewerIds: (l.appsheet_viewer_ids ?? []).join(', '),
+        bedrooms: l.bedrooms != null ? String(l.bedrooms) : '',
+        bathrooms: l.bathrooms != null ? String(l.bathrooms) : '',
+        parkingSpots: l.parking_spots != null ? String(l.parking_spots) : '',
       }
     })
 

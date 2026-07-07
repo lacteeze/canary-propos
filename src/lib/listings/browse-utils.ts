@@ -206,6 +206,41 @@ export function sortListings(listings: BrowseListing[], sort: BrowseSort): Brows
   return sorted
 }
 
+/** Published listings in the same city as the current detail page (excludes self). */
+export function filterSimilarListings(
+  listings: BrowseListing[],
+  currentId: string,
+  city: string,
+  limit = 12
+): BrowseListing[] {
+  const target = normalizeCity(city).toLowerCase()
+  return listings
+    .filter((l) => l.id !== currentId && normalizeCity(l.city).toLowerCase() === target)
+    .slice(0, limit)
+}
+
+/**
+ * City-grouped carousels for a listing detail page: current city first, then other towns.
+ * Excludes the viewed listing; uses the same city grouping as the landing page.
+ */
+export function getDetailPageCarouselGroups(
+  listings: BrowseListing[],
+  currentId: string,
+  currentCity: string,
+  options: CityGroupOptions = { mergeOuterBay: true }
+): CityGroup[] {
+  const currentDisplay = displayCityGroup(currentCity, options)
+  const groups = groupListingsByCity(
+    listings.filter((l) => l.id !== currentId),
+    options
+  ).filter((g) => g.listings.length > 0)
+
+  const currentGroup = groups.find((g) => g.city === currentDisplay)
+  const otherGroups = groups.filter((g) => g.city !== currentDisplay)
+
+  return [...(currentGroup ? [currentGroup] : []), ...otherGroups]
+}
+
 const OUTER_BAY_GROUP = "Clarke's Beach & Dildo"
 
 export type CityGroupOptions = {

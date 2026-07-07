@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Instrument_Sans, Instrument_Serif, IBM_Plex_Mono } from 'next/font/google'
+import { Instrument_Sans, IBM_Plex_Mono } from 'next/font/google'
 import { LandingPage } from '@/components/landing/landing-page'
 import { getHospitableStays } from '@/lib/landing/get-hospitable-stays'
 import { getPublishedListings } from '@/lib/landing/get-published-listings'
@@ -11,13 +11,6 @@ export const dynamic = 'force-dynamic'
 const instrumentSans = Instrument_Sans({
   subsets: ['latin'],
   variable: '--font-instrument-sans',
-})
-
-const instrumentSerif = Instrument_Serif({
-  subsets: ['latin'],
-  weight: '400',
-  style: ['normal', 'italic'],
-  variable: '--font-instrument-serif',
 })
 
 const ibmPlexMono = IBM_Plex_Mono({
@@ -45,11 +38,10 @@ export default async function HomePage() {
     getPublishedListings(orgSlug),
     getLandingStats(orgSlug, stays.length),
   ])
-  const listingsHref = orgSlug ? `/?org=${orgSlug}#homes` : '/#homes'
   const staysHref = orgSlug ? `/?org=${orgSlug}#stays` : '/#stays'
 
   return (
-    <div className={`${instrumentSans.variable} ${instrumentSerif.variable} ${ibmPlexMono.variable}`} style={{ fontFamily: 'var(--font-instrument-sans), system-ui, sans-serif' }}>
+    <div className={`${instrumentSans.variable} ${ibmPlexMono.variable}`} style={{ fontFamily: 'var(--font-instrument-sans), system-ui, sans-serif' }}>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -80,7 +72,6 @@ export default async function HomePage() {
       <LandingPage
         listings={listings}
         stays={stays}
-        listingsHref={listingsHref}
         totalHomes={stats.totalHomes}
         staysHref={staysHref}
       />

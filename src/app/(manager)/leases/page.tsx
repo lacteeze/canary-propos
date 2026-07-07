@@ -6,9 +6,11 @@ import Link from 'next/link'
 import { AddLeaseForm } from '@/components/leases/AddLeaseForm'
 import { ExpiryAlertCallout, type ExpiringLease } from '@/components/leases/ExpiryAlertCallout'
 
-function computeDisplayStatus(endDate: string, dbStatus: string): 'Active' | 'Expiring' | 'Expired' {
+function computeDisplayStatus(endDate: string | null, dbStatus: string): 'Active' | 'Expiring' | 'Expired' {
   const today = new Date().toISOString().split('T')[0]
-  if (dbStatus === 'expired' || endDate < today) return 'Expired'
+  if (dbStatus === 'expired') return 'Expired'
+  if (!endDate) return 'Active'
+  if (endDate < today) return 'Expired'
   const daysLeft = Math.ceil((new Date(endDate).getTime() - new Date().getTime()) / 86400000)
   if (daysLeft <= 90) return 'Expiring'
   return 'Active'
@@ -81,8 +83,9 @@ export default async function LeasesPage() {
   const ninetyStr = ninetyDaysFromNow.toISOString().split('T')[0]
 
   const expiringLeases: ExpiringLease[] = (leases ?? [])
-    .filter((l) => l.status === 'active' && l.end_date >= today && l.end_date <= ninetyStr)
+    .filter((l) => l.status === 'active' && l.end_date && l.end_date >= today && l.end_date <= ninetyStr)
     .map((l) => {
+      const endDate = l.end_date!
       const tenant = l.people as { first_name: string | null; last_name: string | null } | null
       const unit = l.units as { unit_number: string | null; properties: { street_address: string; city: string } | null } | null
       const tenantName = tenant
@@ -92,9 +95,9 @@ export default async function LeasesPage() {
         ? `${unit.properties?.street_address ?? ''} Unit ${unit.unit_number ?? '—'}`
         : '—'
       const daysUntilExpiry = Math.ceil(
-        (new Date(l.end_date).getTime() - new Date().getTime()) / 86400000
+        (new Date(endDate).getTime() - new Date().getTime()) / 86400000
       )
-      return { id: l.id, tenantName, propertyUnit: unitDisplay, endDate: l.end_date, daysUntilExpiry }
+      return { id: l.id, tenantName, propertyUnit: unitDisplay, endDate, daysUntilExpiry }
     })
 
   return (

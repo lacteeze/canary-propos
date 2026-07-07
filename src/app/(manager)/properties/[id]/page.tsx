@@ -129,12 +129,13 @@ export default async function PropertyDetailPage({ params }: PageProps) {
       return daysUntil >= 0 && daysUntil <= 90
     })
     .map((lease) => {
+      const endDateStr = lease.end_date!
       const tenantData = lease.people as { first_name: string | null; last_name: string | null } | null
       const tenantName = tenantData
         ? [tenantData.first_name, tenantData.last_name].filter(Boolean).join(' ')
         : 'Unknown tenant'
       const unit = unitsList.find((u) => u.id === lease.unit_id)
-      const endDate = new Date(lease.end_date)
+      const endDate = new Date(endDateStr)
       const daysUntilExpiry = Math.ceil(
         (endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
       )
@@ -142,7 +143,7 @@ export default async function PropertyDetailPage({ params }: PageProps) {
         id: lease.id,
         tenantName,
         propertyUnit: unit?.unit_number ?? '—',
-        endDate: lease.end_date,
+        endDate: endDateStr,
         daysUntilExpiry,
       }
     })

@@ -26,6 +26,8 @@ export interface CanaryProperty {
   ownerId: string
   /** underlying unit id — used when creating listings */
   unitId: string
+  /** Hospitable Public API property UUID for STR calendar matching */
+  hospitablePropertyId: string
   mgmtFee: string
   /** raw management fee fields (staff-only edit form) */
   mgmtFeeType: string
@@ -46,6 +48,38 @@ export interface CanaryLease {
   renewal: string
   utilities: string
   notes: string
+  /** Tenant-facing — dollar amount credited against rent */
+  rentalCredit: string
+  /** Tenant-facing — credit expiry date (YYYY-MM-DD) */
+  rentalCreditExpiry: string
+  /** Tenant-facing — e.g. Not Included, Internet Included */
+  utilitiesIncluded: string
+  /** Tenant-facing — pets policy on this lease */
+  petsPolicy: string
+  /** Tenant-facing — insurance requirement flag */
+  insuranceRequired: string
+  insuranceConfirmed: string
+  policyExpires: string
+  insuranceDetails: string
+  /** Internal — management window / fees from AppSheet */
+  managementStart: string
+  managementEnd: string
+  managementFeePercent: string
+  leasingFeePercent: string
+  terminationReason: string
+  daysOccupied: string
+  /** Internal — AppSheet import metadata */
+  appsheetUniqueId: string
+  portfolioAppsheetId: string
+  folderId: string
+  previousLeaseAppsheetId: string
+  tenantContactsRaw: string
+  appsheetTenantIds: string
+  appsheetViewerIds: string
+  /** Snapshot at lease time (may differ from current unit) */
+  bedrooms: string
+  bathrooms: string
+  parkingSpots: string
 }
 
 export interface CanaryPortfolio {
@@ -111,6 +145,31 @@ export interface CanaryDraft {
   utilities: string
   description: string
   published: boolean
+}
+
+/** Short-term reservation from Hospitable, mapped for the leases timeline. */
+export interface CanaryStrBooking {
+  id: string
+  /** Timeline row key — matched Canary address or Hospitable label */
+  property: string
+  hospitablePropertyId: string
+  hospitablePropertyName: string
+  start: string
+  end: string
+  guestLabel: string
+  platform: string
+  status: string
+  nights: number | null
+  code: string
+}
+
+export interface HospitableCalendarData {
+  strBookings: CanaryStrBooking[]
+  /** True when PAT is set and fetch succeeded */
+  connected: boolean
+  /** Human-readable status for empty/error states */
+  statusMessage: string
+  propertyCount: number
 }
 
 export interface CanaryPayment {

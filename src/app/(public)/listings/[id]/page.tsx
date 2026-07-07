@@ -4,8 +4,12 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { InquiryForm } from '@/components/listings/InquiryForm'
 import { ApplicationForm } from '@/components/listings/ApplicationForm'
+import { SimilarListingsSection } from '@/components/landing/SimilarListingsCarousel'
 import { PublicHeader } from '@/components/public/PublicHeader'
-import { CARD_PHOTOS } from '@/lib/landing/content'
+import { CARD_PHOTOS, getLandingCopy } from '@/lib/landing/content'
+import { getPublishedListings } from '@/lib/landing/get-published-listings'
+import { fontDisplay } from '@/lib/landing/typography'
+import { getDetailPageCarouselGroups } from '@/lib/listings/browse-utils'
 import { createPublicClient } from '@/lib/supabase/public'
 import { getOrgBySlug } from '@/lib/orgs'
 import { headers } from 'next/headers'
@@ -89,6 +93,18 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
   const availableLabel = listing.available_from
     ? new Date(listing.available_from).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
     : null
+
+  const listingCity = property?.city ?? "St. John's"
+  const allPublished = await getPublishedListings(orgSlug)
+  const carouselGroups = getDetailPageCarouselGroups(allPublished, id, listingCity)
+  const cardCopy = getLandingCopy('en')
+  const listingCardCopy = {
+    tBed: cardCopy.tBed,
+    tBath: cardCopy.tBath,
+    tPark: cardCopy.tPark,
+    longTerm: cardCopy.longTerm,
+    midTerm: cardCopy.midTerm,
+  }
 
   return (
     <>
@@ -256,9 +272,9 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
                   <h2
                     style={{
                       margin: '0 0 14px',
-                      fontFamily: "var(--font-instrument-serif), 'Instrument Serif', Georgia, serif",
-                      fontStyle: 'italic',
-                      fontWeight: 400,
+                      fontFamily: fontDisplay,
+                      fontStyle: 'normal',
+                      fontWeight: 600,
                       fontSize: 'clamp(22px, 3vw, 28px)',
                       color: 'var(--text)',
                     }}
@@ -355,6 +371,8 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
             <InquiryForm listingId={listing.id} orgId={listing.org_id} />
             <ApplicationForm listingId={listing.id} orgId={listing.org_id} />
           </div>
+
+          <SimilarListingsSection groups={carouselGroups} copy={listingCardCopy} />
         </div>
       </main>
     </>

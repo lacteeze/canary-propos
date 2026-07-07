@@ -88,7 +88,7 @@ const UNIT_STATUS_REVERSE: Record<string, string> = {
 
 export async function updatePropertyField(
   unitId: string,
-  field: 'status' | 'asking_rent' | 'bedrooms' | 'bathrooms',
+  field: 'status' | 'asking_rent' | 'bedrooms' | 'bathrooms' | 'hospitable_property_id',
   value: string
 ): Promise<ActionResult> {
   const ctx = await getStaffContext()
@@ -96,7 +96,7 @@ export async function updatePropertyField(
 
   const { data: unit } = await ctx.supabase
     .from('units')
-    .select('id, status, asking_rent, bedrooms, bathrooms')
+    .select('id, status, asking_rent, bedrooms, bathrooms, hospitable_property_id')
     .eq('id', unitId)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -127,11 +127,24 @@ export async function updatePropertyField(
     if (Number.isNaN(n) || n < 0) return { success: false, error: 'Invalid bathroom count.' }
     changes.push({ field: 'bathrooms', oldValue: str(unit.bathrooms), newValue: String(n) })
     patch.bathrooms = n
+  } else if (field === 'hospitable_property_id') {
+    const trimmed = value.trim()
+    if (trimmed && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+      return { success: false, error: 'Hospitable property ID must be a UUID (or leave blank to clear).' }
+    }
+    const next = trimmed || null
+    const prev = unit.hospitable_property_id?.trim() || null
+    if (next === prev) return { success: true }
+    changes.push({ field: 'hospitable_property_id', oldValue: prev, newValue: next })
+    patch.hospitable_property_id = next
   }
 
   const { error } = await ctx.supabase.from('units').update(patch).eq('id', unitId).eq('org_id', ctx.person.org_id)
   if (error) {
     console.error('[updatePropertyField]', error)
+    if (error.code === '23505') {
+      return { success: false, error: 'That Hospitable property is already linked to another unit.' }
+    }
     return { success: false, error: 'Failed to update property.' }
   }
   await writeAuditEntries(ctx.supabase, ctx.person.org_id, 'units', unitId, ctx.person.id, changes)
@@ -155,6 +168,10 @@ const propertyDetailsSchema = z.object({
   ownerId: z.string().uuid().nullable(),
   managementFeeType: z.enum(['percent', 'flat']),
   managementFeeValue: z.number().min(0).nullable(),
+  hospitablePropertyId: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+    z.string().uuid().nullable()
+  ),
 })
 
 export type PropertyDetailsInput = z.infer<typeof propertyDetailsSchema>
@@ -169,7 +186,7 @@ export async function updatePropertyDetails(unitId: string, input: PropertyDetai
 
   const { data: unit } = await ctx.supabase
     .from('units')
-    .select('id, property_id, status, bedrooms, bathrooms, asking_rent, amenities')
+    .select('id, property_id, status, bedrooms, bathrooms, asking_rent, amenities, hospitable_property_id')
     .eq('id', unitId)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -225,6 +242,15 @@ export async function updatePropertyDetails(unitId: string, input: PropertyDetai
     changes.push({ field: 'pets', oldValue: oldPetLabel, newValue: form.pets })
     unitPatch.amenities = form.pets === 'No pets' ? nonPet : [...nonPet, form.pets]
   }
+  const oldHospitableId = unit.hospitable_property_id?.trim() || null
+  if (form.hospitablePropertyId !== oldHospitableId) {
+    changes.push({
+      field: 'hospitable_property_id',
+      oldValue: oldHospitableId,
+      newValue: form.hospitablePropertyId,
+    })
+    unitPatch.hospitable_property_id = form.hospitablePropertyId
+  }
 
   // ----- properties patch -----
   const propPatch: PropertyUpdate = { updated_at: now }
@@ -266,6 +292,9 @@ export async function updatePropertyDetails(unitId: string, input: PropertyDetai
     const { error } = await ctx.supabase.from('units').update(unitPatch).eq('id', unitId).eq('org_id', ctx.person.org_id)
     if (error) {
       console.error('[updatePropertyDetails:units]', error)
+      if (error.code === '23505') {
+        return { success: false, error: 'That Hospitable property is already linked to another unit.' }
+      }
       return { success: false, error: 'Failed to update property.' }
     }
   }

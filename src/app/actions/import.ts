@@ -591,7 +591,7 @@ async function importPayments(ctx: Ctx, records: Record<string, string>[]): Prom
     .from('leases')
     .select('id, unit_id, start_date, end_date')
     .eq('org_id', ctx.person.org_id)
-  const leasesByUnit = new Map<string, { id: string; start: string; end: string }[]>()
+  const leasesByUnit = new Map<string, { id: string; start: string; end: string | null }[]>()
   for (const l of leaseRows ?? []) {
     if (!leasesByUnit.has(l.unit_id)) leasesByUnit.set(l.unit_id, [])
     leasesByUnit.get(l.unit_id)!.push({ id: l.id, start: l.start_date, end: l.end_date })
@@ -617,8 +617,14 @@ async function importPayments(ctx: Ctx, records: Record<string, string>[]): Prom
     if (leases.length === 0) {
       return void errors.push({ line, message: `no lease found on "${d.property_address}" — import Leases first` })
     }
-    const covering = leases.find((l) => l.start <= d.date && d.date <= l.end)
-    const lease = covering ?? [...leases].sort((a, b) => (a.end < b.end ? 1 : -1))[0]
+    const covering = leases.find((l) => l.start <= d.date && (!l.end || d.date <= l.end))
+    const lease =
+      covering ??
+      [...leases].sort((a, b) => {
+        const aEnd = a.end ?? '9999-12-31'
+        const bEnd = b.end ?? '9999-12-31'
+        return aEnd < bEnd ? 1 : -1
+      })[0]
     const status = (d.status || 'recorded').toLowerCase()
     toInsert.push({
       line,

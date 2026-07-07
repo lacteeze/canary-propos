@@ -147,6 +147,8 @@ const WO_STATUS_REVERSE: Record<string, string> = {
   'Reviewing Estimates': 'pending_approval',
   Completed: 'completed',
   Closed: 'closed',
+  Postponed: 'postponed',
+  Cancelled: 'cancelled',
 }
 
 const WO_STATUS_LABEL: Record<string, string> = Object.fromEntries(
@@ -292,7 +294,19 @@ export async function updatePortfolioField(
 
 export async function updateProjectField(
   projectId: string,
-  field: 'status' | 'priority' | 'title' | 'description' | 'estimated_cost',
+  field:
+    | 'status'
+    | 'priority'
+    | 'title'
+    | 'description'
+    | 'estimated_cost'
+    | 'budget'
+    | 'deposit'
+    | 'category'
+    | 'notes'
+    | 'start_date'
+    | 'end_date'
+    | 'completed_date',
   value: string
 ): Promise<ActionResult> {
   const ctx = await getStaffContext()
@@ -300,7 +314,7 @@ export async function updateProjectField(
 
   const { data: wo } = await ctx.supabase
     .from('work_orders')
-    .select('id, status, priority, title, description, estimated_cost')
+    .select('id, status, priority, title, description, estimated_cost, budget, deposit, category, notes, start_date, end_date, completed_date')
     .eq('id', projectId)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -324,11 +338,23 @@ export async function updateProjectField(
   } else if (field === 'description') {
     changes.push({ field: 'description', oldValue: wo.description, newValue: value })
     patch.description = value
-  } else if (field === 'estimated_cost') {
-    const n = parseFloat(value.replace(/[$,]/g, ''))
-    if (Number.isNaN(n) || n < 0) return { success: false, error: 'Invalid estimate.' }
-    changes.push({ field: 'estimated_cost', oldValue: str(wo.estimated_cost), newValue: String(n) })
-    patch.estimated_cost = n
+  } else if (field === 'estimated_cost' || field === 'budget' || field === 'deposit') {
+    if (value.trim() === '') {
+      changes.push({ field, oldValue: str(wo[field]), newValue: null })
+      patch[field] = null
+    } else {
+      const n = parseFloat(value.replace(/[$,]/g, ''))
+      if (Number.isNaN(n) || n < 0) return { success: false, error: 'Invalid amount.' }
+      changes.push({ field, oldValue: str(wo[field]), newValue: String(n) })
+      patch[field] = n
+    }
+  } else if (field === 'category' || field === 'notes') {
+    changes.push({ field, oldValue: wo[field], newValue: value || null })
+    patch[field] = value || null
+  } else if (field === 'start_date' || field === 'end_date' || field === 'completed_date') {
+    if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return { success: false, error: 'Invalid date format.' }
+    changes.push({ field, oldValue: str(wo[field]), newValue: value || null })
+    patch[field] = value || null
   }
 
   const { error } = await ctx.supabase.from('work_orders').update(patch).eq('id', projectId).eq('org_id', ctx.person.org_id)

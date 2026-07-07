@@ -235,7 +235,11 @@ function softDate(s: string): string | null {
   const first = s.split(/[,;]/)[0].trim()
   if (/^\d{4}-\d{2}-\d{2}$/.test(first)) return first
   const d = new Date(first)
-  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10)
+  if (Number.isNaN(d.getTime())) return null
+  // Use local date components — toISOString() would shift evening timestamps
+  // (AppSheet exports local NL time) into the next UTC day.
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 function splitName(d: { first_name: string; last_name: string; name: string }): { first: string | null; last: string | null } {
   if (d.first_name || d.last_name) return { first: d.first_name || null, last: d.last_name || null }
@@ -641,40 +645,127 @@ async function importPayments(ctx: Ctx, records: Record<string, string>[]): Prom
 }
 
 const WO_PRIORITIES = ['low', 'medium', 'high', 'urgent']
-const WO_STATUSES = ['draft', 'submitted', 'assigned', 'in_progress', 'pending_approval', 'approved', 'completed', 'closed']
+const WO_STATUSES = ['draft', 'submitted', 'assigned', 'in_progress', 'pending_approval', 'approved', 'completed', 'closed', 'postponed', 'cancelled']
+
+// AppSheet project labels → work_order enums (normalized: lowercase, spaces collapsed)
+const WO_STATUS_ALIASES: Record<string, string> = {
+  estimate: 'draft',
+  'requires estimate': 'submitted',
+  'reviewing estimates': 'pending_approval',
+  'approved to schedule': 'approved',
+  'in progress': 'in_progress',
+}
+const WO_PRIORITY_ALIASES: Record<string, string> = {
+  '1 - urgent': 'urgent',
+  '2 - high': 'high',
+  '3 - normal': 'medium',
+  '3 - medium': 'medium',
+  '4 - low': 'low',
+  '5 - complete': 'low', // completed AppSheet projects carry a pseudo-priority
+  normal: 'medium',
+}
 
 const projectSchema = z.object({
   property_address: z.string().min(1, 'is required'),
   unit_number: z.string().optional().default(''),
   title: z.string().min(1, 'is required'),
-  description: z.string().min(1, 'is required'),
+  description: z.string().optional().default(''),
   priority: z.string().optional().default(''),
   status: z.string().optional().default(''),
   vendor_email: z.string().optional().default(''),
+  contractor: z.string().optional().default(''),
+  category: z.string().optional().default(''),
   estimated_cost: z.string().optional().default(''),
+  budget: z.string().optional().default(''),
+  deposit: z.string().optional().default(''),
+  start_date: z.string().optional().default(''),
+  end_date: z.string().optional().default(''),
+  completed_date: z.string().optional().default(''),
+  notes: z.string().optional().default(''),
+  external_ref: z.string().optional().default(''),
 })
+
+/**
+ * Resolve a unit from an address that may be a full AppSheet address
+ * ("10 Golf Ave, St. John's, NL A1C 5C6, Canada") — falls back to matching
+ * on the street portion before the first comma.
+ */
+function resolveUnitLenient(
+  unitsByAddress: Map<string, UnitRef[]>,
+  address: string,
+  unitNumber: string
+): { unit?: UnitRef; error?: string } {
+  const full = resolveUnit(unitsByAddress, address, unitNumber)
+  if (full.unit) return full
+  const street = address.split(',')[0].trim()
+  if (street && normKey(street) !== normKey(address)) {
+    const partial = resolveUnit(unitsByAddress, street, unitNumber)
+    if (partial.unit) return partial
+  }
+  return full
+}
 
 async function importProjects(ctx: Ctx, records: Record<string, string>[]): Promise<ImportResult> {
   const [people, unitsByAddress] = await Promise.all([loadPeopleByEmail(ctx), loadUnitsByAddress(ctx)])
 
+  // People by full name (for contractor matching when no email is present).
+  const { data: peopleRows } = await ctx.supabase
+    .from('people')
+    .select('id, first_name, last_name')
+    .eq('org_id', ctx.person.org_id)
+  const peopleByName = new Map<string, string>()
+  for (const p of peopleRows ?? []) {
+    const name = normKey([p.first_name, p.last_name].filter(Boolean).join(' '))
+    if (name) peopleByName.set(name, p.id)
+  }
+
+  // Existing AppSheet refs so re-imports are idempotent.
+  const { data: woRows } = await ctx.supabase
+    .from('work_orders')
+    .select('external_ref')
+    .eq('org_id', ctx.person.org_id)
+    .not('external_ref', 'is', null)
+  const existingRefs = new Set((woRows ?? []).map((w) => normKey(w.external_ref ?? '')))
+
+  /** "Name: phone: email" (possibly a list) or plain name → person id; null when unmatched. */
+  const resolveContractor = (raw: string): string | null => {
+    const email = raw.match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0]
+    if (email) {
+      const p = people.get(normKey(email))
+      if (p) return p.id
+    }
+    const name = raw.split(/[:,]/)[0].trim()
+    return (name && peopleByName.get(normKey(name))) || null
+  }
+
   const errors: ImportRowError[] = []
+  let skipped = 0
   const toInsert: { line: number; record: Record<string, unknown> }[] = []
 
   records.forEach((rec, i) => {
     const line = i + 2
+    // AppSheet exports can contain rows where every real column is blank
+    // (only ignored boolean columns filled) — skip them instead of erroring.
+    if (Object.values(rec).every((v) => !v.trim())) return void skipped++
     const parsed = projectSchema.safeParse(rec)
     if (!parsed.success) return void errors.push({ line, message: firstIssue(parsed.error) })
     const d = parsed.data
-    if (d.priority && !WO_PRIORITIES.includes(d.priority.toLowerCase())) {
+
+    const priorityRaw = normKey(d.priority)
+    const priority = WO_PRIORITY_ALIASES[priorityRaw] ?? priorityRaw
+    if (priority && !WO_PRIORITIES.includes(priority)) {
       return void errors.push({ line, message: `priority "${d.priority}" is invalid — use ${WO_PRIORITIES.join(', ')}` })
     }
-    if (d.status && !WO_STATUSES.includes(d.status.toLowerCase())) {
+    const statusRaw = normKey(d.status)
+    const status = WO_STATUS_ALIASES[statusRaw] ?? statusRaw.replace(/ /g, '_')
+    if (status && !WO_STATUSES.includes(status)) {
       return void errors.push({ line, message: `status "${d.status}" is invalid — use ${WO_STATUSES.join(', ')}` })
     }
-    const cost = d.estimated_cost ? Number(d.estimated_cost.replace(/[$,\s]/g, '')) : null
-    if (cost !== null && Number.isNaN(cost)) {
-      return void errors.push({ line, message: `estimated_cost "${d.estimated_cost}" is not a number` })
-    }
+
+    const refKey = normKey(d.external_ref)
+    if (refKey && existingRefs.has(refKey)) return void skipped++
+    if (refKey) existingRefs.add(refKey)
+
     let vendorId: string | null = null
     if (d.vendor_email) {
       const vendor = people.get(normKey(d.vendor_email))
@@ -683,7 +774,17 @@ async function importProjects(ctx: Ctx, records: Record<string, string>[]): Prom
       }
       vendorId = vendor.id
     }
-    const { unit, error } = resolveUnit(unitsByAddress, d.property_address, d.unit_number)
+    let notes = d.notes.trim() || null
+    if (!vendorId && d.contractor) {
+      vendorId = resolveContractor(d.contractor)
+      // Human-readable but unmatched contractor values are preserved in notes
+      // (AppSheet also exports opaque row ids here, which are dropped).
+      if (!vendorId && /[@\s]/.test(d.contractor.trim())) {
+        notes = [notes, `Contractor: ${d.contractor.trim()}`].filter(Boolean).join('\n')
+      }
+    }
+
+    const { unit, error } = resolveUnitLenient(unitsByAddress, d.property_address, d.unit_number)
     if (!unit) return void errors.push({ line, message: error! })
     toInsert.push({
       line,
@@ -692,18 +793,26 @@ async function importProjects(ctx: Ctx, records: Record<string, string>[]): Prom
         property_id: unit.propertyId,
         unit_id: d.unit_number ? unit.unitId : null,
         title: d.title.trim(),
-        description: d.description.trim(),
-        priority: (d.priority || 'medium').toLowerCase(),
-        status: (d.status || 'submitted').toLowerCase(),
+        description: d.description.trim() || d.title.trim(),
+        priority: priority || 'medium',
+        status: status || 'submitted',
         assigned_vendor_id: vendorId,
-        estimated_cost: cost,
+        estimated_cost: softNumber(d.estimated_cost),
+        budget: softNumber(d.budget),
+        deposit: softNumber(d.deposit),
+        category: d.category.trim() || null,
+        start_date: softDate(d.start_date),
+        end_date: softDate(d.end_date),
+        completed_date: softDate(d.completed_date),
+        notes,
+        external_ref: d.external_ref.trim() || null,
         created_by: ctx.person.id,
       },
     })
   })
 
   const inserted = await chunkedInsert(ctx, 'work_orders', toInsert, errors)
-  return { success: true, inserted, skipped: 0, errors }
+  return { success: true, inserted, skipped, errors }
 }
 
 // ---------- entry point ----------

@@ -68,6 +68,13 @@ export interface CanaryProject {
   description: string
   contractors: string
   estimate: string
+  category: string
+  budget: string
+  deposit: string
+  startDate: string
+  endDate: string
+  completedDate: string
+  notes: string
 }
 
 export interface CanaryPerson {

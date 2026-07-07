@@ -54,6 +54,8 @@ const WORK_ORDER_STATUS_LABEL: Record<string, string> = {
   approved: 'Approved to Schedule',
   completed: 'Completed',
   closed: 'Closed',
+  postponed: 'Postponed',
+  cancelled: 'Cancelled',
 }
 
 const WORK_ORDER_PRIORITY_LABEL: Record<string, string> = {
@@ -146,6 +148,7 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         .from('work_orders')
         .select(
           `id, title, description, priority, status, estimated_cost, property_id,
+           category, budget, deposit, start_date, end_date, completed_date, notes,
            assigned_vendor_id, people!assigned_vendor_id(first_name, last_name),
            properties!property_id(street_address, city)`
         )
@@ -305,6 +308,13 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         contractors: vendorName,
         estimate:
           j.estimated_cost != null ? `$${Number(j.estimated_cost).toLocaleString('en-CA')}` : '',
+        category: j.category ?? '',
+        budget: j.budget != null ? `$${Number(j.budget).toLocaleString('en-CA')}` : '',
+        deposit: j.deposit != null ? `$${Number(j.deposit).toLocaleString('en-CA')}` : '',
+        startDate: j.start_date ?? '',
+        endDate: j.end_date ?? '',
+        completedDate: j.completed_date ?? '',
+        notes: j.notes ?? '',
       }
     })
 

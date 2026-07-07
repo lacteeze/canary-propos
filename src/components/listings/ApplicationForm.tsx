@@ -3,6 +3,7 @@
 // Application interest form — submitted by unauthenticated visitors on the public listing detail page.
 // Phase 3 scope: interest capture only (name, email, phone required, move_in_date, note).
 // Full tenant screening (Single Key / Plaid) is deferred to Phase 4 (D-08).
+// Styled to match the landing page branding (see public-theme.css / .cpub scope).
 
 import { useState, useTransition } from 'react'
 import { submitApplication } from '@/app/actions/inquiries'
@@ -10,6 +11,27 @@ import { submitApplication } from '@/app/actions/inquiries'
 interface ApplicationFormProps {
   listingId: string
   orgId: string
+}
+
+const cardStyle: React.CSSProperties = {
+  background: 'var(--elev)',
+  border: '1px solid var(--border)',
+  borderRadius: 22,
+  padding: '26px 26px 24px',
+  boxShadow: 'var(--shadow)',
+}
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  marginBottom: 6,
+  fontSize: '13px',
+  fontWeight: 600,
+  color: 'var(--text)',
+}
+
+const optionalStyle: React.CSSProperties = {
+  color: 'var(--faint)',
+  fontWeight: 400,
 }
 
 export function ApplicationForm({ listingId, orgId }: ApplicationFormProps) {
@@ -37,15 +59,16 @@ export function ApplicationForm({ listingId, orgId }: ApplicationFormProps) {
 
   if (success) {
     return (
-      <div id="apply-form" className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col items-center gap-3 py-4 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-            <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+      <div id="apply-form" style={cardStyle}>
+        <div className="flex flex-col items-center gap-3 py-6 text-center">
+          <div
+            className="flex h-12 w-12 items-center justify-center rounded-full"
+            style={{ background: 'rgba(109,152,102,.18)', color: 'var(--green)', fontSize: 22, fontWeight: 700 }}
+          >
+            ✓
           </div>
-          <h3 className="text-lg font-semibold text-stone-900">Application received!</h3>
-          <p className="text-sm text-stone-600">
+          <h3 style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>Application received!</h3>
+          <p style={{ margin: 0, fontSize: '13.5px', color: 'var(--dim)', maxWidth: '36ch' }}>
             Thank you for your interest. We&apos;ll review your application and reach out shortly.
           </p>
         </div>
@@ -54,16 +77,16 @@ export function ApplicationForm({ listingId, orgId }: ApplicationFormProps) {
   }
 
   return (
-    <div id="apply-form" className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-      <h2 className="mb-1 text-xl font-semibold text-stone-900">Apply for this unit</h2>
-      <p className="mb-4 text-sm text-stone-500">
+    <div id="apply-form" style={cardStyle}>
+      <h2 style={{ margin: '0 0 4px', fontSize: 21, fontWeight: 700, letterSpacing: '-.02em' }}>Apply for this unit</h2>
+      <p style={{ margin: '0 0 18px', fontSize: '13.5px', color: 'var(--dim)' }}>
         Express your interest — we&apos;ll be in touch to walk you through next steps.
       </p>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Name */}
         <div>
-          <label htmlFor="app-name" className="mb-1 block text-sm font-medium text-stone-700">
-            Full name <span className="text-red-500">*</span>
+          <label htmlFor="app-name" style={labelStyle}>
+            Full name <span style={{ color: 'var(--red)' }}>*</span>
           </label>
           <input
             id="app-name"
@@ -71,14 +94,14 @@ export function ApplicationForm({ listingId, orgId }: ApplicationFormProps) {
             type="text"
             required
             placeholder="Jane Smith"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="cpub-field"
           />
         </div>
 
         {/* Email */}
         <div>
-          <label htmlFor="app-email" className="mb-1 block text-sm font-medium text-stone-700">
-            Email address <span className="text-red-500">*</span>
+          <label htmlFor="app-email" style={labelStyle}>
+            Email address <span style={{ color: 'var(--red)' }}>*</span>
           </label>
           <input
             id="app-email"
@@ -86,14 +109,14 @@ export function ApplicationForm({ listingId, orgId }: ApplicationFormProps) {
             type="email"
             required
             placeholder="jane@example.com"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="cpub-field"
           />
         </div>
 
         {/* Phone — required for applications (D-09) */}
         <div>
-          <label htmlFor="app-phone" className="mb-1 block text-sm font-medium text-stone-700">
-            Phone <span className="text-red-500">*</span>
+          <label htmlFor="app-phone" style={labelStyle}>
+            Phone <span style={{ color: 'var(--red)' }}>*</span>
           </label>
           <input
             id="app-phone"
@@ -101,39 +124,37 @@ export function ApplicationForm({ listingId, orgId }: ApplicationFormProps) {
             type="tel"
             required
             placeholder="+1 416 555 0100"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="cpub-field"
           />
         </div>
 
         {/* Move-in date */}
         <div>
-          <label htmlFor="app-move-in" className="mb-1 block text-sm font-medium text-stone-700">
-            Desired move-in date <span className="text-stone-400 font-normal">(optional)</span>
+          <label htmlFor="app-move-in" style={labelStyle}>
+            Desired move-in date <span style={optionalStyle}>(optional)</span>
           </label>
-          <input
-            id="app-move-in"
-            name="move_in_date"
-            type="date"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
+          <input id="app-move-in" name="move_in_date" type="date" className="cpub-field" />
         </div>
 
         {/* Note */}
         <div>
-          <label htmlFor="app-note" className="mb-1 block text-sm font-medium text-stone-700">
-            Tell us about yourself <span className="text-stone-400 font-normal">(optional)</span>
+          <label htmlFor="app-note" style={labelStyle}>
+            Tell us about yourself <span style={optionalStyle}>(optional)</span>
           </label>
           <textarea
             id="app-note"
             name="note"
             rows={4}
             placeholder="A little about you, your household, pets, or anything else that would help us understand your situation…"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+            className="cpub-field resize-none"
           />
         </div>
 
         {error && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">
+          <p
+            role="alert"
+            style={{ margin: 0, borderRadius: 12, background: 'rgba(179,86,74,.12)', border: '1px solid rgba(179,86,74,.3)', padding: '10px 14px', fontSize: '13.5px', color: 'var(--red)' }}
+          >
             {error}
           </p>
         )}
@@ -141,7 +162,8 @@ export function ApplicationForm({ listingId, orgId }: ApplicationFormProps) {
         <button
           type="submit"
           disabled={isPending}
-          className="flex min-h-11 w-full items-center justify-center rounded-md bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-800 disabled:opacity-60"
+          className="flex min-h-12 w-full items-center justify-center disabled:opacity-60"
+          style={{ border: 'none', background: 'var(--ink)', color: 'var(--ink-text)', borderRadius: 999, padding: '12px 22px', fontWeight: 700, fontSize: '15px', cursor: 'pointer' }}
         >
           {isPending ? 'Submitting…' : 'Submit application interest'}
         </button>

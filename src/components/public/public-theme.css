@@ -1,0 +1,182 @@
+/* Shared theme for public-facing pages (listing detail, etc.).
+   Mirrors the landing page's light palette (see landing-styles.css) so the
+   public pages feel like a continuation of the marketing site. */
+
+html:has(.cpub),
+html:has(.cpub) body {
+  margin: 0;
+  padding: 0;
+  background: #f6f1e7;
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+.cpub {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+  --bg: #f6f1e7;
+  --panel: #fdfbf6;
+  --elev: #ffffff;
+  --hover: #f1e9da;
+  --border: #e6dcc9;
+  --border2: #d5c8ad;
+  --text: #2b251d;
+  --dim: #7d7263;
+  --faint: #a4988a;
+  --accent: #4d6b46;
+  --accent-hi: #415a3b;
+  --accent-text: #f2f6f0;
+  --yellow: #f0c445;
+  --yellow-hi: #e5b52e;
+  --yellow-text: #33270a;
+  --green: #6d9866;
+  --red: #b3564a;
+  --ink: #211c15;
+  --ink2: #2c261d;
+  --ink-border: #3f382c;
+  --ink-text: #f4efe6;
+  --ink-dim: #a89a84;
+  --shadow: 0 18px 50px rgba(70, 55, 35, 0.14), 0 2px 8px rgba(70, 55, 35, 0.08);
+  box-sizing: border-box;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 15.5px;
+  line-height: 1.55;
+}
+
+.cpub *,
+.cpub *::before,
+.cpub *::after {
+  box-sizing: border-box;
+}
+
+.cpub input,
+.cpub button,
+.cpub select,
+.cpub textarea {
+  font-family: var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif;
+  font-size: inherit;
+  color: inherit;
+}
+
+.cpub ::placeholder {
+  color: var(--faint);
+}
+
+/* --- Header (mirrors landing header) --- */
+
+.cpub .cpub-nav-link {
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 13.5px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.cpub .cpub-nav-link:hover {
+  background: rgba(125, 114, 99, 0.12);
+}
+
+.cpub .cpub-btn-yellow {
+  border: none;
+  background: var(--yellow);
+  color: var(--yellow-text);
+  border-radius: 999px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.cpub .cpub-btn-yellow:hover {
+  background: var(--yellow-hi);
+}
+
+.cpub .cpub-portal-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  text-decoration: none;
+  color: inherit;
+  font-weight: 600;
+  font-size: 13.5px;
+  transition: background 0.15s ease;
+}
+
+.cpub .cpub-portal-link:hover {
+  background: var(--hover);
+}
+
+.cpub .cpub-burger {
+  display: none;
+}
+
+@media (max-width: 920px) {
+  .cpub .cpub-nav,
+  .cpub .cpub-hdrctl {
+    display: none !important;
+  }
+
+  .cpub .cpub-burger {
+    display: grid !important;
+  }
+}
+
+/* --- Detail page helpers --- */
+
+.cpub .cpub-btn-outline {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--border2);
+  background: transparent;
+  color: var(--text);
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14.5px;
+  text-decoration: none;
+  padding: 11px 22px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.cpub .cpub-btn-outline:hover {
+  background: var(--hover);
+  border-color: var(--text);
+}
+
+.cpub .cpub-field {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cpub .cpub-field:focus {
+  border-color: var(--yellow-hi);
+  box-shadow: 0 0 0 3px rgba(240, 196, 69, 0.28);
+}
+
+.cpub .cpub-thumb {
+  transition: opacity 0.2s ease;
+}
+
+.cpub .cpub-thumb:hover {
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cpub * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

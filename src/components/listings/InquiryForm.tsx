@@ -2,6 +2,7 @@
 // src/components/listings/InquiryForm.tsx
 // Showing request form — submitted by unauthenticated visitors on the public listing detail page.
 // Fields: name, email, phone, move_in_date, budget, note.
+// Styled to match the landing page branding (see public-theme.css / .cpub scope).
 
 import { useState, useTransition } from 'react'
 import { submitInquiry } from '@/app/actions/inquiries'
@@ -9,6 +10,27 @@ import { submitInquiry } from '@/app/actions/inquiries'
 interface InquiryFormProps {
   listingId: string
   orgId: string
+}
+
+const cardStyle: React.CSSProperties = {
+  background: 'var(--elev)',
+  border: '1px solid var(--border)',
+  borderRadius: 22,
+  padding: '26px 26px 24px',
+  boxShadow: 'var(--shadow)',
+}
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  marginBottom: 6,
+  fontSize: '13px',
+  fontWeight: 600,
+  color: 'var(--text)',
+}
+
+const optionalStyle: React.CSSProperties = {
+  color: 'var(--faint)',
+  fontWeight: 400,
 }
 
 export function InquiryForm({ listingId, orgId }: InquiryFormProps) {
@@ -36,15 +58,16 @@ export function InquiryForm({ listingId, orgId }: InquiryFormProps) {
 
   if (success) {
     return (
-      <div id="inquiry-form" className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col items-center gap-3 py-4 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-            <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+      <div id="inquiry-form" style={cardStyle}>
+        <div className="flex flex-col items-center gap-3 py-6 text-center">
+          <div
+            className="flex h-12 w-12 items-center justify-center rounded-full"
+            style={{ background: 'rgba(109,152,102,.18)', color: 'var(--green)', fontSize: 22, fontWeight: 700 }}
+          >
+            ✓
           </div>
-          <h3 className="text-lg font-semibold text-stone-900">Request sent!</h3>
-          <p className="text-sm text-stone-600">
+          <h3 style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>Request sent!</h3>
+          <p style={{ margin: 0, fontSize: '13.5px', color: 'var(--dim)', maxWidth: '32ch' }}>
             Your showing request has been sent. We&apos;ll be in touch soon.
           </p>
         </div>
@@ -53,13 +76,16 @@ export function InquiryForm({ listingId, orgId }: InquiryFormProps) {
   }
 
   return (
-    <div id="inquiry-form" className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-      <h2 className="mb-4 text-xl font-semibold text-stone-900">Request a showing</h2>
+    <div id="inquiry-form" style={cardStyle}>
+      <h2 style={{ margin: '0 0 4px', fontSize: 21, fontWeight: 700, letterSpacing: '-.02em' }}>Request a showing</h2>
+      <p style={{ margin: '0 0 18px', fontSize: '13.5px', color: 'var(--dim)' }}>
+        Tell us when works for you — we&apos;ll confirm within a business day.
+      </p>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Name */}
         <div>
-          <label htmlFor="inq-name" className="mb-1 block text-sm font-medium text-stone-700">
-            Full name <span className="text-red-500">*</span>
+          <label htmlFor="inq-name" style={labelStyle}>
+            Full name <span style={{ color: 'var(--red)' }}>*</span>
           </label>
           <input
             id="inq-name"
@@ -67,14 +93,14 @@ export function InquiryForm({ listingId, orgId }: InquiryFormProps) {
             type="text"
             required
             placeholder="Jane Smith"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="cpub-field"
           />
         </div>
 
         {/* Email */}
         <div>
-          <label htmlFor="inq-email" className="mb-1 block text-sm font-medium text-stone-700">
-            Email address <span className="text-red-500">*</span>
+          <label htmlFor="inq-email" style={labelStyle}>
+            Email address <span style={{ color: 'var(--red)' }}>*</span>
           </label>
           <input
             id="inq-email"
@@ -82,41 +108,36 @@ export function InquiryForm({ listingId, orgId }: InquiryFormProps) {
             type="email"
             required
             placeholder="jane@example.com"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="cpub-field"
           />
         </div>
 
         {/* Phone */}
         <div>
-          <label htmlFor="inq-phone" className="mb-1 block text-sm font-medium text-stone-700">
-            Phone <span className="text-stone-400 font-normal">(optional)</span>
+          <label htmlFor="inq-phone" style={labelStyle}>
+            Phone <span style={optionalStyle}>(optional)</span>
           </label>
           <input
             id="inq-phone"
             name="phone"
             type="tel"
             placeholder="+1 416 555 0100"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="cpub-field"
           />
         </div>
 
         {/* Move-in date */}
         <div>
-          <label htmlFor="inq-move-in" className="mb-1 block text-sm font-medium text-stone-700">
-            Desired move-in date <span className="text-stone-400 font-normal">(optional)</span>
+          <label htmlFor="inq-move-in" style={labelStyle}>
+            Desired move-in date <span style={optionalStyle}>(optional)</span>
           </label>
-          <input
-            id="inq-move-in"
-            name="move_in_date"
-            type="date"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
+          <input id="inq-move-in" name="move_in_date" type="date" className="cpub-field" />
         </div>
 
         {/* Budget */}
         <div>
-          <label htmlFor="inq-budget" className="mb-1 block text-sm font-medium text-stone-700">
-            Monthly budget ($) <span className="text-stone-400 font-normal">(optional)</span>
+          <label htmlFor="inq-budget" style={labelStyle}>
+            Monthly budget ($) <span style={optionalStyle}>(optional)</span>
           </label>
           <input
             id="inq-budget"
@@ -125,26 +146,29 @@ export function InquiryForm({ listingId, orgId }: InquiryFormProps) {
             min={0}
             step={50}
             placeholder="2000"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="cpub-field"
           />
         </div>
 
         {/* Note */}
         <div>
-          <label htmlFor="inq-note" className="mb-1 block text-sm font-medium text-stone-700">
-            Questions or notes <span className="text-stone-400 font-normal">(optional)</span>
+          <label htmlFor="inq-note" style={labelStyle}>
+            Questions or notes <span style={optionalStyle}>(optional)</span>
           </label>
           <textarea
             id="inq-note"
             name="note"
             rows={3}
             placeholder="Anything you'd like us to know…"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+            className="cpub-field resize-none"
           />
         </div>
 
         {error && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">
+          <p
+            role="alert"
+            style={{ margin: 0, borderRadius: 12, background: 'rgba(179,86,74,.12)', border: '1px solid rgba(179,86,74,.3)', padding: '10px 14px', fontSize: '13.5px', color: 'var(--red)' }}
+          >
             {error}
           </p>
         )}
@@ -152,7 +176,8 @@ export function InquiryForm({ listingId, orgId }: InquiryFormProps) {
         <button
           type="submit"
           disabled={isPending}
-          className="flex min-h-11 w-full items-center justify-center rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+          className="cpub-btn-yellow flex min-h-12 w-full items-center justify-center disabled:opacity-60"
+          style={{ padding: '12px 22px', fontSize: '15px' }}
         >
           {isPending ? 'Sending…' : 'Send request'}
         </button>

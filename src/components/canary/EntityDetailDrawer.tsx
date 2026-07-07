@@ -36,7 +36,7 @@ interface EntityDetailDrawerProps {
 const PROPERTY_STATUSES = ['Vacant', 'Leased', 'Maintenance']
 const LEASE_RENEWAL = ['—', 'pending', 'sent', 'accepted', 'declined']
 const LEASE_DB_STATUS = ['active', 'expired', 'terminated']
-const PROJECT_STATUSES = ['Estimate', 'Requires Estimate', 'Reviewing Estimates', 'Approved to Schedule', 'In Progress', 'Completed', 'Closed']
+const PROJECT_STATUSES = ['Estimate', 'Requires Estimate', 'Reviewing Estimates', 'Approved to Schedule', 'In Progress', 'Completed', 'Closed', 'Postponed', 'Cancelled']
 const PROJECT_PRIORITIES = ['1 - Urgent', '2 - High', '3 - Medium', '4 - Low']
 
 function StatusSelect({
@@ -552,9 +552,16 @@ export default function EntityDetailDrawer({
             },
             { label: 'Property', value: j.property || '—' },
             { label: 'Title', value: <InlineField value={j.name} label="title" confirm onSave={wrapSave((v) => updateProjectField(j.id, 'title', v))} disabled={!canEdit} /> },
+            { label: 'Category', value: <InlineField value={j.category} label="category" onSave={wrapSave((v) => updateProjectField(j.id, 'category', v))} disabled={!canEdit} /> },
             { label: 'Estimate', value: <InlineField value={(j.estimate || '').replace(/[$,]/g, '')} label="estimate" type="number" confirm onSave={wrapSave((v) => updateProjectField(j.id, 'estimated_cost', v))} disabled={!canEdit} /> },
+            { label: 'Budget', value: <InlineField value={(j.budget || '').replace(/[$,]/g, '')} label="budget" type="number" confirm onSave={wrapSave((v) => updateProjectField(j.id, 'budget', v))} disabled={!canEdit} /> },
+            { label: 'Deposit', value: <InlineField value={(j.deposit || '').replace(/[$,]/g, '')} label="deposit" type="number" confirm onSave={wrapSave((v) => updateProjectField(j.id, 'deposit', v))} disabled={!canEdit} /> },
+            { label: 'Start date', value: <InlineField value={j.startDate} label="start date" type="date" onSave={wrapSave((v) => updateProjectField(j.id, 'start_date', v))} disabled={!canEdit} /> },
+            { label: 'End date', value: <InlineField value={j.endDate} label="end date" type="date" onSave={wrapSave((v) => updateProjectField(j.id, 'end_date', v))} disabled={!canEdit} /> },
+            { label: 'Completed date', value: <InlineField value={j.completedDate} label="completed date" type="date" onSave={wrapSave((v) => updateProjectField(j.id, 'completed_date', v))} disabled={!canEdit} /> },
             { label: 'Contractors', value: j.contractors || '—' },
             { label: 'Description', value: <InlineField value={j.description} label="description" type="textarea" onSave={wrapSave((v) => updateProjectField(j.id, 'description', v))} disabled={!canEdit} /> },
+            { label: 'Notes', value: <InlineField value={j.notes} label="notes" type="textarea" onSave={wrapSave((v) => updateProjectField(j.id, 'notes', v))} disabled={!canEdit} /> },
           ]}
         />,
       ]

@@ -45,7 +45,8 @@ export default async function HomePage() {
     getPublishedListings(orgSlug),
     getLandingStats(orgSlug, stays.length),
   ])
-  const listingsHref = orgSlug ? `/listings?org=${orgSlug}` : '/listings'
+  // The dedicated /listings browse page is retired — all homes live on the landing page.
+  const listingsHref = '/#homes'
   const staysHref = orgSlug ? `/?org=${orgSlug}#stays` : '/#stays'
 
   return (

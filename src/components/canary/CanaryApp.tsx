@@ -796,7 +796,7 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
             ) : (
               <span style={{ color: 'var(--dim)', fontWeight: 600, fontSize: 13, border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', whiteSpace: 'nowrap' }}>{userName}</span>
             )}
-            <a href="/listings" style={{ textDecoration: 'none', color: 'var(--dim)', border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap' }}>Public site ↗</a>
+            <a href="/" style={{ textDecoration: 'none', color: 'var(--dim)', border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap' }}>Public site ↗</a>
             <button onClick={() => { const t = theme === 'dark' ? 'light' : 'dark'; setTheme(t); try { localStorage.setItem('canary_theme', t) } catch { /* ignore */ } }} title="Toggle light / dark" style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 11px', cursor: 'pointer', fontSize: 14 }}>{theme === 'dark' ? '☀' : '☾'}</button>
             <button onClick={signOut} title="Sign out" style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 13, color: 'var(--dim)', whiteSpace: 'nowrap' }}>Sign out</button>
             {priv && (

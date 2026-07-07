@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/supabase'
 
 type UnitUpdate = Database['public']['Tables']['units']['Update']
+type PropertyUpdate = Database['public']['Tables']['properties']['Update']
 type LeaseUpdate = Database['public']['Tables']['leases']['Update']
 type PersonUpdate = Database['public']['Tables']['people']['Update']
 type WorkOrderUpdate = Database['public']['Tables']['work_orders']['Update']
@@ -77,7 +78,6 @@ const UNIT_STATUS_MAP: Record<string, string> = {
   Vacant: 'vacant',
   Leased: 'occupied',
   Maintenance: 'maintenance',
-  Project: 'maintenance',
 }
 
 const UNIT_STATUS_REVERSE: Record<string, string> = {
@@ -134,6 +134,151 @@ export async function updatePropertyField(
     console.error('[updatePropertyField]', error)
     return { success: false, error: 'Failed to update property.' }
   }
+  await writeAuditEntries(ctx.supabase, ctx.person.org_id, 'units', unitId, ctx.person.id, changes)
+  revalidatePath('/app')
+  return { success: true }
+}
+
+const PET_LABELS = ['No pets', 'Pet friendly', 'Cat friendly', 'Dog friendly', 'By approval'] as const
+const PET_AMENITY_RE = /pet|cat|dog|approval/i
+
+const propertyDetailsSchema = z.object({
+  status: z.enum(['Vacant', 'Leased', 'Maintenance']),
+  bedrooms: z.number().int().min(0).max(50),
+  bathrooms: z.number().min(0).max(50),
+  askingRent: z.number().min(0).nullable(),
+  pets: z.enum(PET_LABELS),
+  propertyType: z.enum(['house', 'duplex', 'apartment_building', 'condo', 'townhouse', 'other']),
+  city: z.string().trim().max(120),
+  province: z.string().trim().max(120),
+  portfolioId: z.string().uuid().nullable(),
+  ownerId: z.string().uuid().nullable(),
+  managementFeeType: z.enum(['percent', 'flat']),
+  managementFeeValue: z.number().min(0).nullable(),
+})
+
+export type PropertyDetailsInput = z.infer<typeof propertyDetailsSchema>
+
+export async function updatePropertyDetails(unitId: string, input: PropertyDetailsInput): Promise<ActionResult> {
+  const ctx = await getStaffContext()
+  if (!ctx) return { success: false, error: 'Only managers can edit properties.' }
+
+  const parsed = propertyDetailsSchema.safeParse(input)
+  if (!parsed.success) return { success: false, error: 'Invalid form values.' }
+  const form = parsed.data
+
+  const { data: unit } = await ctx.supabase
+    .from('units')
+    .select('id, property_id, status, bedrooms, bathrooms, asking_rent, amenities')
+    .eq('id', unitId)
+    .eq('org_id', ctx.person.org_id)
+    .single()
+  if (!unit || !unit.property_id) return { success: false, error: 'Property not found.' }
+
+  const { data: prop } = await ctx.supabase
+    .from('properties')
+    .select('id, property_type, city, province, portfolio_id, owner_id, management_fee_type, management_fee_value')
+    .eq('id', unit.property_id)
+    .eq('org_id', ctx.person.org_id)
+    .single()
+  if (!prop) return { success: false, error: 'Property not found.' }
+
+  // Validate portfolio / owner belong to this org before assignment.
+  if (form.portfolioId) {
+    const { data: pf } = await ctx.supabase
+      .from('portfolios').select('id').eq('id', form.portfolioId).eq('org_id', ctx.person.org_id).maybeSingle()
+    if (!pf) return { success: false, error: 'Portfolio not found.' }
+  }
+  if (form.ownerId) {
+    const { data: ow } = await ctx.supabase
+      .from('people').select('id').eq('id', form.ownerId).eq('org_id', ctx.person.org_id).maybeSingle()
+    if (!ow) return { success: false, error: 'Owner not found.' }
+  }
+
+  const changes: { field: string; oldValue: string | null; newValue: string | null }[] = []
+  const now = new Date().toISOString()
+
+  // ----- units patch -----
+  const unitPatch: UnitUpdate = { updated_at: now }
+  const newStatus = UNIT_STATUS_MAP[form.status]
+  if (newStatus !== unit.status) {
+    changes.push({ field: 'status', oldValue: UNIT_STATUS_REVERSE[unit.status] ?? unit.status, newValue: form.status })
+    unitPatch.status = newStatus as UnitUpdate['status']
+  }
+  if (form.bedrooms !== (unit.bedrooms ?? 0)) {
+    changes.push({ field: 'bedrooms', oldValue: str(unit.bedrooms), newValue: String(form.bedrooms) })
+    unitPatch.bedrooms = form.bedrooms
+  }
+  if (form.bathrooms !== Number(unit.bathrooms ?? 0)) {
+    changes.push({ field: 'bathrooms', oldValue: str(unit.bathrooms), newValue: String(form.bathrooms) })
+    unitPatch.bathrooms = form.bathrooms
+  }
+  const oldRent = unit.asking_rent != null ? Number(unit.asking_rent) : null
+  if (form.askingRent !== oldRent) {
+    changes.push({ field: 'asking_rent', oldValue: str(oldRent), newValue: str(form.askingRent) })
+    unitPatch.asking_rent = form.askingRent
+  }
+  const amenities: string[] = (unit.amenities as string[] | null) ?? []
+  const nonPet = amenities.filter((a) => !PET_AMENITY_RE.test(a))
+  const oldPetLabel = amenities.length !== nonPet.length ? amenities.find((a) => PET_AMENITY_RE.test(a)) ?? 'No pets' : 'No pets'
+  if (form.pets !== oldPetLabel && !(form.pets === 'No pets' && amenities.length === nonPet.length)) {
+    changes.push({ field: 'pets', oldValue: oldPetLabel, newValue: form.pets })
+    unitPatch.amenities = form.pets === 'No pets' ? nonPet : [...nonPet, form.pets]
+  }
+
+  // ----- properties patch -----
+  const propPatch: PropertyUpdate = { updated_at: now }
+  if (form.propertyType !== prop.property_type) {
+    changes.push({ field: 'type', oldValue: prop.property_type, newValue: form.propertyType })
+    propPatch.property_type = form.propertyType
+  }
+  if (form.city !== (prop.city ?? '')) {
+    changes.push({ field: 'city', oldValue: prop.city, newValue: form.city || null })
+    propPatch.city = form.city || undefined
+  }
+  if (form.province !== (prop.province ?? '')) {
+    changes.push({ field: 'province', oldValue: prop.province, newValue: form.province || null })
+    propPatch.province = form.province || undefined
+  }
+  if (form.portfolioId !== (prop.portfolio_id ?? null)) {
+    changes.push({ field: 'portfolio', oldValue: prop.portfolio_id, newValue: form.portfolioId })
+    propPatch.portfolio_id = form.portfolioId
+  }
+  if (form.ownerId !== (prop.owner_id ?? null)) {
+    changes.push({ field: 'owner', oldValue: prop.owner_id, newValue: form.ownerId })
+    propPatch.owner_id = form.ownerId
+  }
+  const oldFeeValue = prop.management_fee_value != null ? Number(prop.management_fee_value) : null
+  if (form.managementFeeType !== (prop.management_fee_type ?? 'percent') || form.managementFeeValue !== oldFeeValue) {
+    const fmt = (t: string | null, v: number | null) => (v == null ? null : t === 'percent' ? `${v}%` : `$${v}`)
+    changes.push({
+      field: 'management_fee',
+      oldValue: fmt(prop.management_fee_type, oldFeeValue),
+      newValue: fmt(form.managementFeeType, form.managementFeeValue),
+    })
+    propPatch.management_fee_type = form.managementFeeType
+    propPatch.management_fee_value = form.managementFeeValue
+  }
+
+  if (!changes.length) return { success: true }
+
+  if (Object.keys(unitPatch).length > 1) {
+    const { error } = await ctx.supabase.from('units').update(unitPatch).eq('id', unitId).eq('org_id', ctx.person.org_id)
+    if (error) {
+      console.error('[updatePropertyDetails:units]', error)
+      return { success: false, error: 'Failed to update property.' }
+    }
+  }
+  if (Object.keys(propPatch).length > 1) {
+    const { error } = await ctx.supabase
+      .from('properties').update(propPatch).eq('id', unit.property_id).eq('org_id', ctx.person.org_id)
+    if (error) {
+      console.error('[updatePropertyDetails:properties]', error)
+      return { success: false, error: 'Failed to update property.' }
+    }
+  }
+
+  // All entries recorded against the unit so they surface in the drawer audit log.
   await writeAuditEntries(ctx.supabase, ctx.person.org_id, 'units', unitId, ctx.person.id, changes)
   revalidatePath('/app')
   return { success: true }

@@ -7,10 +7,12 @@ import {
   updatePersonField,
   updatePortfolioField,
   updateProjectField,
+  updatePropertyDetails,
   updatePropertyField,
+  type PropertyDetailsInput,
 } from '@/app/actions/entity-updates'
 import { getOrCreatePropertyThread, getThreadMessages, sendChatMessage, type ChatMessage } from '@/app/actions/chat'
-import type { CanaryDb, CanaryPerson } from '@/lib/canary/types'
+import type { CanaryDb, CanaryPerson, CanaryProperty } from '@/lib/canary/types'
 import AuditLogPanel from './AuditLogPanel'
 
 const MONO = "'IBM Plex Mono', monospace"
@@ -223,6 +225,170 @@ function PropertyChatSection({
   )
 }
 
+const PROPERTY_TYPES = ['house', 'duplex', 'apartment_building', 'condo', 'townhouse', 'other'] as const
+const PET_OPTIONS = ['No pets', 'Pet friendly', 'Cat friendly', 'Dog friendly', 'By approval'] as const
+
+function formLabel(text: string): React.ReactNode {
+  return <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--dim)', marginBottom: 4 }}>{text}</span>
+}
+
+const formFieldStyle: React.CSSProperties = {
+  width: '100%', background: 'var(--input)', border: '1px solid var(--border)',
+  borderRadius: 8, padding: '8px 10px', fontWeight: 600, fontSize: 13, color: 'var(--text)',
+}
+
+function PropertyEditForm({
+  property,
+  priv,
+  portfolios,
+  owners,
+  onClose,
+  onSaved,
+}: {
+  property: CanaryProperty
+  priv: boolean
+  portfolios: { id: string; name: string }[]
+  owners: { id: string; name: string }[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [status, setStatus] = useState(PROPERTY_STATUSES.includes(property.status) ? property.status : 'Vacant')
+  const [propertyType, setPropertyType] = useState(property.type.replace(/ /g, '_') || 'house')
+  const [city, setCity] = useState(property.city)
+  const [province, setProvince] = useState(property.area)
+  const [beds, setBeds] = useState(property.beds || '0')
+  const [baths, setBaths] = useState(property.baths || '0')
+  const [rent, setRent] = useState(property.rate != null ? String(property.rate) : '')
+  const [pets, setPets] = useState(PET_OPTIONS.includes(property.petFriendly as typeof PET_OPTIONS[number]) ? property.petFriendly : 'No pets')
+  const [portfolioId, setPortfolioId] = useState(property.portfolioId)
+  const [ownerId, setOwnerId] = useState(property.ownerId)
+  const [feeType, setFeeType] = useState(property.mgmtFeeType === 'flat' ? 'flat' : 'percent')
+  const [feeValue, setFeeValue] = useState(property.mgmtFeeValue)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  const save = async () => {
+    setErr('')
+    const bedsN = parseInt(beds, 10)
+    const bathsN = parseFloat(baths)
+    if (Number.isNaN(bedsN) || bedsN < 0) return setErr('Invalid bedroom count.')
+    if (Number.isNaN(bathsN) || bathsN < 0) return setErr('Invalid bathroom count.')
+    const rentN = rent.trim() === '' ? null : parseFloat(rent.replace(/[$,]/g, ''))
+    if (rentN != null && (Number.isNaN(rentN) || rentN < 0)) return setErr('Invalid asking rent.')
+    const feeN = feeValue.trim() === '' ? null : parseFloat(feeValue)
+    if (feeN != null && (Number.isNaN(feeN) || feeN < 0)) return setErr('Invalid management fee.')
+    if (!window.confirm('Save these property changes?')) return
+
+    const payload: PropertyDetailsInput = {
+      status: status as PropertyDetailsInput['status'],
+      bedrooms: bedsN,
+      bathrooms: bathsN,
+      askingRent: rentN,
+      pets: pets as PropertyDetailsInput['pets'],
+      propertyType: propertyType as PropertyDetailsInput['propertyType'],
+      city: city.trim(),
+      province: province.trim(),
+      portfolioId: portfolioId || null,
+      ownerId: ownerId || null,
+      managementFeeType: feeType as PropertyDetailsInput['managementFeeType'],
+      managementFeeValue: feeN,
+    }
+    setSaving(true)
+    const res = await updatePropertyDetails(property.unitId, payload)
+    setSaving(false)
+    if (res.success) {
+      onSaved()
+      onClose()
+    } else {
+      setErr(res.error ?? 'Failed to save.')
+    }
+  }
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(10,8,6,.6)', zIndex: 70 }} />
+      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 'min(520px,94vw)', maxHeight: '90vh', overflowY: 'auto', background: 'var(--panel)', border: '1px solid var(--border2)', borderRadius: 14, zIndex: 71, boxShadow: 'var(--shadow)', padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 14 }}>
+          <div>
+            <div style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 4 }}>Edit property</div>
+            <div style={{ fontWeight: 700, fontSize: 17 }}>{property.address}</div>
+          </div>
+          <button type="button" onClick={onClose} style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: 'var(--dim)', flex: 'none' }}>✕</button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <label>{formLabel('Status')}
+            <select value={status} onChange={(e) => setStatus(e.target.value)} style={formFieldStyle}>
+              {PROPERTY_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label>{formLabel('Type')}
+            <select value={propertyType} onChange={(e) => setPropertyType(e.target.value)} style={formFieldStyle}>
+              {PROPERTY_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
+            </select>
+          </label>
+          <label>{formLabel('City')}
+            <input value={city} onChange={(e) => setCity(e.target.value)} style={formFieldStyle} />
+          </label>
+          <label>{formLabel('Province / area')}
+            <input value={province} onChange={(e) => setProvince(e.target.value)} style={formFieldStyle} />
+          </label>
+          <label>{formLabel('Bedrooms')}
+            <input type="number" min={0} value={beds} onChange={(e) => setBeds(e.target.value)} style={formFieldStyle} />
+          </label>
+          <label>{formLabel('Bathrooms')}
+            <input type="number" min={0} step={0.5} value={baths} onChange={(e) => setBaths(e.target.value)} style={formFieldStyle} />
+          </label>
+          <label>{formLabel('Asking rent ($/mo)')}
+            <input type="number" min={0} value={rent} onChange={(e) => setRent(e.target.value)} style={formFieldStyle} />
+          </label>
+          <label>{formLabel('Pets')}
+            <select value={pets} onChange={(e) => setPets(e.target.value)} style={formFieldStyle}>
+              {PET_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </label>
+        </div>
+
+        {priv && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 8, borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>🔒 Private — staff only</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <label>{formLabel('Portfolio')}
+                <select value={portfolioId} onChange={(e) => setPortfolioId(e.target.value)} style={formFieldStyle}>
+                  <option value="">— None —</option>
+                  {portfolios.map((pf) => <option key={pf.id} value={pf.id}>{pf.name}</option>)}
+                </select>
+              </label>
+              <label>{formLabel('Owner')}
+                <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} style={formFieldStyle}>
+                  <option value="">— None —</option>
+                  {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </select>
+              </label>
+              <label>{formLabel('Fee type')}
+                <select value={feeType} onChange={(e) => setFeeType(e.target.value)} style={formFieldStyle}>
+                  <option value="percent">Percent (%)</option>
+                  <option value="flat">Flat ($)</option>
+                </select>
+              </label>
+              <label>{formLabel(feeType === 'percent' ? 'Management fee (%)' : 'Management fee ($)')}
+                <input type="number" min={0} value={feeValue} onChange={(e) => setFeeValue(e.target.value)} style={formFieldStyle} />
+              </label>
+            </div>
+          </div>
+        )}
+
+        {err && <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 12 }}>{err}</div>}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 18, justifyContent: 'flex-end' }}>
+          <button type="button" onClick={onClose} style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 9, padding: '9px 16px', fontSize: 13, cursor: 'pointer', color: 'var(--dim)', fontWeight: 600 }}>Cancel</button>
+          <button type="button" onClick={save} disabled={saving} className="cy-accent-btn" style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '9px 18px', fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>{saving ? 'Saving…' : 'Save changes'}</button>
+        </div>
+      </div>
+    </>
+  )
+}
+
 type RowDef = { label: string; value: React.ReactNode; onClick?: () => void }
 
 function Section({ title, rows }: { title: string; rows: RowDef[] }) {
@@ -255,6 +421,11 @@ export default function EntityDetailDrawer({
 }: EntityDetailDrawerProps) {
   const router = useRouter()
   const [auditKey, setAuditKey] = useState(0)
+  const [editingProperty, setEditingProperty] = useState(false)
+
+  React.useEffect(() => {
+    setEditingProperty(false)
+  }, [drawer?.kind, drawer?.id])
 
   const refresh = () => {
     setAuditKey((k) => k + 1)
@@ -277,6 +448,7 @@ export default function EntityDetailDrawer({
   let auditId = drawer.id
   let sections: React.ReactNode[] = []
   let found = true
+  let propertyForEdit: CanaryProperty | null = null
 
   if (drawer.kind === 'lease') {
     const l = db.leases.find((x) => x.id === drawer.id)
@@ -352,6 +524,7 @@ export default function EntityDetailDrawer({
       title = short(p.address)
       sub = p.address
       kindLabel = 'Property · ' + (p.status || '')
+      propertyForEdit = p
       sections = [
         <Section
           key="overview"
@@ -580,12 +753,27 @@ export default function EntityDetailDrawer({
           </div>
           <button type="button" onClick={onClose} style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: 'var(--dim)', flex: 'none' }}>✕</button>
         </div>
-        {actions.map((da) => (
-          <button key={da.label} type="button" className="cy-accent-btn" onClick={da.onClick} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '9px 14px', fontWeight: 700, cursor: 'pointer', margin: '6px 8px 6px 0', alignSelf: 'flex-start' }}>{da.label}</button>
-        ))}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 0 }}>
+          {propertyForEdit && canEdit && (
+            <button type="button" onClick={() => setEditingProperty(true)} style={{ border: '1px solid var(--border)', background: 'var(--elev)', color: 'var(--text)', borderRadius: 9, padding: '9px 14px', fontWeight: 700, cursor: 'pointer', margin: '6px 8px 6px 0', alignSelf: 'flex-start', fontSize: 13 }}>✎ Edit property</button>
+          )}
+          {actions.map((da) => (
+            <button key={da.label} type="button" className="cy-accent-btn" onClick={da.onClick} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '9px 14px', fontWeight: 700, cursor: 'pointer', margin: '6px 8px 6px 0', alignSelf: 'flex-start' }}>{da.label}</button>
+          ))}
+        </div>
         <div style={{ flex: 1 }}>{sections}</div>
         {auditTable && <AuditLogPanel key={auditKey} tableName={auditTable} recordId={auditId} canEdit={canEdit} />}
       </aside>
+      {editingProperty && propertyForEdit && canEdit && (
+        <PropertyEditForm
+          property={propertyForEdit}
+          priv={priv}
+          portfolios={db.portfolios.map((pf) => ({ id: pf.id, name: pf.name }))}
+          owners={db.people.filter((pe) => pe.role === 'Client').map((pe) => ({ id: pe.id, name: pe.name }))}
+          onClose={() => setEditingProperty(false)}
+          onSaved={refresh}
+        />
+      )}
     </>
   )
 }

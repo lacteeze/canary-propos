@@ -138,20 +138,23 @@ html:has(.cland2) body {
   border-radius: 999px;
 }
 
+/* Inherit the landing palette (light or dark) instead of the .cnry-browse
+   defaults. Note: `--x: var(--x)` would be a self-referential cycle and make
+   the property invalid, killing active-state highlights in the filter bar. */
 .cland2 .cl2-homes-browse.cnry-browse {
-  --bg: var(--bg);
-  --panel: var(--panel);
-  --elev: var(--elev);
-  --hover: var(--hover);
-  --border: var(--border);
-  --border2: var(--border2);
-  --text: var(--text);
-  --dim: var(--dim);
-  --faint: var(--faint);
-  --accent: var(--accent);
-  --accent-text: var(--accent-text);
-  --ink: var(--ink);
-  --ink-text: var(--ink-text);
+  --bg: inherit;
+  --panel: inherit;
+  --elev: inherit;
+  --hover: inherit;
+  --border: inherit;
+  --border2: inherit;
+  --text: inherit;
+  --dim: inherit;
+  --faint: inherit;
+  --accent: inherit;
+  --accent-text: inherit;
+  --ink: inherit;
+  --ink-text: inherit;
   --input: var(--panel);
   color: inherit;
   font-size: inherit;

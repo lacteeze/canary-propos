@@ -1,7 +1,6 @@
 'use client'
 // src/components/listings/InquiryForm.tsx
 // Showing request form — submitted by unauthenticated visitors on the public listing detail page.
-// Fields: name, email, phone, move_in_date, budget, note.
 
 import { useState, useTransition } from 'react'
 import { submitInquiry } from '@/app/actions/inquiries'
@@ -36,15 +35,11 @@ export function InquiryForm({ listingId, orgId }: InquiryFormProps) {
 
   if (success) {
     return (
-      <div id="inquiry-form" className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col items-center gap-3 py-4 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-            <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-semibold text-stone-900">Request sent!</h3>
-          <p className="text-sm text-stone-600">
+      <div id="inquiry-form" className="cpub-form-card">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '16px 0', textAlign: 'center' }}>
+          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(109,152,102,.15)', display: 'grid', placeItems: 'center', fontSize: 22, color: 'var(--green)' }}>✓</div>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Request sent!</h3>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--dim)' }}>
             Your showing request has been sent. We&apos;ll be in touch soon.
           </p>
         </div>
@@ -53,107 +48,46 @@ export function InquiryForm({ listingId, orgId }: InquiryFormProps) {
   }
 
   return (
-    <div id="inquiry-form" className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-      <h2 className="mb-4 text-xl font-semibold text-stone-900">Request a showing</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Name */}
-        <div>
-          <label htmlFor="inq-name" className="mb-1 block text-sm font-medium text-stone-700">
-            Full name <span className="text-red-500">*</span>
-          </label>
-          <input
-            id="inq-name"
-            name="name"
-            type="text"
-            required
-            placeholder="Jane Smith"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
+    <div id="inquiry-form" className="cpub-form-card">
+      <h2>Request a showing</h2>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="cpub-field">
+          <label htmlFor="inq-name">Full name <span style={{ color: 'var(--str-pill)' }}>*</span></label>
+          <input id="inq-name" name="name" type="text" required placeholder="Jane Smith" />
         </div>
 
-        {/* Email */}
-        <div>
-          <label htmlFor="inq-email" className="mb-1 block text-sm font-medium text-stone-700">
-            Email address <span className="text-red-500">*</span>
-          </label>
-          <input
-            id="inq-email"
-            name="email"
-            type="email"
-            required
-            placeholder="jane@example.com"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
+        <div className="cpub-field">
+          <label htmlFor="inq-email">Email address <span style={{ color: 'var(--str-pill)' }}>*</span></label>
+          <input id="inq-email" name="email" type="email" required placeholder="jane@example.com" />
         </div>
 
-        {/* Phone */}
-        <div>
-          <label htmlFor="inq-phone" className="mb-1 block text-sm font-medium text-stone-700">
-            Phone <span className="text-stone-400 font-normal">(optional)</span>
-          </label>
-          <input
-            id="inq-phone"
-            name="phone"
-            type="tel"
-            placeholder="+1 416 555 0100"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
+        <div className="cpub-field">
+          <label htmlFor="inq-phone">Phone <span style={{ fontWeight: 400, color: 'var(--faint)' }}>(optional)</span></label>
+          <input id="inq-phone" name="phone" type="tel" placeholder="+1 709 555 0100" />
         </div>
 
-        {/* Move-in date */}
-        <div>
-          <label htmlFor="inq-move-in" className="mb-1 block text-sm font-medium text-stone-700">
-            Desired move-in date <span className="text-stone-400 font-normal">(optional)</span>
-          </label>
-          <input
-            id="inq-move-in"
-            name="move_in_date"
-            type="date"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
+        <div className="cpub-field">
+          <label htmlFor="inq-move-in">Desired move-in date <span style={{ fontWeight: 400, color: 'var(--faint)' }}>(optional)</span></label>
+          <input id="inq-move-in" name="move_in_date" type="date" />
         </div>
 
-        {/* Budget */}
-        <div>
-          <label htmlFor="inq-budget" className="mb-1 block text-sm font-medium text-stone-700">
-            Monthly budget ($) <span className="text-stone-400 font-normal">(optional)</span>
-          </label>
-          <input
-            id="inq-budget"
-            name="budget"
-            type="number"
-            min={0}
-            step={50}
-            placeholder="2000"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
+        <div className="cpub-field">
+          <label htmlFor="inq-budget">Monthly budget ($) <span style={{ fontWeight: 400, color: 'var(--faint)' }}>(optional)</span></label>
+          <input id="inq-budget" name="budget" type="number" min={0} step={50} placeholder="2000" />
         </div>
 
-        {/* Note */}
-        <div>
-          <label htmlFor="inq-note" className="mb-1 block text-sm font-medium text-stone-700">
-            Questions or notes <span className="text-stone-400 font-normal">(optional)</span>
-          </label>
-          <textarea
-            id="inq-note"
-            name="note"
-            rows={3}
-            placeholder="Anything you'd like us to know…"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
-          />
+        <div className="cpub-field">
+          <label htmlFor="inq-note">Questions or notes <span style={{ fontWeight: 400, color: 'var(--faint)' }}>(optional)</span></label>
+          <textarea id="inq-note" name="note" rows={3} placeholder="Anything you'd like us to know…" />
         </div>
 
         {error && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">
+          <p style={{ margin: 0, borderRadius: 10, background: 'rgba(255,90,95,.1)', padding: '10px 12px', fontSize: 13, color: 'var(--str-pill)' }} role="alert">
             {error}
           </p>
         )}
 
-        <button
-          type="submit"
-          disabled={isPending}
-          className="flex min-h-11 w-full items-center justify-center rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
-        >
+        <button type="submit" disabled={isPending} className="cpub-btn-primary">
           {isPending ? 'Sending…' : 'Send request'}
         </button>
       </form>

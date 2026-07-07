@@ -1,0 +1,134 @@
+.cpub-nav {
+  display: flex;
+}
+
+.cpub-burger {
+  display: none !important;
+}
+
+@media (max-width: 860px) {
+  .cpub-nav {
+    display: none !important;
+  }
+
+  .cpub-burger {
+    display: grid !important;
+    place-items: center;
+  }
+}
+
+.cpub-form-card {
+  background: var(--elev);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+
+.cpub-form-card h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.cpub-form-card .cpub-form-sub {
+  margin: 0 0 18px;
+  font-size: 13.5px;
+  color: var(--dim);
+}
+
+.cpub-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dim);
+}
+
+.cpub-field input,
+.cpub-field textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  background: var(--panel);
+  color: var(--text);
+  font-family: inherit;
+}
+
+.cpub-field input:focus,
+.cpub-field textarea:focus {
+  outline: none;
+  border-color: var(--yellow);
+  box-shadow: 0 0 0 3px rgba(240, 196, 69, 0.35);
+}
+
+.cpub-field textarea {
+  resize: vertical;
+  min-height: 88px;
+}
+
+.cpub-btn-primary {
+  display: flex;
+  min-height: 44px;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--yellow);
+  color: var(--yellow-text);
+  box-shadow: 0 8px 24px rgba(240, 196, 69, 0.28);
+  font-family: inherit;
+}
+
+.cpub-btn-primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.cpub-btn-outline {
+  display: flex;
+  min-height: 44px;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--border2);
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--elev);
+  font-family: inherit;
+}
+
+.cpub-btn-outline:hover {
+  background: var(--hover);
+}
+
+.cpub-stat-pill {
+  font-family: var(--font-ibm-plex-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(244, 239, 230, 0.85);
+}
+
+.cpub-amenity {
+  display: inline-block;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--dim);
+}

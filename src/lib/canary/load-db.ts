@@ -28,7 +28,7 @@ function fullAddress(street: string, city: string | null): string {
 
 function unitStatusLabel(status: string | null): string {
   if (status === 'occupied') return 'Leased'
-  if (status === 'maintenance') return 'Project'
+  if (status === 'maintenance') return 'Maintenance'
   return 'Vacant'
 }
 
@@ -232,6 +232,8 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         portfolioId: p.portfolio_id ?? '',
         ownerId: p.owner_id ?? '',
         mgmtFee: feeLabel,
+        mgmtFeeType: p.management_fee_type ?? 'percent',
+        mgmtFeeValue: p.management_fee_value != null ? String(Number(p.management_fee_value)) : '',
       }
     })
 

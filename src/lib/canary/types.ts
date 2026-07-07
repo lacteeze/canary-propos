@@ -27,6 +27,9 @@ export interface CanaryProperty {
   /** underlying unit id — used when creating listings */
   unitId: string
   mgmtFee: string
+  /** raw management fee fields (staff-only edit form) */
+  mgmtFeeType: string
+  mgmtFeeValue: string
 }
 
 export interface CanaryLease {

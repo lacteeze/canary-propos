@@ -490,7 +490,7 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
   }).sort((a, b) => a.sortKey - b.sortKey)
 
   // ---------- filters / lists per page ----------
-  const statuses = ['', 'Vacant', 'Leased', 'Airbnb', 'Project', 'Office']
+  const statuses = ['', 'Vacant', 'Leased', 'Airbnb', 'Maintenance', 'Office']
   const chipFor = (st: string): [string, string] => st === 'Leased' ? ['var(--green)', 'var(--green-text)'] : st === 'Vacant' ? ['var(--amber)', 'var(--amber-text)'] : st === 'Airbnb' ? ['var(--blue)', 'var(--bg)'] : ['var(--elev)', 'var(--dim)']
   const filteredProps = props.filter(matchProp).filter((p) => !propFilter || p.status === propFilter)
 
@@ -559,7 +559,7 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
       }),
       open: (p: CanaryProperty) => () => setDrawer({ kind: 'property', id: p.id }),
       group: (p: CanaryProperty) => p.status || '—',
-      groupOrder: ['Vacant', 'Leased', 'Airbnb', 'Project', 'Office'],
+      groupOrder: ['Vacant', 'Leased', 'Airbnb', 'Maintenance', 'Office'],
       card: (p: CanaryProperty) => ({ title: short(p.address), sub: [[p.beds, 'bd'].join(' '), [p.baths, 'ba'].join(' '), [p.city, p.area].filter(Boolean).join(' ')].join(' · '), right: p.rate ? money(p.rate) : '', rightColor: 'var(--text)' }),
       cols: [
         { key: 'address', label: 'Address', flex: '2', bold: true, get: (p: CanaryProperty) => short(p.address) },
@@ -796,7 +796,7 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
             ) : (
               <span style={{ color: 'var(--dim)', fontWeight: 600, fontSize: 13, border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', whiteSpace: 'nowrap' }}>{userName}</span>
             )}
-            <a href="/listings" style={{ textDecoration: 'none', color: 'var(--dim)', border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap' }}>Public site ↗</a>
+            <a href="https://canary-propos.vercel.app" target="_blank" rel="noopener" style={{ textDecoration: 'none', color: 'var(--dim)', border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap' }}>Public site ↗</a>
             <button onClick={() => { const t = theme === 'dark' ? 'light' : 'dark'; setTheme(t); try { localStorage.setItem('canary_theme', t) } catch { /* ignore */ } }} title="Toggle light / dark" style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 11px', cursor: 'pointer', fontSize: 14 }}>{theme === 'dark' ? '☀' : '☾'}</button>
             <button onClick={signOut} title="Sign out" style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 13, color: 'var(--dim)', whiteSpace: 'nowrap' }}>Sign out</button>
             {priv && (

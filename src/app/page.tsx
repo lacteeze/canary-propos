@@ -45,7 +45,7 @@ export default async function HomePage() {
     getPublishedListings(orgSlug),
     getLandingStats(orgSlug, stays.length),
   ])
-  const listingsHref = orgSlug ? `/listings?org=${orgSlug}` : '/listings'
+  const listingsHref = orgSlug ? `/?org=${orgSlug}#homes` : '/#homes'
   const staysHref = orgSlug ? `/?org=${orgSlug}#stays` : '/#stays'
 
   return (

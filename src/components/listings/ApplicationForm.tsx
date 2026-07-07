@@ -1,8 +1,6 @@
 'use client'
 // src/components/listings/ApplicationForm.tsx
 // Application interest form — submitted by unauthenticated visitors on the public listing detail page.
-// Phase 3 scope: interest capture only (name, email, phone required, move_in_date, note).
-// Full tenant screening (Single Key / Plaid) is deferred to Phase 4 (D-08).
 
 import { useState, useTransition } from 'react'
 import { submitApplication } from '@/app/actions/inquiries'
@@ -37,15 +35,11 @@ export function ApplicationForm({ listingId, orgId }: ApplicationFormProps) {
 
   if (success) {
     return (
-      <div id="apply-form" className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col items-center gap-3 py-4 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-            <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-semibold text-stone-900">Application received!</h3>
-          <p className="text-sm text-stone-600">
+      <div id="apply-form" className="cpub-form-card">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '16px 0', textAlign: 'center' }}>
+          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(109,152,102,.15)', display: 'grid', placeItems: 'center', fontSize: 22, color: 'var(--green)' }}>✓</div>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Application received!</h3>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--dim)' }}>
             Thank you for your interest. We&apos;ll review your application and reach out shortly.
           </p>
         </div>
@@ -54,95 +48,47 @@ export function ApplicationForm({ listingId, orgId }: ApplicationFormProps) {
   }
 
   return (
-    <div id="apply-form" className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-      <h2 className="mb-1 text-xl font-semibold text-stone-900">Apply for this unit</h2>
-      <p className="mb-4 text-sm text-stone-500">
-        Express your interest — we&apos;ll be in touch to walk you through next steps.
-      </p>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Name */}
-        <div>
-          <label htmlFor="app-name" className="mb-1 block text-sm font-medium text-stone-700">
-            Full name <span className="text-red-500">*</span>
-          </label>
-          <input
-            id="app-name"
-            name="name"
-            type="text"
-            required
-            placeholder="Jane Smith"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
+    <div id="apply-form" className="cpub-form-card">
+      <h2>Apply for this unit</h2>
+      <p className="cpub-form-sub">Express your interest — we&apos;ll be in touch to walk you through next steps.</p>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="cpub-field">
+          <label htmlFor="app-name">Full name <span style={{ color: 'var(--str-pill)' }}>*</span></label>
+          <input id="app-name" name="name" type="text" required placeholder="Jane Smith" />
         </div>
 
-        {/* Email */}
-        <div>
-          <label htmlFor="app-email" className="mb-1 block text-sm font-medium text-stone-700">
-            Email address <span className="text-red-500">*</span>
-          </label>
-          <input
-            id="app-email"
-            name="email"
-            type="email"
-            required
-            placeholder="jane@example.com"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
+        <div className="cpub-field">
+          <label htmlFor="app-email">Email address <span style={{ color: 'var(--str-pill)' }}>*</span></label>
+          <input id="app-email" name="email" type="email" required placeholder="jane@example.com" />
         </div>
 
-        {/* Phone — required for applications (D-09) */}
-        <div>
-          <label htmlFor="app-phone" className="mb-1 block text-sm font-medium text-stone-700">
-            Phone <span className="text-red-500">*</span>
-          </label>
-          <input
-            id="app-phone"
-            name="phone"
-            type="tel"
-            required
-            placeholder="+1 416 555 0100"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
+        <div className="cpub-field">
+          <label htmlFor="app-phone">Phone <span style={{ color: 'var(--str-pill)' }}>*</span></label>
+          <input id="app-phone" name="phone" type="tel" required placeholder="+1 709 555 0100" />
         </div>
 
-        {/* Move-in date */}
-        <div>
-          <label htmlFor="app-move-in" className="mb-1 block text-sm font-medium text-stone-700">
-            Desired move-in date <span className="text-stone-400 font-normal">(optional)</span>
-          </label>
-          <input
-            id="app-move-in"
-            name="move_in_date"
-            type="date"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
+        <div className="cpub-field">
+          <label htmlFor="app-move-in">Desired move-in date <span style={{ fontWeight: 400, color: 'var(--faint)' }}>(optional)</span></label>
+          <input id="app-move-in" name="move_in_date" type="date" />
         </div>
 
-        {/* Note */}
-        <div>
-          <label htmlFor="app-note" className="mb-1 block text-sm font-medium text-stone-700">
-            Tell us about yourself <span className="text-stone-400 font-normal">(optional)</span>
-          </label>
+        <div className="cpub-field">
+          <label htmlFor="app-note">Tell us about yourself <span style={{ fontWeight: 400, color: 'var(--faint)' }}>(optional)</span></label>
           <textarea
             id="app-note"
             name="note"
             rows={4}
             placeholder="A little about you, your household, pets, or anything else that would help us understand your situation…"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
           />
         </div>
 
         {error && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">
+          <p style={{ margin: 0, borderRadius: 10, background: 'rgba(255,90,95,.1)', padding: '10px 12px', fontSize: 13, color: 'var(--str-pill)' }} role="alert">
             {error}
           </p>
         )}
 
-        <button
-          type="submit"
-          disabled={isPending}
-          className="flex min-h-11 w-full items-center justify-center rounded-md bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-800 disabled:opacity-60"
-        >
+        <button type="submit" disabled={isPending} className="cpub-btn-primary">
           {isPending ? 'Submitting…' : 'Submit application interest'}
         </button>
       </form>

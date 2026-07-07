@@ -8,6 +8,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { deleteDraftListing, saveDraftListing, savePaymentEntry } from '@/app/actions/canary'
 import CanaryImport from './CanaryImport'
+import EntityDetailDrawer, { type DrawerState } from './EntityDetailDrawer'
+import MessagesView from './MessagesView'
 import type { CanaryDb, CanaryDraft, CanaryLease, CanaryPayment, CanaryPerson, CanaryPortfolio, CanaryProject, CanaryProperty, CanaryRole } from '@/lib/canary/types'
 import './canary.css'
 
@@ -52,7 +54,7 @@ function isoDate(d: Date | null): string {
 }
 
 type ChatMsg = { role: 'user' | 'assistant'; text: string }
-type Drawer = { kind: 'lease' | 'property' | 'person' | 'portfolio'; id: string } | null
+type Drawer = DrawerState
 type SortState = { key: string; dir: 'asc' | 'desc' } | null
 type DraftForm = {
   id: string | null
@@ -98,6 +100,7 @@ const ICONS: Record<string, string[]> = {
   payments: ['M12 1v22', 'M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'],
   projects: ['M9 11l3 3L22 4', 'M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'],
   import: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M7 10l5 5 5-5', 'M12 15V3'],
+  messages: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z', 'M8 10h.01', 'M12 10h.01', 'M16 10h.01'],
 }
 
 const monoLabel: React.CSSProperties = { fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--dim)' }
@@ -134,6 +137,7 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
   const [paySaving, setPaySaving] = useState(false)
   const [payCat, setPayCat] = useState('')
   const [payType, setPayType] = useState('')
+  const [messagesThreadId, setMessagesThreadId] = useState<string | null>(null)
 
   // restore persisted UI prefs
   React.useEffect(() => {
@@ -364,6 +368,7 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
     { key: 'portfolios', label: 'Portfolios', hideFor: ['Tenant', 'Vendor'] },
     { key: 'payments', label: 'Payments', hideFor: ['Vendor'] },
     { key: 'projects', label: 'Projects' },
+    { key: 'messages', label: 'Messages', privOnly: true },
     { key: 'import', label: 'Import', privOnly: true },
   ]
   const navItems = allNav
@@ -624,7 +629,7 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
       rows: qsort(filteredProj, {
         name: (j: CanaryProject) => (j.name || '').toLowerCase(), property: (j: CanaryProject) => short(j.property).toLowerCase(), status: (j: CanaryProject) => j.status || '', priority: (j: CanaryProject) => prioRank(j), estimate: (j: CanaryProject) => parseFloat(String(j.estimate || '').replace(/[$,]/g, '')) || 0,
       }),
-      open: null,
+      open: (j: CanaryProject) => () => setDrawer({ kind: 'project', id: j.id }),
       group: (j: CanaryProject) => j.status || '—',
       groupOrder: ['In Progress', 'Approved to Schedule', 'Reviewing Estimates', 'Requires Estimate', 'Estimate', 'Postponed', 'Cancelled'],
       card: (j: CanaryProject) => ({ title: j.name || 'Untitled', sub: short(j.property) + ' · ' + (j.priority || 'No priority'), right: j.estimate || '', rightColor: 'var(--dim)' }),
@@ -700,37 +705,14 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
     })
   }
 
-  // ---------- drawer ----------
-  type DrawerRow = { k: string; v: string; vColor: string; onClick: (() => void) | null }
-  type DrawerSection = { title: string; rows: DrawerRow[] }
-  const drawerRow = (k: string, v: string | null | undefined, opts?: { color?: string; onClick?: () => void }): DrawerRow => ({ k, v: v == null || v === '' ? '—' : String(v), vColor: opts?.color || 'var(--text)', onClick: opts?.onClick || null })
-
-  let drawerVals: { open: boolean; kind: string; title: string; sub: string; sections: DrawerSection[]; actions: { label: string; onClick: () => void }[] } = { open: false, kind: '', title: '', sub: '', sections: [], actions: [] }
-  if (drawer) {
-    const sections: DrawerSection[] = []
+  // ---------- drawer actions ----------
+  const drawerActions = useMemo(() => {
+    if (!drawer || !priv) return []
     const actions: { label: string; onClick: () => void }[] = []
-    let title = '', sub = '', kindLabel: string = drawer.kind
-    let found = true
-
     if (drawer.kind === 'lease') {
       const l = db.leases.find((x) => x.id === drawer.id)
-      if (!l) found = false
-      else {
-        title = short(l.property); sub = l.property; kindLabel = 'Lease · ' + (l.status || '')
-        sections.push({
-          title: 'Lease details',
-          rows: [
-            drawerRow('Status', l.status, { color: l.status === 'Active' ? 'var(--green)' : l.status === 'Expiring' ? 'var(--red)' : 'var(--text)' }),
-            drawerRow('Rent', l.rent), drawerRow('Deposit', l.deposit),
-            drawerRow('Start', l.start), drawerRow('End', l.end), drawerRow('Months', l.months),
-            l.renewal ? drawerRow('Renewal', l.renewal) : null,
-          ].filter(Boolean) as DrawerRow[],
-        })
-        const tenants = tenantNames(l.tenantInfo)
-        sections.push({ title: 'Tenants', rows: tenants ? tenants.split(', ').map((n) => drawerRow('•', priv ? (l.tenantInfo.split(',').find((s) => s.includes(n)) || n).trim() : n)) : [drawerRow('', 'No tenants on record')] })
-        const related = db.projects.filter((j) => j.property === l.property)
-        if (related.length) sections.push({ title: 'Tasks & projects at property', rows: related.map((j) => drawerRow(j.status || '—', j.name)) })
-        if (priv) actions.push({
+      if (l) {
+        actions.push({
           label: 'Draft renewal listing',
           onClick: () => {
             const p = db.properties.find((x) => x.address === l.property)
@@ -742,95 +724,12 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
         })
       }
     }
-
     if (drawer.kind === 'property') {
       const p = db.properties.find((x) => x.id === drawer.id)
-      if (!p) found = false
-      else {
-        title = short(p.address); sub = p.address; kindLabel = 'Property · ' + (p.status || '')
-        sections.push({
-          title: 'Overview',
-          rows: [
-            drawerRow('Status', p.status), drawerRow('Type', p.type), drawerRow('Area', [p.city, p.area].filter(Boolean).join(' · ')),
-            drawerRow('Beds / Baths', [p.beds, p.baths].map((x) => x || '—').join(' / ')),
-            drawerRow('Asking rate', p.rate ? money(p.rate) + '/mo' : ''),
-            drawerRow('Pets', p.petFriendly),
-          ],
-        })
-        if (priv) {
-          sections.push({
-            title: '🔒 Private — staff only',
-            rows: [
-              drawerRow('Portfolio', p.portfolioId ? db.portfolios.find((pf) => pf.id === p.portfolioId)?.name ?? '' : ''),
-              drawerRow('Owner', peopleById.get(p.ownerId)?.name ?? ''),
-              drawerRow('Management fee', p.mgmtFee),
-            ],
-          })
-        }
-        const hist = db.leases.filter((l) => l.property === p.address).sort((a, b) => (parseDate(b.start)?.getTime() ?? 0) - (parseDate(a.start)?.getTime() ?? 0))
-        sections.push({ title: 'Lease history (' + hist.length + ')', rows: hist.slice(0, 10).map((l) => drawerRow(l.status || '—', (l.start || '?') + ' → ' + (l.end || '?') + ' · ' + (l.rent || '') + (tenantNames(l.tenantInfo) ? ' · ' + tenantNames(l.tenantInfo) : ''), { onClick: () => setDrawer({ kind: 'lease', id: l.id }) })) })
-        const related = db.projects.filter((j) => j.property === p.address)
-        if (related.length) sections.push({ title: 'Open projects', rows: related.map((j) => drawerRow(j.status || '—', j.name)) })
-        if (priv) actions.push({ label: '+ Draft lease from this property', onClick: () => startDraftFor(p) })
-      }
+      if (p) actions.push({ label: '+ Draft lease from this property', onClick: () => startDraftFor(p) })
     }
-
-    if (drawer.kind === 'person') {
-      const p = db.people.find((x) => x.id === drawer.id)
-      if (!p) found = false
-      else {
-        title = p.name; sub = p.company && p.company !== p.name ? p.company : ''; kindLabel = p.role || 'Person'
-        sections.push({
-          title: 'Contact',
-          rows: [
-            drawerRow('Email', p.email), drawerRow('Phone', p.phone), drawerRow('Status', p.status),
-            p.company ? drawerRow('Company', p.company) : null,
-            p.address ? drawerRow('Mailing address', p.address) : null,
-            p.website ? drawerRow('Website', p.website) : null,
-            p.services ? drawerRow('Services', p.services) : null,
-            p.rating ? drawerRow('Rating', p.rating + ' / 5') : null,
-          ].filter(Boolean) as DrawerRow[],
-        })
-        if (p.notes) sections.push({ title: 'Notes', rows: [drawerRow('', p.notes)] })
-        if (p.role === 'Tenant') {
-          const prefs = [
-            p.minBeds ? drawerRow('Min bedrooms', p.minBeds) : null,
-            p.minBaths ? drawerRow('Min bathrooms', p.minBaths) : null,
-            p.minParking ? drawerRow('Min parking', p.minParking) : null,
-            p.pets ? drawerRow('Pets', p.pets) : null,
-            p.moveIn ? drawerRow('Move-in date', p.moveIn) : null,
-            p.leaseType ? drawerRow('Lease type', p.leaseType) : null,
-            p.maxPrice ? drawerRow('Max price', money(parseFloat(p.maxPrice)) + '/mo') : null,
-          ].filter(Boolean) as DrawerRow[]
-          if (prefs.length) sections.push({ title: 'Looking for', rows: prefs })
-          const theirs = db.leases.filter((l) => (l.tenantIds || '').includes(p.id))
-          if (theirs.length) sections.push({ title: 'Leases', rows: theirs.map((l) => drawerRow(l.status || '—', short(l.property) + ' · ' + (l.start || '') + ' → ' + (l.end || ''), { onClick: () => setDrawer({ kind: 'lease', id: l.id }) })) })
-        }
-        if (p.role === 'Client') {
-          const pfs = db.portfolios.filter((pf) => (pf.ownerIds || '').includes(p.id))
-          if (pfs.length) sections.push({ title: 'Portfolios', rows: pfs.map((pf) => drawerRow(pf.status || '—', pf.name, { onClick: () => setDrawer({ kind: 'portfolio', id: pf.id }) })) })
-          const owned = db.properties.filter((x) => x.ownerId === p.id)
-          if (owned.length) sections.push({ title: 'Properties (' + owned.length + ')', rows: owned.slice(0, 12).map((x) => drawerRow(x.status || '—', short(x.address), { onClick: () => setDrawer({ kind: 'property', id: x.id }) })) })
-        }
-      }
-    }
-
-    if (drawer.kind === 'portfolio') {
-      const pf = db.portfolios.find((x) => x.id === drawer.id)
-      if (!pf) found = false
-      else {
-        title = pf.name; kindLabel = 'Portfolio · ' + (pf.status || '')
-        const owners = (pf.ownerIds || '').split(',').map((s) => s.trim()).filter(Boolean).map((i) => peopleById.get(i)).filter(Boolean) as CanaryPerson[]
-        sub = owners.map((o) => o.name).join(', ')
-        sections.push({ title: 'Terms', rows: [drawerRow('Status', pf.status), drawerRow('Start date', pf.startDate)] })
-        if (owners.length) sections.push({ title: 'Owners', rows: owners.map((o) => drawerRow(o.role, o.name + (o.email ? ' · ' + o.email : ''), { onClick: () => setDrawer({ kind: 'person', id: o.id }) })) })
-        const pprops = db.properties.filter((p) => p.portfolioId === pf.id)
-        sections.push({ title: 'Properties (' + pprops.length + ')', rows: pprops.map((p) => drawerRow(p.status || '—', short(p.address), { onClick: () => setDrawer({ kind: 'property', id: p.id }) })) })
-      }
-    }
-
-    if (found) drawerVals = { open: true, kind: kindLabel, title, sub, sections, actions }
-  }
+    return actions
+  }, [drawer, priv, db.leases, db.properties, startDraftFor])
 
   // ---------- draft composer derived ----------
   const propOptions = db.properties.map((p) => ({ id: p.id, short: short(p.address) }))
@@ -1307,7 +1206,7 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
               {showDefault && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 12 }}>
                   {(genRows as CanaryProject[]).map((pj) => (
-                    <div key={pj.id} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '15px 16px', minWidth: 0 }}>
+                    <div key={pj.id} className="cy-hov-border" onClick={() => setDrawer({ kind: 'project', id: pj.id })} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '15px 16px', minWidth: 0, cursor: 'pointer' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
                         <div style={{ fontWeight: 700, minWidth: 0 }}>{pj.name || 'Untitled'}</div>
                         <span style={{ flex: 'none', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 6, background: 'var(--elev)', border: '1px solid var(--border)', color: projStatusColor(pj) }}>{pj.status || '—'}</span>
@@ -1323,6 +1222,13 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
 
           {/* ============ IMPORT ============ */}
           {view === 'import' && priv && <CanaryImport />}
+
+          {/* ============ MESSAGES ============ */}
+          {view === 'messages' && priv && (
+            <MessagesView
+              initialThreadId={messagesThreadId}
+            />
+          )}
 
           {/* ============ GENERIC TABLE VIEW ============ */}
           {showTable && pdef && (
@@ -1423,36 +1329,25 @@ export default function CanaryApp({ db, userRole, userPersonId, canSwitchRoles, 
         </main>
       </div>
 
-      {/* ============ DRAWER (detail panel) ============ */}
-      {drawerVals.open && (
-        <>
-          <div onClick={() => setDrawer(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(10,8,6,.55)', zIndex: 60, backdropFilter: 'blur(2px)' }} />
-          <aside style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(480px,94vw)', background: 'var(--panel)', borderLeft: '1px solid var(--border2)', zIndex: 61, boxShadow: 'var(--shadow)', overflowY: 'auto', padding: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
-              <div>
-                <div style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 4 }}>{drawerVals.kind}</div>
-                <div style={{ fontWeight: 700, fontSize: 19, letterSpacing: '-.01em' }}>{drawerVals.title}</div>
-                <div style={{ color: 'var(--dim)', fontSize: 13 }}>{drawerVals.sub}</div>
-              </div>
-              <button onClick={() => setDrawer(null)} style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: 'var(--dim)', flex: 'none' }}>✕</button>
-            </div>
-            {drawerVals.actions.map((da) => (
-              <button key={da.label} className="cy-accent-btn" onClick={da.onClick} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '9px 14px', fontWeight: 700, cursor: 'pointer', margin: '6px 8px 6px 0' }}>{da.label}</button>
-            ))}
-            {drawerVals.sections.map((ds, si) => (
-              <div key={si} style={{ marginTop: 16 }}>
-                <div style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 8, borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>{ds.title}</div>
-                {ds.rows.map((dr, ri) => (
-                  <div key={ri} className={dr.onClick ? 'cy-hov' : undefined} onClick={dr.onClick ?? undefined} style={{ display: 'flex', gap: 12, padding: '6px 4px', fontSize: '13.5px', borderRadius: 7, cursor: dr.onClick ? 'pointer' : 'default' }}>
-                    <span style={{ flex: '0 0 128px', color: 'var(--dim)' }}>{dr.k}</span>
-                    <span style={{ flex: 1, fontWeight: 600, color: dr.vColor, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{dr.v}</span>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </aside>
-        </>
-      )}
+      {/* ============ DRAWER (editable detail panel) ============ */}
+      <EntityDetailDrawer
+        drawer={drawer}
+        onClose={() => setDrawer(null)}
+        db={db}
+        canEdit={priv}
+        priv={priv}
+        peopleById={peopleById}
+        onNavigate={(d) => setDrawer(d)}
+        actions={drawerActions}
+        tenantNames={tenantNames}
+        short={short}
+        money={money}
+        onOpenMessages={(threadId) => {
+          setMessagesThreadId(threadId)
+          setView('messages')
+          setDrawer(null)
+        }}
+      />
 
       {/* ============ DRAFT LEASE COMPOSER ============ */}
       {draftOpen && (

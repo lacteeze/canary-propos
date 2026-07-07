@@ -6,6 +6,8 @@ export type CanaryRole = 'Admin' | 'Manager' | 'Owner' | 'Tenant' | 'Vendor'
 
 export interface CanaryProperty {
   id: string
+  /** properties.id — used for property-scoped chat threads */
+  propertyDbId: string
   /** Full address line, e.g. "12 Duckworth St, St. John's" */
   address: string
   status: string // Vacant | Leased | Maintenance | —
@@ -57,6 +59,8 @@ export interface CanaryPortfolio {
 
 export interface CanaryProject {
   id: string
+  /** properties.id for the linked property */
+  propertyDbId: string
   name: string
   property: string
   status: string

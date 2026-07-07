@@ -145,7 +145,7 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
       supabase
         .from('work_orders')
         .select(
-          `id, title, description, priority, status, estimated_cost,
+          `id, title, description, priority, status, estimated_cost, property_id,
            assigned_vendor_id, people!assigned_vendor_id(first_name, last_name),
            properties!property_id(street_address, city)`
         )
@@ -215,6 +215,7 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
       return {
         id: u.id,
         unitId: u.id,
+        propertyDbId: p.id,
         address: fullAddress(street, p.city),
         status: unitStatusLabel(u.status),
         beds: u.bedrooms != null ? String(u.bedrooms) : '',
@@ -295,6 +296,7 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         : ''
       return {
         id: j.id,
+        propertyDbId: j.property_id ?? '',
         name: j.title,
         property: fullAddress(j.properties.street_address, j.properties.city),
         status: WORK_ORDER_STATUS_LABEL[j.status] ?? j.status,

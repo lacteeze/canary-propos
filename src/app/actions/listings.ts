@@ -29,7 +29,7 @@ async function getCallerContext() {
 }
 
 // --- Schema ---
-const listingStatusEnum = z.enum(['draft', 'published', 'unlisted'])
+const listingStatusEnum = z.enum(['draft', 'published', 'unlisted', 'renewal_sent'])
 
 const listingSchema = z.object({
   unit_id: z.string().uuid('Unit is required'),

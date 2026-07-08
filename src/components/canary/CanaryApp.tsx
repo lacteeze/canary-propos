@@ -3,14 +3,22 @@
 // CanaryApp — the authenticated Canary PM app shell.
 // Faithful React port of the CanaryApp.dc design prototype, wired to live
 // Supabase data (loaded server-side in src/app/(canary)/app/page.tsx).
-import React, { useCallback, useMemo, useState, useTransition } from 'react'
+import React, { useCallback, useMemo, useRef, useState, useTransition } from 'react'
+import { CalendarIcon, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { deleteDraftListing, saveDraftListing, savePaymentEntry } from '@/app/actions/canary'
+import { activateDraftListing, deleteDraftListing, saveDraftListing, savePaymentEntry } from '@/app/actions/canary'
+import { archiveProperties, unarchiveProperties, deleteProperties, mergeProperties } from '@/app/actions/entity-updates'
 import CanaryImport from './CanaryImport'
+import DatePickerField from './DatePickerField'
 import EntityDetailDrawer, { type DrawerState } from './EntityDetailDrawer'
 import MessagesView from './MessagesView'
-import type { CanaryDb, CanaryDraft, CanaryLease, CanaryPayment, CanaryPerson, CanaryPortfolio, CanaryProject, CanaryProperty, CanaryRole, CanaryStrBooking, HospitableCalendarData } from '@/lib/canary/types'
+import PropertyOccupancyCalendar from './PropertyOccupancyCalendar'
+import type { CanaryDb, CanaryDraft, CanaryLease, CanaryPayment, CanaryPerson, CanaryPortfolio, CanaryProject, CanaryProperty, CanaryRole, CanaryStrBooking, DraftListingStatus, HospitableCalendarData } from '@/lib/canary/types'
+import { draftStatusBadge, draftTimelineMeta, inquiryStatusBadge } from '@/lib/canary/types'
+import { isMonthToMonthLease, validateLeaseDates } from '@/lib/canary/lease-term'
+import type { LeaseTermType } from '@/lib/canary/lease-term'
+import { draftBarRange, leaseBarRangeForLease, strBarRange, tlRangesOverlap } from '@/lib/canary/timeline-times'
 import { resolveToCanaryAddress } from '@/lib/hospitable/property-label'
 import './canary.css'
 
@@ -42,6 +50,16 @@ function rentNum(r: string | null | undefined): number {
   const n = parseFloat(String(r || '').replace(/[$,]/g, ''))
   return Number.isNaN(n) ? 0 : n
 }
+const DRAFT_RENT_STEP = 25
+function leaseRentForProperty(leases: CanaryLease[], address: string): string {
+  const onAddr = leases.filter((l) => l.property === address)
+  const current = onAddr.find((l) => l.status === 'Active' || l.status === 'Expiring')
+  if (current) {
+    const n = rentNum(current.rent)
+    if (n > 0) return String(n)
+  }
+  return ''
+}
 function tenantNames(info: string | null | undefined): string {
   if (!info) return ''
   const names = info.split(',').map((s) => s.split(':')[0].trim()).filter((s) => s && !/@/.test(s) && !/^\d/.test(s))
@@ -53,6 +71,23 @@ function fmtD(d: Date | null): string {
 function isoDate(d: Date | null): string {
   return d ? d.toISOString().slice(0, 10) : ''
 }
+function naturalCompare(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+}
+function leaseEndSortTime(ls: CanaryLease[]): number | null {
+  const current = ls.find((l) => l.status === 'Active' || l.status === 'Expiring')
+  if (current) {
+    const e = parseDate(current.end)
+    if (e) return e.getTime()
+  }
+  let nextUpcoming: number | null = null
+  for (const l of ls) {
+    if (l.status !== 'Upcoming') continue
+    const e = parseDate(l.end)?.getTime()
+    if (e != null && (nextUpcoming == null || e < nextUpcoming)) nextUpcoming = e
+  }
+  return nextUpcoming
+}
 
 type ChatMsg = { role: 'user' | 'assistant'; text: string }
 type Drawer = DrawerState
@@ -60,6 +95,8 @@ type SortState = { key: string; dir: 'asc' | 'desc' } | null
 type DraftForm = {
   id: string | null
   propId: string
+  tenantId: string
+  termType: LeaseTermType
   rent: string
   start: string
   end: string
@@ -69,7 +106,7 @@ type DraftForm = {
   pets: string
   utilities: string
   description: string
-  published: boolean
+  status: DraftListingStatus
   address?: string
 }
 type PayFormState = { date: string; property: string; category: string; description: string; amount: string; type: 'Credit' | 'Debit' }
@@ -119,10 +156,13 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const [chatInput, setChatInput] = useState('')
   const [chatBusy, setChatBusy] = useState(false)
   const [search, setSearch] = useState('')
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [tlAnchor, setTlAnchor] = useState<number | null>(null)
   const [tlZoomIdx, setTlZoomIdx] = useState(7)
+  const [tlSortDir, setTlSortDir] = useState<'asc' | 'desc'>('asc')
   const [tlStatusFilter, setTlStatusFilter] = useState<Record<string, boolean>>({})
+  const [tlOverlapPick, setTlOverlapPick] = useState<{ label: string; action: () => void }[] | null>(null)
   const [propFilter, setPropFilter] = useState('')
   const [peopleRole, setPeopleRole] = useState('')
   const [projFilter, setProjFilter] = useState('')
@@ -140,6 +180,11 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const [payCat, setPayCat] = useState('')
   const [payType, setPayType] = useState('')
   const [messagesThreadId, setMessagesThreadId] = useState<string | null>(null)
+  const [selectedPropIds, setSelectedPropIds] = useState<string[]>([])
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [mergeOpen, setMergeOpen] = useState(false)
+  const [mergePrimaryId, setMergePrimaryId] = useState('')
+  const [calView, setCalView] = useState<{ propId: string; address: string } | null>(null)
 
   // restore persisted UI prefs
   React.useEffect(() => {
@@ -160,6 +205,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const scoped = useMemo(() => {
     let { properties, leases, portfolios, projects, people } = db
     const drafts0 = db.drafts
+    const inquiries0 = db.inquiries
     if (role === 'Owner' && personaId) {
       const pf = portfolios.filter((x) => (x.ownerIds || '').includes(personaId))
       const pfIds = new Set(pf.map((x) => x.id))
@@ -186,8 +232,14 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       portfolios = []
       people = []
     }
+    const addrs = new Set(properties.map((p) => p.address))
     const drafts = priv ? drafts0 : role === 'Owner' ? drafts0.filter((d) => properties.some((p) => p.id === d.propId)) : []
-    return { properties, leases, portfolios, projects, people, drafts }
+    const inquiries = priv
+      ? inquiries0
+      : role === 'Owner'
+        ? inquiries0.filter((i) => addrs.has(i.property))
+        : []
+    return { properties, leases, portfolios, projects, people, drafts, inquiries }
   }, [db, role, personaId, priv])
 
   // ---------- personas ----------
@@ -238,7 +290,10 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   }, [priv, canSwitchRoles, personaId, personaOptions])
 
   // ---------- KPIs ----------
-  const props = scoped.properties
+  const viewingArchived = propFilter === 'Archived'
+  const activeProps = useMemo(() => scoped.properties.filter((p) => !p.archivedAt), [scoped.properties])
+  const archivedProps = useMemo(() => scoped.properties.filter((p) => p.archivedAt), [scoped.properties])
+  const props = viewingArchived ? archivedProps : activeProps
   const scopedStrBookings = useMemo(() => {
     if (role === 'Tenant' || role === 'Vendor') return []
     const bookings = hospitableCalendar.strBookings
@@ -271,14 +326,20 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   ]
 
   // ---------- draft composer ----------
-  const startDraftFor = useCallback((prop: CanaryProperty | null, presets?: { start?: string; end?: string }) => {
+  const startDraftFor = useCallback((prop: CanaryProperty | null, presets?: { start?: string; end?: string; rent?: string }) => {
     const p = presets || {}
+    const leaseRent = prop ? leaseRentForProperty(db.leases, prop.address) : ''
+    const rent = (p.rent != null && p.rent !== '')
+      ? p.rent
+      : leaseRent || (prop && prop.rate ? String(prop.rate) : '')
     setDrawer(null)
     setDraftError('')
     setDraft({
       id: null,
       propId: prop ? prop.id : '',
-      rent: prop && prop.rate ? String(prop.rate) : '',
+      tenantId: '',
+      termType: 'fixed_term',
+      rent,
       start: p.start || '',
       end: p.end || '',
       beds: prop ? prop.beds || '' : '',
@@ -287,16 +348,20 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       pets: prop && /dog/i.test(prop.petFriendly || '') ? 'Dog friendly' : prop && /yes|pet/i.test(prop.petFriendly || '') ? 'Pet friendly' : 'No pets',
       utilities: prop && /yes|included/i.test(prop.utilitiesIncluded || '') ? 'Included' : 'Not included',
       description: prop?.description || '',
-      published: false,
+      status: 'draft',
       address: prop?.address,
     })
     setDraftOpen(true)
-  }, [])
+  }, [db.leases])
 
   const openDraft = useCallback((d: CanaryDraft) => {
     setDraftError('')
-    setDraft({ ...d })
+    setDraft({ ...d, tenantId: '', termType: 'fixed_term' })
     setDraftOpen(true)
+  }, [])
+
+  const openPropertyCalendar = useCallback((propId: string, address: string) => {
+    setCalView({ propId, address })
   }, [])
 
   const submitDraft = useCallback(async () => {
@@ -311,7 +376,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       description: draft.description || null,
       pets: draft.pets,
       utilities: draft.utilities,
-      published: draft.published,
+      status: draft.status,
     })
     setDraftSaving(false)
     if (!res.success) { setDraftError(res.error); return }
@@ -329,6 +394,32 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     if (!res.success) { setDraftError(res.error); return }
     setDraftOpen(false)
     setDraft(null)
+    startTransition(() => router.refresh())
+  }, [draft, draftSaving, router])
+
+  const activateDraft = useCallback(async () => {
+    if (!draft || !draft.propId || draftSaving) return
+    if (!draft.start) { setDraftError('Start date is required to activate a lease.'); return }
+    const rent = rentNum(draft.rent)
+    if (!rent || rent <= 0) { setDraftError('Monthly rent is required to activate a lease.'); return }
+    const dateErr = validateLeaseDates(draft.termType, draft.start, draft.end || null)
+    if (dateErr) { setDraftError(dateErr); return }
+    setDraftSaving(true)
+    setDraftError('')
+    const res = await activateDraftListing({
+      listingId: draft.id,
+      unitId: draft.propId,
+      tenantId: draft.tenantId || null,
+      startDate: draft.start,
+      endDate: draft.end || null,
+      monthlyRent: rent,
+      termType: draft.termType,
+    })
+    setDraftSaving(false)
+    if (!res.success) { setDraftError(res.error); return }
+    setDraftOpen(false)
+    setDraft(null)
+    setView('leases')
     startTransition(() => router.refresh())
   }, [draft, draftSaving, router])
 
@@ -417,7 +508,23 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const prioRank = (j: CanaryProject) => { const n = parseInt(j.priority, 10); return Number.isNaN(n) ? 9 : n }
   const openProj = scoped.projects.filter((j) => j.status && !['Cancelled', 'Postponed', 'Completed', 'Closed'].includes(j.status))
   const topProject = [...openProj].sort((a, b) => prioRank(a) - prioRank(b) || (a.status === 'In Progress' ? -1 : 0))[0] || null
-  const dashDrafts = scoped.drafts.slice(0, 5)
+  const dashDrafts = scoped.drafts.filter((d) => d.status !== 'renewal_sent').slice(0, 5)
+  const tenantForAddress = useCallback((address: string) => {
+    const lease = scoped.leases.find((l) => l.property === address && (l.status === 'Active' || l.status === 'Expiring'))
+    return tenantNames(lease?.tenantInfo) || '—'
+  }, [scoped.leases])
+  const dashRenewals = scoped.drafts
+    .filter((d) => d.status === 'renewal_sent')
+    .sort((a, b) => (parseDate(b.sentAt)?.getTime() ?? 0) - (parseDate(a.sentAt)?.getTime() ?? 0))
+    .slice(0, 6)
+  const dashApplications = scoped.inquiries
+    .filter((i) => i.type === 'application' && i.status === 'new')
+    .sort((a, b) => (parseDate(b.submittedAt)?.getTime() ?? 0) - (parseDate(a.submittedAt)?.getTime() ?? 0))
+    .slice(0, 6)
+  const openRenewalsTimeline = useCallback(() => {
+    setTlStatusFilter({ active: false, expiring: false, upcoming: false, draft: false, renewal_sent: true, str: false, past: false })
+    setView('leases')
+  }, [])
 
   // ---------- timeline ----------
   const zoomIdx = Math.max(0, Math.min(TL_ZOOM_PRESETS.length - 1, tlZoomIdx))
@@ -440,13 +547,14 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   }
   const tlTodayLeft = pct(now).toFixed(2) + '%'
   const tlSliderOffset = Math.round((winStart.getTime() - todayMid.getTime()) / DAY)
-  const fdef: Record<string, boolean> = { active: true, expiring: true, upcoming: true, draft: true, str: true, past: false }
+  const fdef: Record<string, boolean> = { active: true, expiring: true, upcoming: true, draft: true, renewal_sent: true, str: true, past: true }
   const filt = { ...fdef, ...tlStatusFilter }
   const filterMeta = [
     { key: 'active', label: 'Active', dot: 'var(--green)' },
     { key: 'expiring', label: 'Expiring', dot: 'var(--red)' },
     { key: 'upcoming', label: 'Upcoming', dot: 'var(--amber)' },
     { key: 'draft', label: 'Drafts', dot: 'var(--accent)' },
+    { key: 'renewal_sent', label: 'Renewals sent', dot: 'var(--purple)' },
     { key: 'str', label: 'STR stays', dot: 'var(--blue)' },
     { key: 'past', label: 'Past', dot: 'var(--gray)' },
   ]
@@ -466,14 +574,15 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     return m
   }, [scoped.leases, timelineAddressFor])
   const draftsByProp = useMemo(() => {
+    const propById = new Map(props.map((p) => [p.id, p]))
     const m = new Map<string, CanaryDraft[]>()
     scoped.drafts.forEach((d) => {
-      const k = timelineAddressFor(d.address)
+      const k = propById.get(d.propId)?.address ?? timelineAddressFor(d.address) ?? d.address
       if (!m.has(k)) m.set(k, [])
       m.get(k)!.push(d)
     })
     return m
-  }, [scoped.drafts, timelineAddressFor])
+  }, [scoped.drafts, timelineAddressFor, props])
   const strByProp = useMemo(() => {
     const m = new Map<string, CanaryStrBooking[]>()
     scopedStrBookings.forEach((b) => {
@@ -487,73 +596,142 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const catOf = (l: CanaryLease) => {
     if (l.status === 'Upcoming') return 'upcoming'
     if (l.status === 'Active' || l.status === 'Expiring') {
+      if (isMonthToMonthLease(l.termType)) return 'active'
       const e = parseDate(l.end)
       return (e && e <= soon && !hasSuccessor(l)) || l.status === 'Expiring' ? 'expiring' : 'active'
     }
     return 'past'
   }
+  const leaseTimelineStatusLabel = (l: CanaryLease, cat: ReturnType<typeof catOf>) => {
+    if (cat === 'active' && isMonthToMonthLease(l.termType)) return 'Monthly'
+    return cat === 'expiring' ? 'Expiring' : cat === 'upcoming' ? 'Upcoming' : cat === 'active' ? 'Active' : (l.status || 'Past')
+  }
+  const leaseTimelineRent = (l: CanaryLease) => {
+    const n = rentNum(l.rent)
+    return n ? money(n) + '/mo' : ''
+  }
+  const leaseTimelineLabel = (l: CanaryLease, cat: ReturnType<typeof catOf>) =>
+    [leaseTimelineStatusLabel(l, cat), leaseTimelineRent(l)].filter(Boolean).join(' · ')
 
-  type TlBar = { left: string; width: string; bg: string; color: string; borderStyle: string; label: string; title: string; onClick?: () => void; top: number; height: number; interactive: boolean }
+  type TlBarKind = 'lease' | 'draft' | 'str'
+  type TlBar = { left: string; width: string; bg: string; color: string; borderStyle: string; label: string; title: string; onClick?: () => void; top: number; height: number; interactive: boolean; kind: TlBarKind; zIndex: number; startMs: number; endMs: number; opacity?: number }
+  const TL_BAR_H = 28
+  const TL_BAR_GAP = 4
+  const TL_BAR_TOP = 12
+  const assignBarLanes = (bars: TlBar[]) => {
+    if (!bars.length) return 48
+    const lanes: TlBar[][] = []
+    const sorted = [...bars].sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs)
+    for (const bar of sorted) {
+      let lane = 0
+      while (true) {
+        const occupants = lanes[lane] || []
+        const conflict = occupants.some((o) => tlRangesOverlap(bar.startMs, bar.endMs, o.startMs, o.endMs))
+        if (!conflict) {
+          if (!lanes[lane]) lanes[lane] = []
+          lanes[lane].push(bar)
+          bar.top = TL_BAR_TOP + lane * (TL_BAR_H + TL_BAR_GAP)
+          bar.height = TL_BAR_H
+          bar.zIndex = lane + 1
+          break
+        }
+        lane++
+      }
+    }
+    const maxLane = lanes.length - 1
+    return maxLane === 0 ? 48 : TL_BAR_TOP + (maxLane + 1) * (TL_BAR_H + TL_BAR_GAP) + 8
+  }
+  const handleTlBarClick = (e: React.MouseEvent<HTMLDivElement>, rowBars: TlBar[]) => {
+    const track = e.currentTarget.parentElement
+    if (!track) return
+    const rect = track.getBoundingClientRect()
+    const xPct = ((e.clientX - rect.left) / rect.width) * 100
+    const clickMs = winStart.getTime() + (xPct / 100) * span
+    const hits = rowBars.filter((b) => b.interactive && clickMs >= b.startMs && clickMs <= b.endMs)
+    if (!hits.length) return
+    if (hits.length === 1) {
+      hits[0].onClick?.()
+      return
+    }
+    setTlOverlapPick(hits.map((b) => ({ label: b.label, action: () => { setTlOverlapPick(null); b.onClick?.() } })))
+  }
   const buildTimelineRow = (address: string, p: CanaryProperty | undefined, labelAddress?: string) => {
     const ls = leasesByProp.get(address) || []
-    const current = ls.filter((l) => l.status === 'Active' || l.status === 'Expiring')[0]
-    const nextEnd = current ? parseDate(current.end) : null
+    const leaseEndMs = leaseEndSortTime(ls)
     const bars: TlBar[] = []
-    let hasLeaseBar = false
     ls.forEach((l) => {
-      const s = parseDate(l.start), e = parseDate(l.end)
-      if (!s || !e || e < winStart || s > winEnd) return
+      const range = leaseBarRangeForLease(l.start, l.end, l.termType)
+      if (!range || range.endMs < winStart.getTime() || range.startMs > winEnd.getTime()) return
       const cat = catOf(l)
       if (!filt[cat]) return
-      hasLeaseBar = true
-      const [bg, color] = cat === 'expiring' ? ['var(--red)', 'var(--red-text)'] : cat === 'upcoming' ? ['var(--amber)', 'var(--amber-text)'] : cat === 'active' ? ['var(--green)', 'var(--green-text)'] : ['var(--gray)', 'var(--bg)']
+      const isMonthly = cat === 'active' && isMonthToMonthLease(l.termType)
+      const [bg, color] = isMonthly
+        ? ['var(--orange)', 'var(--orange-text)']
+        : cat === 'expiring'
+          ? ['var(--red)', 'var(--red-text)']
+          : cat === 'upcoming'
+            ? ['var(--amber)', 'var(--amber-text)']
+            : cat === 'active'
+              ? ['var(--green)', 'var(--green-text)']
+              : ['var(--gray)', 'var(--bg)']
+      const barLabel = leaseTimelineLabel(l, cat)
+      const rentPart = leaseTimelineRent(l)
       bars.push({
-        left: pct(s).toFixed(2) + '%', width: Math.max(1.6, pct(e) - pct(s)).toFixed(2) + '%',
-        bg, color, borderStyle: 'none', label: tenantNames(l.tenantInfo) || l.status,
-        title: l.status + ' · ' + (l.rent || '') + ' · ' + l.start + ' → ' + l.end,
+        left: pct(range.startMs).toFixed(2) + '%', width: Math.max(1.6, pct(range.endMs) - pct(range.startMs)).toFixed(2) + '%',
+        bg, color, borderStyle: 'none', label: barLabel,
+        title: [leaseTimelineStatusLabel(l, cat), rentPart, (l.start || '') + ' → ' + (l.end || '')].filter(Boolean).join(' · '),
         onClick: () => setDrawer({ kind: 'lease', id: l.id }),
-        top: 12, height: 30, interactive: true,
+        top: TL_BAR_TOP, height: TL_BAR_H, interactive: true, kind: 'lease', zIndex: 1,
+        startMs: range.startMs, endMs: range.endMs,
+        opacity: cat === 'past' ? 0.72 : undefined,
       })
     })
-    if (filt.draft) (draftsByProp.get(address) || []).forEach((d) => {
-      const s = parseDate(d.start)
-      const e = parseDate(d.end) || (s ? new Date(s.getTime() + 365 * DAY) : null)
-      if (!s || !e || e < winStart || s > winEnd) return
-      hasLeaseBar = true
+    const showDrafts = (d: CanaryDraft) => {
+      if (d.status === 'renewal_sent') return filt.renewal_sent
+      return filt.draft
+    };
+    (draftsByProp.get(address) || []).forEach((d) => {
+      if (!showDrafts(d)) return
+      const draftStart =
+        d.start ||
+        (d.status === 'renewal_sent' && d.sentAt ? d.sentAt : '') ||
+        isoDate(todayMid)
+      const range = draftBarRange(draftStart, d.end, 365 * DAY)
+      if (!range || range.endMs < winStart.getTime() || range.startMs > winEnd.getTime()) return
+      const meta = draftTimelineMeta(d)
       bars.push({
-        left: pct(s).toFixed(2) + '%', width: Math.max(1.6, pct(e) - pct(s)).toFixed(2) + '%',
-        bg: 'transparent', color: 'var(--accent)', borderStyle: '2px dashed var(--accent)',
-        label: d.published ? 'Listing · public' : 'Draft lease',
-        title: 'Draft · $' + d.rent + '/mo', onClick: () => openDraft(d),
-        top: 12, height: 30, interactive: true,
+        left: pct(range.startMs).toFixed(2) + '%', width: Math.max(1.6, pct(range.endMs) - pct(range.startMs)).toFixed(2) + '%',
+        bg: meta.bg, color: meta.color, borderStyle: meta.borderStyle,
+        label: meta.label,
+        title: meta.title, onClick: () => openDraft(d),
+        top: TL_BAR_TOP, height: TL_BAR_H, interactive: true, kind: 'draft', zIndex: 1,
+        startMs: range.startMs, endMs: range.endMs,
       })
     })
     if (filt.str) (strByProp.get(address) || []).forEach((b) => {
-      const s = parseDate(b.start), e = parseDate(b.end)
-      if (!s || !e || e < winStart || s > winEnd) return
+      const range = strBarRange(b)
+      if (!range || range.endMs < winStart.getTime() || range.startMs > winEnd.getTime()) return
       const pending = b.status === 'request'
       bars.push({
-        left: pct(s).toFixed(2) + '%', width: Math.max(1.6, pct(e) - pct(s)).toFixed(2) + '%',
+        left: pct(range.startMs).toFixed(2) + '%', width: Math.max(1.6, pct(range.endMs) - pct(range.startMs)).toFixed(2) + '%',
         bg: pending ? 'transparent' : 'var(--blue)',
         color: pending ? 'var(--blue)' : 'var(--bg)',
         borderStyle: pending ? '2px dashed var(--blue)' : 'none',
         label: b.guestLabel,
         title: `${b.platform} · ${b.guestLabel} · ${b.start} → ${b.end}${b.nights ? ` · ${b.nights}n` : ''}${b.code ? ` · ${b.code}` : ''}`,
-        top: hasLeaseBar ? 36 : 12,
-        height: 24,
-        interactive: false,
+        top: TL_BAR_TOP, height: TL_BAR_H, interactive: false, kind: 'str', zIndex: 1,
+        startMs: range.startMs, endMs: range.endMs,
       })
     })
-    const strCount = (strByProp.get(address) || []).length
+    const rowHeight = assignBarLanes(bars)
     const displayAddress = labelAddress ?? p?.address ?? address
     return {
       id: p?.id ?? `str:${displayAddress}`,
+      address: displayAddress,
       short: short(displayAddress),
-      sub: p
-        ? (current ? [tenantNames(current.tenantInfo), current.rent ? money(rentNum(current.rent)) + '/mo' : ''].filter(Boolean).join(' · ') : p.status || '')
-        : `STR · ${strCount} booking${strCount === 1 ? '' : 's'}`,
-      sortKey: nextEnd ? nextEnd.getTime() : p ? 9e15 : 9e14,
+      sortKey: leaseEndMs ?? (p ? 9e15 : 9e14),
       bars,
+      rowHeight,
       strOnly: !p,
     }
   }
@@ -572,12 +750,17 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const tlRows = [
     ...managedPropRows,
     ...strOnlyAddresses.map((address) => buildTimelineRow(timelineAddressFor(address), undefined, address)),
-  ].filter((r) => !r.strOnly || r.bars.length > 0).sort((a, b) => a.sortKey - b.sortKey)
+  ].filter((r) => !r.strOnly || r.bars.length > 0).sort((a, b) => {
+    const dir = tlSortDir === 'desc' ? -1 : 1
+    const byEnd = a.sortKey - b.sortKey
+    if (byEnd !== 0) return byEnd * dir
+    return naturalCompare(a.short, b.short) * dir
+  })
 
   // ---------- filters / lists per page ----------
-  const statuses = ['', 'Vacant', 'Leased', 'Airbnb', 'Maintenance', 'Office']
+  const statuses = ['', 'Vacant', 'Leased', 'Airbnb', 'Maintenance', 'Office', 'Archived']
   const chipFor = (st: string): [string, string] => st === 'Leased' ? ['var(--green)', 'var(--green-text)'] : st === 'Vacant' ? ['var(--amber)', 'var(--amber-text)'] : st === 'Airbnb' ? ['var(--blue)', 'var(--bg)'] : ['var(--elev)', 'var(--dim)']
-  const filteredProps = props.filter(matchProp).filter((p) => !propFilter || p.status === propFilter)
+  const filteredProps = props.filter(matchProp).filter((p) => !propFilter || propFilter === 'Archived' || p.status === propFilter)
 
   const roles = ['', 'Client', 'Tenant', 'Vendor', 'Admin', 'Cleaner', 'Contact', 'Realtor', 'Accountant']
   const roleCounts: Record<string, number> = {}
@@ -612,7 +795,16 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     return [...arr].sort((a, b) => { const av = g(a), bv = g(b); const r = av < bv ? -1 : av > bv ? 1 : 0; return s.dir === 'desc' ? -r : r })
   }
 
-  const leaseStatusColor = (l: CanaryLease) => l.status === 'Active' ? 'var(--green)' : l.status === 'Expiring' ? 'var(--red)' : l.status === 'Upcoming' ? 'var(--amber)' : 'var(--dim)'
+  const leaseStatusColor = (l: CanaryLease) =>
+    l.status === 'Active' && isMonthToMonthLease(l.termType)
+      ? 'var(--orange)'
+      : l.status === 'Active'
+        ? 'var(--green)'
+        : l.status === 'Expiring'
+          ? 'var(--red)'
+          : l.status === 'Upcoming'
+            ? 'var(--amber)'
+            : 'var(--dim)'
   const projStatusColor = (j: CanaryProject) => j.status === 'In Progress' ? 'var(--green)' : j.status === 'Postponed' || j.status === 'Cancelled' ? 'var(--faint)' : 'var(--amber)'
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -629,7 +821,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       open: (l: CanaryLease) => () => setDrawer({ kind: 'lease', id: l.id }),
       cols: [
         { key: 'property', label: 'Property', flex: '1.8', bold: true, get: (l: CanaryLease) => short(l.property) },
-        { key: 'status', label: 'Status', flex: '1', color: leaseStatusColor, get: (l: CanaryLease) => l.status || '—' },
+        { key: 'status', label: 'Status', flex: '1', color: leaseStatusColor, get: (l: CanaryLease) => (l.status === 'Active' && isMonthToMonthLease(l.termType) ? 'Monthly' : l.status) || '—' },
         { key: 'tenants', label: 'Tenants', flex: '2', dim: true, get: (l: CanaryLease) => tenantNames(l.tenantInfo) || '—' },
         { key: 'start', label: 'Start', flex: '0 0 96px', mono: true, get: (l: CanaryLease) => l.start || '—' },
         { key: 'end', label: 'End', flex: '0 0 96px', mono: true, get: (l: CanaryLease) => l.end || '—' },
@@ -738,6 +930,124 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const showTable = pdef ? curView === 'table' : false
   const showKanban = pdef ? curView === 'kanban' : false
   const showGantt = page === 'projects' && curView === 'gantt'
+  const propBulkEnabled = page === 'properties' && priv && showTable
+  const pagePropRows = page === 'properties' ? (genRows as CanaryProperty[]) : []
+  const pagePropIds = pagePropRows.slice(0, tblCap).map((p) => p.id)
+  const allFilteredPropIds = filteredProps.map((p) => p.id)
+  const allPagePropsSelected = pagePropIds.length > 0 && pagePropIds.every((id) => selectedPropIds.includes(id))
+  const somePagePropsSelected = pagePropIds.some((id) => selectedPropIds.includes(id))
+  const allFilteredPropsSelected = allFilteredPropIds.length > 0 && allFilteredPropIds.every((id) => selectedPropIds.includes(id))
+
+  React.useEffect(() => {
+    setSelectedPropIds([])
+  }, [propFilter, curView, view])
+
+  const togglePropSelect = useCallback((id: string) => {
+    setSelectedPropIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }, [])
+
+  const toggleSelectPageProps = useCallback(() => {
+    setSelectedPropIds((prev) => {
+      if (allPagePropsSelected) return prev.filter((id) => !pagePropIds.includes(id))
+      const next = new Set(prev)
+      pagePropIds.forEach((id) => next.add(id))
+      return [...next]
+    })
+  }, [allPagePropsSelected, pagePropIds])
+
+  const selectAllFilteredProps = useCallback(() => {
+    setSelectedPropIds(allFilteredPropIds)
+  }, [allFilteredPropIds])
+
+  const runBulkArchive = useCallback(() => {
+    if (!selectedPropIds.length) return
+    const n = selectedPropIds.length
+    if (!window.confirm(`Archive ${n} propert${n === 1 ? 'y' : 'ies'}? They will be hidden from all active views but can be restored later.`)) return
+    setBulkBusy(true)
+    startTransition(async () => {
+      const res = await archiveProperties(selectedPropIds)
+      setBulkBusy(false)
+      if (!res.success) {
+        window.alert(res.error)
+        return
+      }
+      setSelectedPropIds([])
+      setDrawer(null)
+      router.refresh()
+    })
+  }, [selectedPropIds, router, startTransition])
+
+  const runBulkUnarchive = useCallback(() => {
+    if (!selectedPropIds.length) return
+    const n = selectedPropIds.length
+    if (!window.confirm(`Restore ${n} archived propert${n === 1 ? 'y' : 'ies'}? They will reappear in active property views.`)) return
+    setBulkBusy(true)
+    startTransition(async () => {
+      const res = await unarchiveProperties(selectedPropIds)
+      setBulkBusy(false)
+      if (!res.success) {
+        window.alert(res.error)
+        return
+      }
+      setSelectedPropIds([])
+      setDrawer(null)
+      router.refresh()
+    })
+  }, [selectedPropIds, router, startTransition])
+
+  const selectedPropRows = useMemo(
+    () => props.filter((p) => selectedPropIds.includes(p.id)),
+    [props, selectedPropIds]
+  )
+
+  const runBulkDelete = useCallback(() => {
+    if (!selectedPropIds.length) return
+    const n = selectedPropIds.length
+    const lines = selectedPropRows.map((p) => `• ${p.address}`).join('\n')
+    const msg = `Permanently delete ${n} propert${n === 1 ? 'y' : 'ies'}? This cannot be undone.\n\n${lines}\n\nProperties with active leases, lease history, or work orders will be blocked.`
+    if (!window.confirm(msg)) return
+    setBulkBusy(true)
+    startTransition(async () => {
+      const res = await deleteProperties(selectedPropIds)
+      setBulkBusy(false)
+      if (!res.success) {
+        window.alert(res.error)
+        return
+      }
+      setSelectedPropIds([])
+      setDrawer(null)
+      router.refresh()
+    })
+  }, [selectedPropIds, selectedPropRows, router, startTransition])
+
+  const openMergeModal = useCallback(() => {
+    if (selectedPropIds.length < 2) return
+    setMergePrimaryId(selectedPropIds[0])
+    setMergeOpen(true)
+  }, [selectedPropIds])
+
+  const runMerge = useCallback(() => {
+    if (!mergePrimaryId || selectedPropIds.length < 2) return
+    const mergeIds = selectedPropIds.filter((id) => id !== mergePrimaryId)
+    const primary = selectedPropRows.find((p) => p.id === mergePrimaryId)
+    const absorbed = selectedPropRows.filter((p) => p.id !== mergePrimaryId)
+    const msg = `Merge ${mergeIds.length} duplicate propert${mergeIds.length === 1 ? 'y' : 'ies'} into:\n\n${primary?.address ?? 'Primary'}\n\nAbsorbed:\n${absorbed.map((p) => `• ${p.address}`).join('\n')}\n\nLeases, listings, and work orders will move to the primary. This cannot be undone.`
+    if (!window.confirm(msg)) return
+    setBulkBusy(true)
+    startTransition(async () => {
+      const res = await mergeProperties({ primaryUnitId: mergePrimaryId, mergeUnitIds: mergeIds })
+      setBulkBusy(false)
+      if (!res.success) {
+        window.alert(res.error)
+        return
+      }
+      if (res.warning) window.alert(res.warning)
+      setMergeOpen(false)
+      setSelectedPropIds([])
+      setDrawer(null)
+      router.refresh()
+    })
+  }, [mergePrimaryId, selectedPropIds, selectedPropRows, router, startTransition])
 
   // kanban columns
   type KanCol = { title: string; count: string; more: boolean; moreLabel: string; cards: { title: string; sub: string; right: string; rightColor: string; onClick: (() => void) | null }[] }
@@ -804,22 +1114,68 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
             const e = parseDate(l.end)
             const s = e ? new Date(e.getTime() + DAY) : null
             const e2 = s ? new Date(s.getFullYear() + 1, s.getMonth(), s.getDate() - 1) : null
-            startDraftFor(p || null, { start: isoDate(s), end: isoDate(e2) })
+            startDraftFor(p || null, {
+              start: isoDate(s),
+              end: isoDate(e2),
+              rent: rentNum(l.rent) > 0 ? String(rentNum(l.rent)) : undefined,
+            })
           },
         })
       }
     }
     if (drawer.kind === 'property') {
       const p = db.properties.find((x) => x.id === drawer.id)
-      if (p) actions.push({ label: '+ Draft lease from this property', onClick: () => startDraftFor(p) })
+      if (p?.archivedAt) {
+        actions.push({
+          label: 'Restore property',
+          onClick: () => {
+            if (!window.confirm(`Restore ${short(p.address)}? It will reappear in active property views.`)) return
+            startTransition(async () => {
+              const res = await unarchiveProperties([p.id])
+              if (!res.success) {
+                window.alert(res.error)
+                return
+              }
+              setDrawer(null)
+              router.refresh()
+            })
+          },
+        })
+      } else if (p) {
+        actions.push({ label: 'Calendar view', onClick: () => openPropertyCalendar(p.id, p.address) })
+        actions.push({ label: '+ Draft lease from this property', onClick: () => startDraftFor(p) })
+      }
     }
     return actions
-  }, [drawer, priv, db.leases, db.properties, startDraftFor])
+  }, [drawer, priv, db.leases, db.properties, startDraftFor, openPropertyCalendar, router, startTransition])
+
+  const calViewData = useMemo(() => {
+    if (!calView) return null
+    const canonical = timelineAddressFor(calView.address)
+    return {
+      leases: scoped.leases.filter((l) => timelineAddressFor(l.property) === canonical),
+      drafts: scoped.drafts.filter((d) => d.propId === calView.propId),
+      strBookings: scopedStrBookings.filter((b) => timelineAddressFor(b.property) === canonical),
+    }
+  }, [calView, scoped.leases, scoped.drafts, scopedStrBookings, timelineAddressFor])
 
   // ---------- draft composer derived ----------
-  const propOptions = db.properties.map((p) => ({ id: p.id, short: short(p.address) }))
-  const curDraft: DraftForm = draft ?? { id: null, propId: '', rent: '', start: '', end: '', beds: '', baths: '', parking: '', pets: 'No pets', utilities: 'Not included', description: '', published: false }
+  const propOptions = db.properties.filter((p) => !p.archivedAt).map((p) => ({ id: p.id, short: short(p.address) }))
+  const curDraft: DraftForm = draft ?? { id: null, propId: '', tenantId: '', termType: 'fixed_term', rent: '', start: '', end: '', beds: '', baths: '', parking: '', pets: 'No pets', utilities: 'Not included', description: '', status: 'draft' }
+  const tenantOptions = useMemo(
+    () => db.people.filter((p) => p.role === 'Tenant').map((p) => ({ id: p.id, label: p.name })),
+    [db.people],
+  )
+  const canActivateDraft =
+    !!curDraft.propId &&
+    !!curDraft.start &&
+    rentNum(curDraft.rent) > 0 &&
+    (curDraft.termType === 'month_to_month' || !!curDraft.end)
   const setDraftField = (k: keyof DraftForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setDraft({ ...curDraft, [k]: e.target.value })
+  const adjustDraftRent = (delta: number) => {
+    const next = Math.max(0, rentNum(curDraft.rent) + delta)
+    setDraft({ ...curDraft, rent: next > 0 ? String(next) : '' })
+  }
 
   const curPayForm: PayFormState = payForm ?? emptyPayForm()
   const setPayField = (k: keyof PayFormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setPayForm({ ...curPayForm, [k]: e.target.value } as PayFormState)
@@ -868,7 +1224,27 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
         {/* ============ TOP BAR ============ */}
         <header style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '12px 18px', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 40 }}>
           <button className="cy-hov" onClick={() => setSidebarCollapsed((v) => !v)} title="Toggle menu" style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 11px', cursor: 'pointer', fontSize: 15, lineHeight: 1, color: 'var(--dim)', flex: 'none' }}>☰</button>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search property, tenant, person…" style={{ flex: '1 1 160px', minWidth: 140, background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 10, padding: '9px 13px', outline: 'none' }} />
+          <div style={{ position: 'relative', flex: '1 1 160px', minWidth: 140 }}>
+            <input
+              ref={searchInputRef}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search property, tenant, person…"
+              style={{ width: '100%', boxSizing: 'border-box', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 10, padding: '9px 13px', paddingRight: search ? 34 : 13, outline: 'none' }}
+            />
+            {search && (
+              <button
+                type="button"
+                className="cy-search-clear"
+                onClick={() => { setSearch(''); searchInputRef.current?.focus() }}
+                aria-label="Clear search"
+                title="Clear search"
+                style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, border: 'none', borderRadius: 6, background: 'transparent', cursor: 'pointer', color: 'var(--faint)', padding: 0 }}
+              >
+                <X size={14} strokeWidth={2} />
+              </button>
+            )}
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
             {canSwitchRoles ? (
               <select value={role} onChange={(e) => onRoleChange(e.target.value as CanaryRole)} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 9, padding: '8px 10px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
@@ -1055,20 +1431,68 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                     <div style={{ fontWeight: 700, fontSize: 15 }}>Draft listings</div>
                     {priv && <button onClick={() => startDraftFor(null)} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>+ New draft</button>}
                   </div>
-                  {dashDrafts.map((d) => (
+                  {dashDrafts.map((d) => {
+                    const badge = draftStatusBadge(d.status)
+                    return (
                     <div key={d.id} className="cy-hov" onClick={() => openDraft(d)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 3, border: '2px solid var(--accent)', flex: 'none' }} />
+                      <span style={{ width: 8, height: 8, borderRadius: 3, border: d.status === 'renewal_sent' ? 'none' : '2px solid var(--accent)', background: d.status === 'renewal_sent' ? 'var(--purple)' : 'transparent', flex: 'none' }} />
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(d.address)}</div>
                         <div style={{ color: 'var(--dim)', fontSize: '12.5px' }}>{(d.rent ? '$' + d.rent + '/mo · ' : '') + (d.start || 'no date')}</div>
                       </div>
-                      <span style={{ flex: 'none', fontSize: '11.5px', fontWeight: 700, padding: '3px 8px', borderRadius: 6, color: d.published ? 'var(--green)' : 'var(--dim)', border: '1px solid var(--border)', background: 'var(--elev)' }}>{d.published ? 'PUBLIC' : 'DRAFT'}</span>
+                      <span style={{ flex: 'none', fontSize: '11.5px', fontWeight: 700, padding: '3px 8px', borderRadius: 6, color: badge.color, border: '1px solid var(--border)', background: 'var(--elev)' }}>{badge.label}</span>
                     </div>
-                  ))}
+                    )
+                  })}
                   {!dashDrafts.length && (
                     <div style={{ color: 'var(--dim)', padding: 8, fontSize: '13.5px' }}>No draft leases yet. Start one from a property or the <b>+ Lease</b> button — published drafts appear on the public site.</div>
                   )}
                 </div>
+                <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15 }}>Renewals &amp; offers sent</div>
+                    <button onClick={openRenewalsTimeline} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Timeline →</button>
+                  </div>
+                  {dashRenewals.map((d) => (
+                    <div key={d.id} className="cy-hov" onClick={() => openDraft(d)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--purple)', flex: 'none' }} />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(d.address)}</div>
+                        <div style={{ color: 'var(--dim)', fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tenantForAddress(d.address)}</div>
+                      </div>
+                      <div style={{ textAlign: 'right', flex: 'none' }}>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{d.rent ? '$' + d.rent + '/mo' : '—'}</div>
+                        <div style={{ color: 'var(--dim)', fontSize: 12 }}>{d.sentAt ? fmtD(parseDate(d.sentAt)) : '—'}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {!dashRenewals.length && <div style={{ color: 'var(--dim)', padding: 8 }}>No renewals or offers awaiting tenant response.</div>}
+                </div>
+                {priv && (
+                  <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>Applications sent</div>
+                      <button onClick={() => router.push('/inquiries')} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>All inquiries →</button>
+                    </div>
+                    {dashApplications.map((i) => {
+                      const badge = inquiryStatusBadge(i.status)
+                      return (
+                        <div key={i.id} className="cy-hov" onClick={() => router.push('/inquiries')} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--amber)', flex: 'none' }} />
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{i.name}</div>
+                            <div style={{ color: 'var(--dim)', fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(i.property)}</div>
+                          </div>
+                          <div style={{ textAlign: 'right', flex: 'none' }}>
+                            <div style={{ color: 'var(--dim)', fontSize: 12 }}>{fmtD(parseDate(i.submittedAt))}</div>
+                            <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 8px', borderRadius: 6, color: badge.color, border: '1px solid var(--border)', background: 'var(--elev)' }}>{badge.label}</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {!dashApplications.length && <div style={{ color: 'var(--dim)', padding: 8 }}>No applications awaiting review.</div>}
+                  </div>
+                )}
               </div>
             </section>
           )}
@@ -1083,6 +1507,29 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                       <span style={{ width: 8, height: 8, borderRadius: 3, background: f.dot }} />{f.label}
                     </button>
                   ))}
+                  {(hospitableCalendar.connected || !hospitableCalendar.statusMessage.startsWith('Add HOSPITABLE')) && (
+                    <span
+                      title={hospitableCalendar.connected
+                        ? `Hospitable calendar · ${hospitableCalendar.statusMessage}\nBlue bars = confirmed STR stays · dashed = pending request · gaps = vacant nights`
+                        : hospitableCalendar.statusMessage}
+                      style={{
+                        border: `1px solid ${hospitableCalendar.connected ? 'var(--border)' : 'var(--amber)'}`,
+                        background: hospitableCalendar.connected ? 'transparent' : 'color-mix(in srgb, var(--amber) 10%, transparent)',
+                        color: hospitableCalendar.connected ? 'var(--faint)' : 'var(--amber)',
+                        borderRadius: 8,
+                        padding: '6px 11px',
+                        fontWeight: 600,
+                        fontSize: '12.5px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        cursor: 'default',
+                      }}
+                    >
+                      <span style={{ width: 8, height: 8, borderRadius: 3, background: hospitableCalendar.connected ? 'var(--blue)' : 'var(--amber)', opacity: hospitableCalendar.connected ? 1 : 0.7 }} />
+                      {hospitableCalendar.connected ? `STR · ${scopedStrBookings.length}` : 'STR'}
+                    </span>
+                  )}
                 </div>
                 <button onClick={() => setTlAnchor(todayMid.getTime() - Math.round(spanDays / 4) * DAY)} style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 14px', fontWeight: 600, cursor: 'pointer' }}>Today</button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 9, padding: 3 }}>
@@ -1092,13 +1539,6 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                 </div>
                 <button onClick={() => setTlAnchor(winStart.getTime() - spanDays * DAY)} style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', cursor: 'pointer', color: 'var(--dim)' }}>←</button>
                 <button onClick={() => setTlAnchor(winStart.getTime() + spanDays * DAY)} style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', cursor: 'pointer', color: 'var(--dim)' }}>→</button>
-              </div>
-              <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 10, border: `1px solid ${hospitableCalendar.connected ? 'var(--border)' : 'var(--amber)'}`, background: hospitableCalendar.connected ? 'var(--elev)' : 'color-mix(in srgb, var(--amber) 12%, var(--panel))', fontSize: 13, color: 'var(--dim)' }}>
-                <span style={{ fontWeight: 650, color: 'var(--text)' }}>Hospitable calendar · </span>
-                {hospitableCalendar.statusMessage}
-                {hospitableCalendar.connected ? (
-                  <span style={{ marginLeft: 8, color: 'var(--faint)' }}>Blue bars = confirmed STR stays · dashed = pending request · gaps = vacant nights</span>
-                ) : null}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10, marginBottom: 14 }}>
                 {kpis.map((k) => (
@@ -1113,19 +1553,53 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                 <div style={{ overflowX: 'auto' }}>
                   <div style={{ minWidth: 760 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'clamp(150px,20vw,250px) 1fr', borderBottom: '1px solid var(--border)' }}>
-                      <div style={{ padding: '10px 14px', fontFamily: MONO, fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--dim)', display: 'flex', alignItems: 'center', gap: 8 }}>Property <span style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '2px 7px', fontSize: 10 }}>⇅ lease end</span></div>
+                      <div style={{ padding: '10px 14px', fontFamily: MONO, fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--dim)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        Property
+                        <button
+                          type="button"
+                          title="Sort by lease end date"
+                          aria-label={`Sort by lease end date (${tlSortDir === 'desc' ? 'descending' : 'ascending'})`}
+                          onClick={() => setTlSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+                          style={{
+                            border: '1px solid var(--border)',
+                            borderRadius: 6,
+                            padding: '2px 7px',
+                            fontSize: 10,
+                            fontFamily: MONO,
+                            letterSpacing: '.06em',
+                            textTransform: 'uppercase',
+                            background: 'var(--elev)',
+                            color: 'var(--text)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {tlSortDir === 'desc' ? '↓' : '↑'} lease end
+                        </button>
+                      </div>
                       <div style={{ position: 'relative', height: 38 }}>
                         {tlTicks.map((t, i) => (
                           <div key={i} style={{ position: 'absolute', top: 0, bottom: 0, left: t.left, borderLeft: '1px solid var(--border)', padding: '10px 0 0 8px', fontFamily: MONO, fontSize: 11, color: 'var(--dim)', letterSpacing: '.06em', fontWeight: t.weight }}>{t.label}</div>
                         ))}
                       </div>
                     </div>
-                    <div style={{ maxHeight: '62vh', overflowY: 'auto', position: 'relative' }}>
+                    <div className="cy-timeline-scroll">
                       {tlRows.map((r) => (
-                        <div key={r.id} style={{ display: 'grid', gridTemplateColumns: 'clamp(150px,20vw,250px) 1fr', borderBottom: '1px solid var(--border)', minHeight: r.bars.some((b) => b.top > 20) ? 68 : 56 }}>
-                          <div className="cy-hov" onClick={() => { if (!r.strOnly) setDrawer({ kind: 'property', id: r.id }) }} style={{ padding: '9px 14px', cursor: r.strOnly ? 'default' : 'pointer', borderRight: '1px solid var(--border)', minWidth: 0 }}>
-                            <div style={{ fontWeight: 650, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.short}{r.strOnly ? <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--blue)', letterSpacing: '.04em' }}>STR</span> : null}</div>
-                            <div style={{ color: 'var(--dim)', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.sub}</div>
+                        <div key={r.id} style={{ display: 'grid', gridTemplateColumns: 'clamp(150px,20vw,250px) 1fr', borderBottom: '1px solid var(--border)', minHeight: r.rowHeight }}>
+                          <div className="cy-hov" onClick={() => { if (!r.strOnly) setDrawer({ kind: 'property', id: r.id }) }} style={{ padding: '6px 14px', cursor: r.strOnly ? 'default' : 'pointer', borderRight: '1px solid var(--border)', minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontWeight: 650, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.short}{r.strOnly ? <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--blue)', letterSpacing: '.04em' }}>STR</span> : null}</div>
+                            </div>
+                            {!r.strOnly && (
+                              <button
+                                type="button"
+                                aria-label={`Monthly calendar for ${r.short}`}
+                                title="Monthly calendar"
+                                onClick={(e) => { e.stopPropagation(); openPropertyCalendar(r.id, r.address) }}
+                                style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 7, width: 28, height: 28, display: 'grid', placeItems: 'center', cursor: 'pointer', color: 'var(--dim)', flex: 'none' }}
+                              >
+                                <CalendarIcon size={14} />
+                              </button>
+                            )}
                           </div>
                           <div style={{ position: 'relative', overflow: 'hidden' }}>
                             {tlTicks.map((t, i) => (
@@ -1133,7 +1607,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                             ))}
                             <div style={{ position: 'absolute', top: 0, bottom: 0, left: tlTodayLeft, borderLeft: '2px solid var(--red)', opacity: 0.7 }} />
                             {r.bars.map((b, i) => (
-                              <div key={i} onClick={b.interactive ? b.onClick : undefined} title={b.title} style={{ position: 'absolute', top: b.top, height: b.height, left: b.left, width: b.width, background: b.bg, color: b.color, border: b.borderStyle, borderRadius: 8, display: 'flex', alignItems: 'center', padding: '0 10px', fontWeight: 650, fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', cursor: b.interactive ? 'pointer' : 'default', boxShadow: '0 1px 3px rgba(0,0,0,.25)' }}>{b.label}</div>
+                              <div key={i} onClick={b.interactive ? (e) => handleTlBarClick(e, r.bars) : undefined} title={b.title} style={{ position: 'absolute', top: b.top, height: b.height, left: b.left, width: b.width, zIndex: b.zIndex, background: b.bg, color: b.color, border: b.borderStyle, borderRadius: 8, display: 'flex', alignItems: 'center', padding: '0 10px', fontWeight: 650, fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', cursor: b.interactive ? 'pointer' : 'default', boxShadow: '0 1px 3px rgba(0,0,0,.25)', opacity: b.opacity }}>{b.label}</div>
                             ))}
                           </div>
                         </div>
@@ -1156,10 +1630,44 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
             <section>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
                 {statuses.map((st) => (
-                  <button key={st || 'all'} onClick={() => setPropFilter(st)} style={{ border: `1px solid ${propFilter === st ? 'var(--border2)' : 'var(--border)'}`, background: propFilter === st ? 'var(--elev)' : 'transparent', color: propFilter === st ? 'var(--text)' : 'var(--dim)', borderRadius: 8, padding: '6px 12px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>{st || 'All'}</button>
+                  <button key={st || 'all'} onClick={() => setPropFilter(st)} style={{ border: `1px solid ${propFilter === st ? 'var(--border2)' : 'var(--border)'}`, background: propFilter === st ? 'var(--elev)' : 'transparent', color: propFilter === st ? 'var(--text)' : 'var(--dim)', borderRadius: 8, padding: '6px 12px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                    {st || 'All'}
+                    {st === 'Archived' && archivedProps.length ? <span style={{ opacity: 0.6, fontFamily: MONO, fontSize: 11, marginLeft: 4 }}>{archivedProps.length}</span> : null}
+                  </button>
                 ))}
-                <span style={{ color: 'var(--dim)', fontSize: 13, marginLeft: 'auto' }}>{filteredProps.length + ' of ' + props.length}</span>
+                <span style={{ color: 'var(--dim)', fontSize: 13, marginLeft: 'auto' }}>
+                  {filteredProps.length + ' of ' + props.length}
+                  {!viewingArchived && archivedProps.length ? ` · ${archivedProps.length} archived` : ''}
+                </span>
               </div>
+              {priv && selectedPropIds.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14, padding: '10px 14px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--elev)' }}>
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>{selectedPropIds.length} selected</span>
+                  {viewingArchived ? (
+                    <button className="cy-accent-btn" disabled={bulkBusy} onClick={runBulkUnarchive} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '8px 14px', fontWeight: 700, cursor: bulkBusy ? 'wait' : 'pointer' }}>
+                      {bulkBusy ? 'Restoring…' : `Restore ${selectedPropIds.length} propert${selectedPropIds.length === 1 ? 'y' : 'ies'}`}
+                    </button>
+                  ) : (
+                    <button disabled={bulkBusy} onClick={runBulkArchive} style={{ border: '1px solid var(--red)', background: 'color-mix(in srgb, var(--red) 12%, var(--panel))', color: 'var(--red)', borderRadius: 9, padding: '8px 14px', fontWeight: 700, cursor: bulkBusy ? 'wait' : 'pointer' }}>
+                      {bulkBusy ? 'Archiving…' : `Archive ${selectedPropIds.length} propert${selectedPropIds.length === 1 ? 'y' : 'ies'}`}
+                    </button>
+                  )}
+                  {selectedPropIds.length >= 2 && (
+                    <button disabled={bulkBusy} onClick={openMergeModal} style={{ border: '1px solid var(--border2)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 9, padding: '8px 14px', fontWeight: 700, cursor: bulkBusy ? 'wait' : 'pointer' }}>
+                      Merge {selectedPropIds.length} properties
+                    </button>
+                  )}
+                  <button disabled={bulkBusy} onClick={runBulkDelete} style={{ border: '1px solid var(--red)', background: 'color-mix(in srgb, var(--red) 18%, var(--panel))', color: 'var(--red)', borderRadius: 9, padding: '8px 14px', fontWeight: 700, cursor: bulkBusy ? 'wait' : 'pointer' }}>
+                    {bulkBusy ? 'Deleting…' : `Delete ${selectedPropIds.length} propert${selectedPropIds.length === 1 ? 'y' : 'ies'}`}
+                  </button>
+                  {!allFilteredPropsSelected && (
+                    <button onClick={selectAllFilteredProps} style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', fontWeight: 600, cursor: 'pointer', color: 'var(--dim)', fontSize: 13 }}>
+                      Select all {filteredProps.length} filtered
+                    </button>
+                  )}
+                  <button onClick={() => setSelectedPropIds([])} style={{ border: 'none', background: 'none', color: 'var(--dim)', fontWeight: 600, cursor: 'pointer', fontSize: 13, marginLeft: 'auto' }}>Clear</button>
+                </div>
+              )}
               {showDefault && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 12 }}>
                   {(genRows as CanaryProperty[]).map((p) => {
@@ -1261,7 +1769,11 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
               {payFormOpen && (
                 <div style={{ background: 'var(--panel)', border: '1px solid var(--border2)', borderRadius: 14, padding: 16, marginBottom: 14 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10, alignItems: 'end' }}>
-                    <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Date</span><input type="date" value={curPayForm.date} onChange={setPayField('date')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }} /></label>
+                    <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Date</span>
+                      <div style={{ marginTop: 4 }}>
+                        <DatePickerField value={curPayForm.date} onChange={(v) => setPayForm({ ...curPayForm, date: v })} />
+                      </div>
+                    </label>
                     <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Property</span>
                       <select value={curPayForm.property} onChange={setPayField('property')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }}>
                         <option value="">— select —</option>
@@ -1324,10 +1836,21 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
 
           {/* ============ GENERIC TABLE VIEW ============ */}
           {showTable && pdef && (
-            <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
-              <div style={{ overflowX: 'auto' }}>
+            <div className={`cy-table-panel${page === 'properties' ? ' cy-table-panel--properties' : ''}`} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14 }}>
+              <div className="cy-table-scroll">
                 <div style={{ minWidth: 760 }}>
-                  <div style={{ display: 'flex', gap: 12, padding: '4px 16px', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+                  <div className="cy-table-head" style={{ display: 'flex', gap: 12, padding: '4px 16px', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+                    {propBulkEnabled && (
+                      <label style={{ flex: '0 0 36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title={allPagePropsSelected ? 'Deselect page' : 'Select all on page'}>
+                        <input
+                          type="checkbox"
+                          checked={allPagePropsSelected}
+                          ref={(el) => { if (el) el.indeterminate = !allPagePropsSelected && somePagePropsSelected }}
+                          onChange={toggleSelectPageProps}
+                          style={{ width: 15, height: 15, accentColor: 'var(--accent)', cursor: 'pointer' }}
+                        />
+                      </label>
+                    )}
                     {pdef.cols.map((c) => (
                       <button key={c.key} className="cy-col-head" title={'Sort by ' + c.label} onClick={() => setSort(c.key, curSort && curSort.key === c.key && curSort.dir === 'asc' ? 'desc' : 'asc')} style={{ flex: c.flex, minWidth: 0, border: 'none', background: 'none', cursor: 'pointer', padding: '7px 0', textAlign: (c.align || 'left') as 'left' | 'right', fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.09em', textTransform: 'uppercase', color: curSort && curSort.key === c.key ? 'var(--text)' : 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {c.label} {curSort && curSort.key === c.key ? (curSort.dir === 'desc' ? '↓' : '↑') : ''}
@@ -1336,8 +1859,20 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                   </div>
                   {genRows.slice(0, tblCap).map((r, ri) => {
                     const open = pdef.open ? pdef.open(r) : null
+                    const propRow = page === 'properties' ? (r as CanaryProperty) : null
+                    const checked = propRow ? selectedPropIds.includes(propRow.id) : false
                     return (
-                      <div key={ri} className={open ? 'cy-hov' : undefined} onClick={open ?? undefined} style={{ display: 'flex', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--border)', alignItems: 'center', fontSize: '13.5px', cursor: open ? 'pointer' : 'default', minWidth: 0 }}>
+                      <div key={ri} className={open ? 'cy-hov' : undefined} onClick={open ?? undefined} style={{ display: 'flex', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--border)', alignItems: 'center', fontSize: '13.5px', cursor: open ? 'pointer' : 'default', minWidth: 0, background: checked ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : undefined }}>
+                        {propBulkEnabled && propRow && (
+                          <label style={{ flex: '0 0 36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => togglePropSelect(propRow.id)}
+                              style={{ width: 15, height: 15, accentColor: 'var(--accent)', cursor: 'pointer' }}
+                            />
+                          </label>
+                        )}
                         {pdef.cols.map((c) => (
                           <span key={c.key} style={{ flex: c.flex, minWidth: 0, textAlign: (c.align || 'left') as 'left' | 'right', color: c.color ? c.color(r) : c.dim ? 'var(--dim)' : 'var(--text)', fontWeight: c.bold ? 650 : 400, fontFamily: c.mono ? MONO : 'inherit', fontSize: c.mono ? 12 : '13.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{String(c.get(r))}</span>
                         ))}
@@ -1441,6 +1976,53 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
         }}
       />
 
+      {/* ============ PROPERTY OCCUPANCY CALENDAR ============ */}
+      {calView && calViewData && (
+        <PropertyOccupancyCalendar
+          address={calView.address}
+          shortLabel={short(calView.address)}
+          leases={calViewData.leases}
+          drafts={calViewData.drafts}
+          strBookings={calViewData.strBookings}
+          onClose={() => setCalView(null)}
+        />
+      )}
+
+      {/* ============ MERGE PROPERTIES MODAL ============ */}
+      {mergeOpen && (
+        <>
+          <div onClick={() => setMergeOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(10,8,6,.55)', zIndex: 70, backdropFilter: 'blur(2px)' }} />
+          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 'min(560px,94vw)', maxHeight: '92vh', overflowY: 'auto', background: 'var(--panel)', border: '1px solid var(--border2)', borderRadius: 18, zIndex: 71, boxShadow: 'var(--shadow)', padding: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 4 }}>Merge duplicates</div>
+                <div style={{ fontWeight: 700, fontSize: 19 }}>Pick the property to keep</div>
+                <div style={{ color: 'var(--dim)', fontSize: '13px', marginTop: 6 }}>All leases, listings, and work orders from the others will move to the primary. Orphan property rows are removed.</div>
+              </div>
+              <button onClick={() => setMergeOpen(false)} style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: 'var(--dim)' }}>✕</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {selectedPropRows.map((p) => (
+                <label key={p.id} className="cy-hov-border" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', border: `1px solid ${mergePrimaryId === p.id ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 12, background: mergePrimaryId === p.id ? 'color-mix(in srgb, var(--accent) 10%, var(--panel))' : 'var(--elev)', cursor: 'pointer' }}>
+                  <input type="radio" name="mergePrimary" checked={mergePrimaryId === p.id} onChange={() => setMergePrimaryId(p.id)} style={{ accentColor: 'var(--accent)' }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 650, fontSize: 14 }}>{short(p.address)}</div>
+                    <div style={{ color: 'var(--dim)', fontSize: 12 }}>{p.address}</div>
+                  </div>
+                  {mergePrimaryId === p.id && <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: 'var(--accent)' }}>KEEP</span>}
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+              <button onClick={() => setMergeOpen(false)} style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '9px 14px', fontWeight: 600, cursor: 'pointer', color: 'var(--dim)' }}>Cancel</button>
+              <button className="cy-accent-btn" onClick={runMerge} disabled={bulkBusy || !mergePrimaryId} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '10px 18px', fontWeight: 700, cursor: bulkBusy ? 'wait' : 'pointer', opacity: bulkBusy ? 0.6 : 1 }}>
+                {bulkBusy ? 'Merging…' : `Merge into ${short(selectedPropRows.find((p) => p.id === mergePrimaryId)?.address ?? 'primary')}`}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ============ DRAFT LEASE COMPOSER ============ */}
       {draftOpen && (
         <>
@@ -1464,9 +2046,62 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                   {propOptions.map((o) => (<option key={o.id} value={o.id}>{o.short}</option>))}
                 </select>
                 <span style={{ fontSize: 12, color: 'var(--faint)' }}>Static details (beds, baths, parking) auto-fill from the property record.</span></label>
-              <label><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Monthly rent $</span><input type="number" value={curDraft.rent} onChange={setDraftField('rent')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', marginTop: 4 }} /></label>
-              <label><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Available / start</span><input type="date" value={curDraft.start} onChange={setDraftField('start')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', marginTop: 4 }} /></label>
-              <label><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Lease end</span><input type="date" value={curDraft.end} onChange={setDraftField('end')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', marginTop: 4 }} /></label>
+              <label style={{ gridColumn: '1/-1' }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Tenant <span style={{ color: 'var(--faint)', fontWeight: 500 }}>(optional — link later if unknown)</span></span>
+                <select value={curDraft.tenantId} onChange={setDraftField('tenantId')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', marginTop: 4 }}>
+                  <option value="">— no tenant yet —</option>
+                  {tenantOptions.map((t) => (<option key={t.id} value={t.id}>{t.label}</option>))}
+                </select></label>
+              <label>
+                <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Monthly rent $</span>
+                <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'stretch' }}>
+                  <button
+                    type="button"
+                    onClick={() => adjustDraftRent(-DRAFT_RENT_STEP)}
+                    aria-label={`Decrease rent by $${DRAFT_RENT_STEP}`}
+                    style={{ flex: 'none', width: 40, border: '1px solid var(--border)', background: 'var(--elev)', color: 'var(--text)', borderRadius: 8, fontWeight: 700, fontSize: 18, cursor: 'pointer', lineHeight: 1 }}
+                  >−</button>
+                  <input
+                    type="number"
+                    min={0}
+                    step={DRAFT_RENT_STEP}
+                    value={curDraft.rent}
+                    onChange={setDraftField('rent')}
+                    style={{ flex: 1, minWidth: 0, background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => adjustDraftRent(DRAFT_RENT_STEP)}
+                    aria-label={`Increase rent by $${DRAFT_RENT_STEP}`}
+                    style={{ flex: 'none', width: 40, border: '1px solid var(--border)', background: 'var(--elev)', color: 'var(--text)', borderRadius: 8, fontWeight: 700, fontSize: 18, cursor: 'pointer', lineHeight: 1 }}
+                  >+</button>
+                </div>
+              </label>
+              <label><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Available / start</span>
+                <div style={{ marginTop: 4 }}>
+                  <DatePickerField value={curDraft.start} onChange={(v) => setDraft({ ...curDraft, start: v })} placeholder="Pick start date" />
+                </div>
+              </label>
+              <label><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Term type</span>
+                <select
+                  value={curDraft.termType}
+                  onChange={(e) => setDraft({ ...curDraft, termType: e.target.value as LeaseTermType })}
+                  style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', marginTop: 4 }}
+                >
+                  <option value="fixed_term">Fixed term</option>
+                  <option value="month_to_month">Month-to-month</option>
+                </select>
+              </label>
+              <label><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>
+                Lease end{curDraft.termType === 'month_to_month' ? <span style={{ color: 'var(--faint)', fontWeight: 500 }}> (optional, max 12 mo)</span> : ''}
+              </span>
+                <div style={{ marginTop: 4 }}>
+                  <DatePickerField
+                    value={curDraft.end}
+                    onChange={(v) => setDraft({ ...curDraft, end: v })}
+                    placeholder={curDraft.termType === 'month_to_month' ? 'Optional end date' : 'Pick end date'}
+                  />
+                </div>
+              </label>
               <div style={{ display: 'flex', gap: 10 }}>
                 <label style={{ flex: 1 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Beds</span><input value={curDraft.beds} onChange={setDraftField('beds')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', marginTop: 4 }} /></label>
                 <label style={{ flex: 1 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Baths</span><input value={curDraft.baths} onChange={setDraftField('baths')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', marginTop: 4 }} /></label>
@@ -1484,13 +2119,53 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
             </div>
             {draftError && <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 12 }}>{draftError}</div>}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
-              <button onClick={() => setDraft({ ...curDraft, published: !curDraft.published })} style={{ border: `1px solid ${curDraft.published ? 'var(--green)' : 'var(--border)'}`, background: curDraft.published ? 'var(--green)' : 'transparent', color: curDraft.published ? 'var(--green-text)' : 'var(--dim)', borderRadius: 9, padding: '9px 14px', fontWeight: 700, cursor: 'pointer' }}>{curDraft.published ? '● Published to public site' : '○ Not published'}</button>
-              <span style={{ fontSize: '12.5px', color: 'var(--dim)', flex: 1, minWidth: 180 }}>Published drafts appear on the public listings page with only tenant-safe fields.</span>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Timeline status</span>
+                <select
+                  value={curDraft.status}
+                  onChange={(e) => setDraft({ ...curDraft, status: e.target.value as DraftListingStatus })}
+                  style={{ background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', fontWeight: 600, minWidth: 200 }}
+                >
+                  <option value="draft">Draft lease</option>
+                  <option value="renewal_sent">Renewal sent</option>
+                  <option value="published">Published to public site</option>
+                </select>
+              </label>
+              <span style={{ fontSize: '12.5px', color: 'var(--dim)', flex: 1, minWidth: 180 }}>
+                {curDraft.status === 'published'
+                  ? 'Published drafts appear on the public listings page with only tenant-safe fields.'
+                  : curDraft.status === 'renewal_sent'
+                    ? 'Shows on the timeline as a purple bar — renewal sent to tenant, awaiting signature.'
+                    : 'Shows on the timeline as a dashed yellow bar while the lease is still being prepared.'}
+              </span>
               {!!curDraft.id && <button onClick={removeDraft} disabled={draftSaving} style={{ border: '1px solid var(--border)', background: 'none', color: 'var(--red)', borderRadius: 9, padding: '9px 14px', fontWeight: 600, cursor: 'pointer' }}>Delete</button>}
+              <button
+                onClick={activateDraft}
+                disabled={draftSaving || !canActivateDraft}
+                title={canActivateDraft ? 'Create an active lease from this draft' : curDraft.termType === 'month_to_month' ? 'Set property, rent, and start date to activate' : 'Set property, rent, start date, and end date to activate'}
+                style={{ border: 'none', background: 'var(--green)', color: 'var(--green-text)', borderRadius: 9, padding: '10px 18px', fontWeight: 700, cursor: draftSaving || !canActivateDraft ? 'not-allowed' : 'pointer', opacity: draftSaving || !canActivateDraft ? 0.55 : 1 }}
+              >
+                {draftSaving ? 'Working…' : 'Activate lease'}
+              </button>
               <button className="cy-accent-btn" onClick={submitDraft} disabled={draftSaving} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '10px 18px', fontWeight: 700, cursor: 'pointer', opacity: draftSaving ? 0.6 : 1 }}>{draftSaving ? 'Saving…' : 'Save draft'}</button>
             </div>
           </div>
         </>
+      )}
+
+      {tlOverlapPick && (
+        <div role="dialog" aria-modal="true" aria-label="Choose timeline item" onClick={() => setTlOverlapPick(null)} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,.45)', display: 'grid', placeItems: 'center', padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px', minWidth: 240, maxWidth: 360, boxShadow: '0 8px 32px rgba(0,0,0,.35)' }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Multiple items overlap</div>
+            <div style={{ color: 'var(--dim)', fontSize: 12, marginBottom: 12 }}>Choose which bar to open:</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {tlOverlapPick.map((opt, i) => (
+                <button key={i} type="button" onClick={opt.action} style={{ border: '1px solid var(--border)', background: 'var(--elev)', color: 'var(--text)', borderRadius: 8, padding: '9px 12px', fontWeight: 650, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>{opt.label}</button>
+              ))}
+            </div>
+            <button type="button" onClick={() => setTlOverlapPick(null)} style={{ marginTop: 10, border: 'none', background: 'none', color: 'var(--dim)', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '4px 0' }}>Cancel</button>
+          </div>
+        </div>
       )}
     </div>
   )

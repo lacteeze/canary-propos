@@ -41,10 +41,11 @@ export async function POST(request: NextRequest) {
   }
 
   const db = await loadCanaryDb(caller.orgId)
+  const activeProperties = db.properties.filter((p) => !p.archivedAt)
 
   const snapshot = {
     properties: cap(
-      db.properties.map((p) => ({
+      activeProperties.map((p) => ({
         address: p.address, status: p.status, beds: p.beds, baths: p.baths,
         rate: p.rate, city: p.city, type: p.type,
       })),
@@ -67,25 +68,25 @@ export async function POST(request: NextRequest) {
     portfolios: cap(
       db.portfolios.map((pf) => ({
         name: pf.name,
-        properties: db.properties.filter((p) => p.portfolioId === pf.id).length,
+        properties: activeProperties.filter((p) => p.portfolioId === pf.id).length,
       })),
       60
     ),
     listings: cap(
-      db.drafts.map((d) => ({ address: d.address, rent: d.rent, published: d.published, available: d.start })),
+      db.drafts.map((d) => ({ address: d.address, rent: d.rent, status: d.status, available: d.start })),
       60
     ),
   }
-  const occ = db.properties.length
+  const occ = activeProperties.length
     ? Math.round(
-        (db.properties.filter((p) => p.status === 'Leased').length / db.properties.length) * 100
+        (activeProperties.filter((p) => p.status === 'Leased').length / activeProperties.length) * 100
       )
     : 0
 
   const system =
     "You are the data assistant inside Canary PM, a property-management app for St. John's, Newfoundland. Today is " +
     new Date().toDateString() +
-    '.\nSnapshot: ' + db.properties.length + ' properties, ' + occ + '% occupied, ' +
+    '.\nSnapshot: ' + activeProperties.length + ' properties, ' + occ + '% occupied, ' +
     db.leases.filter((l) => l.status === 'Active' || l.status === 'Expiring').length +
     ' active leases, ' + db.projects.length + ' projects on file.\n' +
     'The full data snapshot (JSON) follows — answer only from it; never invent numbers. ' +

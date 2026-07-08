@@ -4,6 +4,8 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { normalizeLeaseTermType, validateLeaseDates } from '@/lib/canary/lease-term'
+import type { LeaseTermType } from '@/lib/canary/lease-term'
 
 type ActionResult = { success: true; id?: string } | { success: false; error: string }
 
@@ -29,6 +31,8 @@ async function getStaffContext() {
 
 // ---------- Draft lease / listing ----------
 
+const draftListingStatusSchema = z.enum(['draft', 'renewal_sent', 'published'])
+
 const draftSchema = z.object({
   id: z.string().optional().nullable(),
   unitId: z.string().uuid('Property is required'),
@@ -37,7 +41,7 @@ const draftSchema = z.object({
   description: z.string().optional().nullable(),
   pets: z.string().optional().nullable(),
   utilities: z.string().optional().nullable(),
-  published: z.boolean().default(false),
+  status: draftListingStatusSchema.default('draft'),
 })
 
 export async function saveDraftListing(input: {
@@ -48,7 +52,7 @@ export async function saveDraftListing(input: {
   description?: string | null
   pets?: string | null
   utilities?: string | null
-  published: boolean
+  status: 'draft' | 'renewal_sent' | 'published'
 }): Promise<ActionResult> {
   const ctx = await getStaffContext()
   if (!ctx) return { success: false, error: 'Only managers can save draft listings.' }
@@ -89,7 +93,7 @@ export async function saveDraftListing(input: {
     listing_description: descriptionParts.join(' ') || null,
     display_rent: d.rent ?? null,
     available_from: d.start || null,
-    status: (d.published ? 'published' : 'draft') as 'published' | 'draft',
+    status: d.status,
     updated_at: new Date().toISOString(),
   }
 
@@ -101,7 +105,10 @@ export async function saveDraftListing(input: {
       .eq('org_id', ctx.person.org_id)
     if (error) {
       console.error('[saveDraftListing:update]', error)
-      return { success: false, error: 'Failed to save the draft listing.' }
+      const msg = error.message?.includes('listing_status')
+        ? 'Could not save — run database migration 0030_listing_status_renewal_sent (renewal_sent status).'
+        : error.message || 'Failed to save the draft listing.'
+      return { success: false, error: msg }
     }
     revalidatePath('/app')
     return { success: true, id: d.id }
@@ -115,10 +122,126 @@ export async function saveDraftListing(input: {
     .single()
   if (error) {
     console.error('[saveDraftListing:insert]', error)
-    return { success: false, error: 'Failed to save the draft listing.' }
+    const msg = error.message?.includes('listing_status')
+      ? 'Could not save — run database migration 0030_listing_status_renewal_sent (renewal_sent status).'
+      : error.message || 'Failed to save the draft listing.'
+    return { success: false, error: msg }
   }
   revalidatePath('/app')
   return { success: true, id: inserted?.id }
+}
+
+const activateDraftSchema = z.object({
+  listingId: z.string().uuid().optional().nullable(),
+  unitId: z.string().uuid('Property is required'),
+  tenantId: z.string().uuid().optional().nullable(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Start date is required'),
+  endDate: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(''), z.null()])
+    .optional()
+    .nullable(),
+  monthlyRent: z.coerce.number().positive('Monthly rent is required'),
+  termType: z.enum(['fixed_term', 'month_to_month']).default('fixed_term'),
+})
+
+/** Promote a draft listing into an active lease row and unlist the draft. */
+export async function activateDraftListing(input: {
+  listingId?: string | null
+  unitId: string
+  tenantId?: string | null
+  startDate: string
+  endDate?: string | null
+  monthlyRent: number | string
+  termType?: LeaseTermType
+}): Promise<ActionResult> {
+  const ctx = await getStaffContext()
+  if (!ctx) return { success: false, error: 'Only managers can activate draft leases.' }
+
+  const parsed = activateDraftSchema.safeParse({
+    ...input,
+    tenantId: input.tenantId || null,
+    monthlyRent: input.monthlyRent,
+    endDate: input.endDate?.trim() || null,
+    termType: normalizeLeaseTermType(input.termType),
+  })
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
+  }
+  const d = parsed.data
+
+  const dateErr = validateLeaseDates(d.termType, d.startDate, d.endDate || null)
+  if (dateErr) return { success: false, error: dateErr }
+
+  const { data: unit } = await ctx.supabase
+    .from('units')
+    .select('id')
+    .eq('id', d.unitId)
+    .eq('org_id', ctx.person.org_id)
+    .single()
+  if (!unit) return { success: false, error: 'Property not found in your organization.' }
+
+  if (d.tenantId) {
+    const { data: tenant } = await ctx.supabase
+      .from('people')
+      .select('id')
+      .eq('id', d.tenantId)
+      .eq('org_id', ctx.person.org_id)
+      .single()
+    if (!tenant) return { success: false, error: 'Tenant not found in your organization.' }
+  }
+
+  if (d.listingId) {
+    const { data: listing } = await ctx.supabase
+      .from('listings')
+      .select('id, unit_id')
+      .eq('id', d.listingId)
+      .eq('org_id', ctx.person.org_id)
+      .single()
+    if (!listing) return { success: false, error: 'Draft listing not found.' }
+    if (listing.unit_id !== d.unitId) {
+      return { success: false, error: 'Draft listing does not match the selected property.' }
+    }
+  }
+
+  const { data: newLease, error: insertError } = await ctx.supabase
+    .from('leases')
+    .insert({
+      org_id: ctx.person.org_id,
+      unit_id: d.unitId,
+      tenant_id: d.tenantId ?? null,
+      start_date: d.startDate,
+      end_date: d.endDate || null,
+      lease_term_type: d.termType,
+      monthly_rent: d.monthlyRent,
+      deposit_amount: 0,
+      rent_due_day: 1,
+      status: 'active',
+    })
+    .select('id')
+    .single()
+
+  if (insertError) {
+    console.error('[activateDraftListing:insert]', insertError)
+    return { success: false, error: 'Failed to create the lease. Please try again.' }
+  }
+
+  if (d.listingId) {
+    const { error: listingError } = await ctx.supabase
+      .from('listings')
+      .update({ status: 'unlisted', updated_at: new Date().toISOString() })
+      .eq('id', d.listingId)
+      .eq('org_id', ctx.person.org_id)
+    if (listingError) {
+      console.error('[activateDraftListing:unlist]', listingError)
+      return { success: false, error: 'Lease created but failed to remove the draft listing.' }
+    }
+  }
+
+  await ctx.supabase.from('units').update({ status: 'occupied' }).eq('id', d.unitId)
+
+  revalidatePath('/app')
+  revalidatePath('/leases')
+  return { success: true, id: newLease.id }
 }
 
 export async function deleteDraftListing(id: string): Promise<ActionResult> {

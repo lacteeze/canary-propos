@@ -28,8 +28,11 @@ export interface HospitableProperty {
 }
 
 export interface HospitableGuest {
+  /** camelCase aliases — API returns snake_case `first_name` / `last_name` */
   firstName?: string | null
   lastName?: string | null
+  first_name?: string | null
+  last_name?: string | null
 }
 
 export interface HospitableReservation {

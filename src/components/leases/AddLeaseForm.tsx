@@ -7,6 +7,8 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { createLease } from '@/app/actions/leases'
+import { validateLeaseDates } from '@/lib/canary/lease-term'
+import type { LeaseTermType } from '@/lib/canary/lease-term'
 import {
   Dialog,
   DialogContent,
@@ -32,16 +34,22 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-const formSchema = z.object({
-  tenant_id: z.string().min(1, 'Please select a tenant'),
-  property_id: z.string().min(1, 'Please select a property'),
-  unit_id: z.string().min(1, 'Please select a unit'),
-  start_date: z.string().min(1, 'Start date is required'),
-  end_date: z.string().min(1, 'End date is required'),
-  monthly_rent: z.coerce.number().positive('Monthly rent must be positive'),
-  deposit_amount: z.coerce.number().min(0, 'Deposit must be 0 or greater'),
-  rent_due_day: z.coerce.number().int().min(1).max(28),
-})
+const formSchema = z
+  .object({
+    tenant_id: z.string().min(1, 'Please select a tenant'),
+    property_id: z.string().min(1, 'Please select a property'),
+    unit_id: z.string().min(1, 'Please select a unit'),
+    term_type: z.enum(['fixed_term', 'month_to_month']),
+    start_date: z.string().min(1, 'Start date is required'),
+    end_date: z.string().optional().default(''),
+    monthly_rent: z.coerce.number().positive('Monthly rent must be positive'),
+    deposit_amount: z.coerce.number().min(0, 'Deposit must be 0 or greater'),
+    rent_due_day: z.coerce.number().int().min(1).max(28),
+  })
+  .superRefine((data, ctx) => {
+    const err = validateLeaseDates(data.term_type, data.start_date, data.end_date || null)
+    if (err) ctx.addIssue({ code: 'custom', message: err, path: ['end_date'] })
+  })
 
 type FormValues = z.infer<typeof formSchema>
 
@@ -79,6 +87,7 @@ export function AddLeaseForm({ tenants, properties, buttonLabel = 'Add Lease' }:
       tenant_id: '',
       property_id: '',
       unit_id: '',
+      term_type: 'fixed_term' as LeaseTermType,
       start_date: '',
       end_date: '',
       monthly_rent: 0,
@@ -115,8 +124,9 @@ export function AddLeaseForm({ tenants, properties, buttonLabel = 'Add Lease' }:
     const result = await createLease({
       unit_id: values.unit_id,
       tenant_id: values.tenant_id,
+      term_type: values.term_type,
       start_date: values.start_date,
-      end_date: values.end_date,
+      end_date: values.end_date || null,
       monthly_rent: values.monthly_rent,
       deposit_amount: values.deposit_amount,
       rent_due_day: values.rent_due_day,
@@ -237,6 +247,27 @@ export function AddLeaseForm({ tenants, properties, buttonLabel = 'Add Lease' }:
             />
 
             {/* Date range */}
+            <FormField
+              control={form.control}
+              name="term_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Term type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="fixed_term">Fixed term</SelectItem>
+                      <SelectItem value="month_to_month">Month-to-month</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -256,7 +287,9 @@ export function AddLeaseForm({ tenants, properties, buttonLabel = 'Add Lease' }:
                 name="end_date"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>End Date</FormLabel>
+                    <FormLabel>
+                      End Date{form.watch('term_type') === 'month_to_month' ? ' (optional)' : ''}
+                    </FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>

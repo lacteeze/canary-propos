@@ -2,6 +2,8 @@
 // Shapes consumed by the CanaryApp client (ported from the CanaryApp.dc design prototype).
 // The server loader (load-db.ts) maps live Supabase rows into these shapes.
 
+import type { LeaseTermType } from './lease-term'
+
 export type CanaryRole = 'Admin' | 'Manager' | 'Owner' | 'Tenant' | 'Vendor'
 
 export interface CanaryProperty {
@@ -32,12 +34,15 @@ export interface CanaryProperty {
   /** raw management fee fields (staff-only edit form) */
   mgmtFeeType: string
   mgmtFeeValue: string
+  /** ISO timestamp when archived — hidden from active views when set */
+  archivedAt?: string | null
 }
 
 export interface CanaryLease {
   id: string
   property: string
-  status: string // Active | Expiring | Upcoming | Past
+  status: string // Active | Expiring | Upcoming | Past | Expired | Terminated
+  termType: LeaseTermType
   start: string
   end: string
   rent: string
@@ -82,6 +87,18 @@ export interface CanaryLease {
   parkingSpots: string
 }
 
+/** Timeline/calendar category for ended leases (DB status or date-derived). */
+export function isPastLeaseStatus(status: string): boolean {
+  return status === 'Past' || status === 'Expired' || status === 'Terminated'
+}
+
+/** Map display status back to leases.status enum for editing. */
+export function leaseDbStatusFromDisplay(status: string): string {
+  if (status === 'Terminated') return 'terminated'
+  if (status === 'Expired' || status === 'Past') return 'expired'
+  return 'active'
+}
+
 export interface CanaryPortfolio {
   id: string
   name: string
@@ -110,6 +127,8 @@ export interface CanaryProject {
 export interface CanaryPerson {
   id: string
   name: string
+  /** Raw DB role array — use for filtering (e.g. includes 'tenant') */
+  roles: string[]
   role: string // Client | Tenant | Vendor | Admin | Realtor | Accountant | Contact
   email: string
   phone: string
@@ -130,6 +149,26 @@ export interface CanaryPerson {
   maxPrice: string
 }
 
+/** Timeline / composer status for draft listings (maps to listings.status). */
+export type DraftListingStatus = 'draft' | 'renewal_sent' | 'published'
+
+export function draftTimelineMeta(d: CanaryDraft) {
+  const rent = d.rent ? `$${d.rent}/mo` : ''
+  if (d.status === 'published') {
+    return { label: 'Listing · public', title: ['Published', rent].filter(Boolean).join(' · '), bg: 'var(--green)', color: 'var(--green-text)', borderStyle: 'none' as const }
+  }
+  if (d.status === 'renewal_sent') {
+    return { label: 'Renewal sent', title: ['Renewal sent', rent].filter(Boolean).join(' · '), bg: 'transparent', color: 'var(--purple)', borderStyle: '2px dashed var(--purple)' as const }
+  }
+  return { label: 'Draft lease', title: ['Draft', rent].filter(Boolean).join(' · '), bg: 'transparent', color: 'var(--accent)', borderStyle: '2px dashed var(--accent)' as const }
+}
+
+export function draftStatusBadge(status: DraftListingStatus): { label: string; color: string } {
+  if (status === 'published') return { label: 'PUBLIC', color: 'var(--green)' }
+  if (status === 'renewal_sent') return { label: 'RENEWAL SENT', color: 'var(--purple)' }
+  return { label: 'DRAFT', color: 'var(--dim)' }
+}
+
 export interface CanaryDraft {
   id: string
   propId: string
@@ -144,7 +183,31 @@ export interface CanaryDraft {
   pets: string
   utilities: string
   description: string
-  published: boolean
+  status: DraftListingStatus
+  /** When status last changed — used for renewal-sent follow-up dates */
+  sentAt: string
+}
+
+export type InquiryType = 'inquiry' | 'application'
+export type InquiryStatus = 'new' | 'contacted' | 'closed'
+
+export interface CanaryInquiry {
+  id: string
+  listingId: string
+  type: InquiryType
+  name: string
+  email: string
+  phone: string
+  status: InquiryStatus
+  submittedAt: string
+  property: string
+  moveIn: string
+}
+
+export function inquiryStatusBadge(status: InquiryStatus): { label: string; color: string } {
+  if (status === 'new') return { label: 'NEW', color: 'var(--green)' }
+  if (status === 'contacted') return { label: 'CONTACTED', color: 'var(--blue)' }
+  return { label: 'CLOSED', color: 'var(--dim)' }
 }
 
 /** Short-term reservation from Hospitable, mapped for the leases timeline. */
@@ -156,6 +219,10 @@ export interface CanaryStrBooking {
   hospitablePropertyName: string
   start: string
   end: string
+  /** ISO timestamp for timeline positioning — check-in with time-of-day */
+  checkInAt?: string
+  /** ISO timestamp for timeline positioning — check-out with time-of-day */
+  checkOutAt?: string
   guestLabel: string
   platform: string
   status: string
@@ -192,4 +259,5 @@ export interface CanaryDb {
   people: CanaryPerson[]
   drafts: CanaryDraft[]
   payments: CanaryPayment[]
+  inquiries: CanaryInquiry[]
 }

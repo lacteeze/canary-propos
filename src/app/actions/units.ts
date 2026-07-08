@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { ensurePlanCapacityForImport, isPlanLimitExempt } from '@/lib/orgs/plan-limits'
 export type ActionResult =
   | { success: true }
   | { success: false; error: string }
@@ -69,7 +70,7 @@ export async function createUnit(data: {
   const [{ data: org }, { count: unitCount }] = await Promise.all([
     ctx.supabase
       .from('organizations')
-      .select('plan_unit_limit')
+      .select('slug, plan_unit_limit')
       .eq('id', orgId)
       .single(),
     ctx.supabase
@@ -79,9 +80,13 @@ export async function createUnit(data: {
   ])
 
   if (org && unitCount !== null && unitCount >= org.plan_unit_limit) {
-    return {
-      success: false,
-      error: 'You have reached your plan unit limit. Upgrade to add more units.',
+    if (isPlanLimitExempt(org)) {
+      await ensurePlanCapacityForImport(ctx.supabase, orgId, 1)
+    } else {
+      return {
+        success: false,
+        error: 'You have reached your plan unit limit. Upgrade to add more units.',
+      }
     }
   }
 

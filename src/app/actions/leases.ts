@@ -3,6 +3,8 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { normalizeLeaseTermType, validateLeaseDates } from '@/lib/canary/lease-term'
+import type { LeaseTermType } from '@/lib/canary/lease-term'
 
 // --- Action result type ---
 export type ActionResult =
@@ -34,8 +36,12 @@ async function getCallerContext() {
 const createLeaseSchema = z.object({
   unit_id: z.string().uuid('Invalid unit ID'),
   tenant_id: z.string().uuid('Invalid tenant ID'),
+  term_type: z.enum(['fixed_term', 'month_to_month']).default('fixed_term'),
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid start date'),
-  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid end date'),
+  end_date: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(''), z.null()])
+    .optional()
+    .nullable(),
   monthly_rent: z.number().positive('Monthly rent must be positive'),
   deposit_amount: z.number().min(0, 'Deposit amount must be 0 or greater'),
   rent_due_day: z.number().int().min(1).max(28),
@@ -51,8 +57,9 @@ const renewalSchema = z.object({
 export async function createLease(data: {
   unit_id: string
   tenant_id: string
+  term_type?: LeaseTermType
   start_date: string
-  end_date: string
+  end_date?: string | null
   monthly_rent: number
   deposit_amount: number
   rent_due_day: number
@@ -65,12 +72,19 @@ export async function createLease(data: {
     return { success: false, error: 'Only managers can create leases.' }
   }
 
-  const parsed = createLeaseSchema.safeParse(data)
+  const parsed = createLeaseSchema.safeParse({
+    ...data,
+    term_type: normalizeLeaseTermType(data.term_type),
+    end_date: data.end_date?.trim() || null,
+  })
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
   }
 
-  const { unit_id, tenant_id, start_date, end_date, monthly_rent, deposit_amount, rent_due_day, document_path } = parsed.data
+  const dateErr = validateLeaseDates(parsed.data.term_type, parsed.data.start_date, parsed.data.end_date || null)
+  if (dateErr) return { success: false, error: dateErr }
+
+  const { unit_id, tenant_id, term_type, start_date, end_date, monthly_rent, deposit_amount, rent_due_day, document_path } = parsed.data
 
   // Verify unit belongs to caller's org (T-02-15)
   const { data: unit, error: unitError } = await ctx.supabase
@@ -103,7 +117,8 @@ export async function createLease(data: {
       unit_id,
       tenant_id,
       start_date,
-      end_date,
+      end_date: end_date || null,
+      lease_term_type: term_type,
       monthly_rent,
       deposit_amount,
       rent_due_day,

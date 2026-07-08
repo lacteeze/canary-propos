@@ -469,6 +469,7 @@ export default async function PropertyDetailPage({ params }: PageProps) {
                 const unit = unitsList.find((u) => u.id === listing.unit_id)
                 const statusBadge = {
                   draft: { bg: 'bg-stone-100', text: 'text-stone-700', label: 'Draft' },
+                  renewal_sent: { bg: 'bg-violet-100', text: 'text-violet-700', label: 'Renewal sent' },
                   published: { bg: 'bg-green-100', text: 'text-green-700', label: 'Published' },
                   unlisted: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Unlisted' },
                 }[listing.status as string] ?? { bg: 'bg-stone-100', text: 'text-stone-700', label: listing.status }

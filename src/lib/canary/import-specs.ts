@@ -81,23 +81,23 @@ export const IMPORT_SPECS: Record<ImportDataset, ImportSpec> = {
     key: 'properties',
     label: 'Properties & Units',
     description:
-      'One row per unit. Rows sharing the same street address + city are grouped into a single property with multiple units. Duplicate units are skipped.',
+      'One row per unit. Rows sharing the same street address + city are grouped into a single property with multiple units. Duplicate units are skipped. AppSheet/Canary labels (Leased, Archived, Airbnb, single family, 10%, …) are normalized automatically — see PROPERTY_STATUS_ALIASES and PROPERTY_TYPE_ALIASES.',
     columns: [
       { key: 'street_address', required: true, note: '', example: '12 Duckworth St' },
       { key: 'city', required: true, note: '', example: "St. John's" },
       { key: 'province', required: true, note: '', example: 'NL' },
       { key: 'postal_code', note: '', example: 'A1C 1G4' },
-      { key: 'property_type', note: 'house, duplex, apartment_building, condo, townhouse or other', example: 'house' },
-      { key: 'portfolio_name', note: 'Must match an existing portfolio name', example: 'Harbourview Holdings' },
+      { key: 'property_type', note: 'house, duplex, apartment_building, condo, townhouse or other — AppSheet: single family → house, multi-unit → apartment_building, commercial → other', example: 'house' },
+      { key: 'portfolio_name', note: 'Matches portfolio by exact name or AppSheet short name (e.g. "Schwartz & Cooke" → "Schwartz & Cooke - slug"). Import Portfolios first; unmatched names import with no portfolio link.', example: 'Harbourview Holdings' },
       { key: 'owner_email', note: 'Must match an existing person with the owner role', example: 'owner@example.com' },
       { key: 'unit_number', note: 'Leave blank for single-unit properties', example: '2B' },
       { key: 'bedrooms', note: 'Whole number, defaults to 1', example: '2' },
       { key: 'bathrooms', note: 'Number, defaults to 1 (1.5 allowed)', example: '1.5' },
       { key: 'sq_footage', note: 'Whole number', example: '850' },
-      { key: 'status', note: 'vacant, occupied or maintenance — defaults to vacant', example: 'vacant' },
+      { key: 'status', note: 'vacant, occupied or maintenance — AppSheet: Leased→occupied, Archived→archived_at set, Airbnb→vacant, Project→maintenance', example: 'vacant' },
       { key: 'asking_rent', note: 'Monthly asking rent (numbers only)', example: '1600' },
       { key: 'management_fee_type', note: 'percent or flat', example: 'percent' },
-      { key: 'management_fee_value', note: 'e.g. 10 for 10% or 150 for $150 flat', example: '10' },
+      { key: 'management_fee_value', note: 'e.g. 10, 10%, or $150 — % and $ symbols stripped', example: '10' },
     ],
     samples: [
       ['12 Duckworth St', "St. John's", 'NL', 'A1C 1G4', 'duplex', 'Harbourview Holdings', 'owner@example.com', '1', '2', '1', '850', 'occupied', '1600', 'percent', '10'],
@@ -108,14 +108,24 @@ export const IMPORT_SPECS: Record<ImportDataset, ImportSpec> = {
     key: 'leases',
     label: 'Leases',
     description:
-      'One row per lease. Import People and Properties first. AppSheet export headers (Property, Rent, Lease Start Date, Rental Credit, …) are recognized automatically. Duplicate rows (same appsheet_unique_id, or same unit + tenant + start date) are skipped.',
+      'One row per lease. Import Properties first; People optional (tenants can be linked later in the lease editor). AppSheet export headers (Property, Rent, Lease Start Date, Tenants, Editors, …) are recognized automatically. tenant_email is optional — when absent, tenant_id is left blank and appsheet_tenant_ids / tenant_contacts_raw (Editors) are stored for later linking. property_address may be a full AppSheet line (street, city, province, postal, country) — matched to imported properties via canonical street + city (see LEASE_STATUS_ALIASES for status labels). Duplicate rows (same appsheet_unique_id, or same unit + tenant + start date) are skipped.',
     columns: [
       { key: 'property_address', required: true, note: 'Full or street address of an imported property', example: "21 Hercules Pl, St. John's, NL", aliases: ['property'] },
       { key: 'unit_number', note: 'Required when the property has multiple units', example: '2B' },
-      { key: 'tenant_email', note: 'Primary tenant email — must match an imported person (fallback when Editors is blank)', example: 'jane@example.com' },
-      { key: 'tenant_contacts_raw', note: 'AppSheet Editors — Name: phone: email (comma-separated co-tenants)', example: "Jane Doe: 709-555-0142: jane@example.com", aliases: ['editors'] },
+      {
+        key: 'tenant_email',
+        note: 'Optional — primary tenant email; when provided must match an imported person. Leave blank when using AppSheet Tenants/Editors columns only.',
+        example: 'jane@example.com',
+      },
+      {
+        key: 'tenant_contacts_raw',
+        note: 'Optional — AppSheet Editors column (Name: phone: email). Used to resolve tenant_id when email matches People; always stored on the lease row.',
+        example: "Jane Doe: 709-555-0142: jane@example.com",
+        aliases: ['editors'],
+      },
       { key: 'start_date', required: true, note: 'YYYY-MM-DD or M/D/YYYY', example: '2019-06-01', aliases: ['lease_start_date'] },
       { key: 'end_date', note: 'YYYY-MM-DD — leave blank for month-to-month', example: '2020-05-30', aliases: ['lease_end_date'] },
+      { key: 'lease_term_type', note: 'fixed_term or month_to_month — inferred from blank end_date when omitted', example: 'month_to_month', aliases: ['term_type'] },
       { key: 'monthly_rent', required: true, note: 'Numbers only (currency symbols stripped)', example: '1450', aliases: ['rent'] },
       { key: 'utilities_included', note: 'Tenant-facing — e.g. Not Included, Internet Included', example: 'Not Included', aliases: ['utilities'] },
       { key: 'management_start_date', note: 'Internal — YYYY-MM-DD', example: '2019-06-01' },
@@ -128,12 +138,17 @@ export const IMPORT_SPECS: Record<ImportDataset, ImportSpec> = {
       { key: 'insurance_required', note: 'Tenant-facing — TRUE/FALSE', example: 'TRUE' },
       { key: 'insurance_confirmed', note: 'Tenant-facing — TRUE/FALSE', example: 'FALSE' },
       { key: 'policy_expires', note: 'Tenant-facing — YYYY-MM-DD', example: '' },
-      { key: 'status', note: 'active, expired or terminated — AppSheet Active/Expired mapped on import', example: 'expired' },
+      { key: 'status', note: 'active, expired or terminated — AppSheet/Canary: Expiring/Upcoming/Listed/Leased→active, Expired/Past→expired, Evicted/Terminated/Cancelled→terminated; blank→derived from end_date', example: 'expired' },
       { key: 'termination_reason', note: 'Internal — e.g. Terminated by Tenant, Month to month', example: 'Terminated by Tenant', aliases: ['reason'] },
       { key: 'documents', note: 'Internal — document references from AppSheet', example: '' },
       { key: 'notes', note: 'Free-form notes', example: '' },
       { key: 'lease_months', note: 'Stored month count (computed if blank)', example: '11', aliases: ['months'] },
-      { key: 'appsheet_tenant_ids', note: 'Internal — AppSheet Tenants column (comma-separated IDs)', example: 'fdt8cgft360, fdt8cgft359', aliases: ['tenants'] },
+      {
+        key: 'appsheet_tenant_ids',
+        note: 'Optional — AppSheet Tenants column (comma-separated IDs). Resolves tenant_id when people.appsheet_id exists; always stored on the lease row.',
+        example: 'fdt8cgft360, fdt8cgft359',
+        aliases: ['tenants'],
+      },
       { key: 'appsheet_viewer_ids', note: 'Internal — AppSheet Viewers column', example: 'fdt8cgft75, fdt8cgft267', aliases: ['viewers'] },
       { key: 'appsheet_unique_id', note: 'Internal — AppSheet Unique ID for idempotent import', example: "6/1/2019 / 5/30/2020 / 21 Hercules Pl...", aliases: ['unique_id'] },
       { key: 'portfolio_appsheet_id', note: 'Internal — AppSheet Portfolio ID slug', example: 'Hickey & Esau - 2asglkrw', aliases: ['portfolio_id'] },
@@ -150,7 +165,7 @@ export const IMPORT_SPECS: Record<ImportDataset, ImportSpec> = {
       { key: 'rent_due_day', note: '1–28, defaults to 1', example: '1' },
     ],
     samples: [
-      ["21 Hercules Pl, St. John's, NL", '', 'drcatherinehickey@gmail.com', "Catherine Hickey: 709 351 4282: drcatherinehickey@gmail.com, Darren Esau: 709 746 2314: darren@esan.ca", '2019-06-01', '2020-05-30', '1450', 'Not Included', '2019-06-01', '2020-05-30', '12', '', '', '365', '', 'TRUE', 'FALSE', '', 'expired', '', '', '', '11', 'fdt8cgft360, fdt8cgft359', 'fdt8cgft75, fdt8cgft267', "6/1/2019 / 5/30/2020 / 21 Hercules Pl", 'Hickey & Esau - 2asglkrw', '', '50', '1/29/2026 1:43:23', '9/22/2025 0:19:07', '3', '2.0', '2', '', '', '0', '1'],
+      ["21 Hercules Pl, St. John's, NL", '', '', "Catherine Hickey: 709 351 4282: drcatherinehickey@gmail.com, Darren Esau: 709 746 2314: darren@esan.ca", '2019-06-01', '2020-05-30', '1450', 'Not Included', '2019-06-01', '2020-05-30', '12', '', '', '365', '', 'TRUE', 'FALSE', '', 'expired', '', '', '', '11', 'fdt8cgft360, fdt8cgft359', 'fdt8cgft75, fdt8cgft267', "6/1/2019 / 5/30/2020 / 21 Hercules Pl", 'Hickey & Esau - 2asglkrw', '', '50', '1/29/2026 1:43:23', '9/22/2025 0:19:07', '3', '2.0', '2', '', '', '0', '1'],
       ["25 A Cochrane St, St. John's, NL", '', 'lauramadonnamurray@gmail.com', 'Laura Murray: 61481973157: lauramadonnamurray@gmail.com', '2021-05-01', '2025-12-31', '950', 'Internet Included', '2021-05-01', '2025-12-31', '10', '', '2/18/2025', '1706', '', 'TRUE', '', '', 'expired', 'Terminated by Tenant', '', '', '55', '', 'fdt8cgft75, fdt8cgft267', "5/1/2021 / 12/31/2025 / 25 A Cochrane St", 'Laura Murray - pz0h7usq', '', '50', '4/28/2026 17:04:52', '', '1', '1.0', '2', '', '', '0', '1'],
     ],
   },
@@ -203,6 +218,166 @@ export const IMPORT_ORDER: ImportDataset[] = [
   'payments',
   'projects',
 ]
+
+// ---------- AppSheet / Canary value aliases (properties import) ----------
+
+/** AppSheet / Canary UI status labels → units.status (DB check constraint). */
+export const PROPERTY_STATUS_ALIASES: Record<string, 'vacant' | 'occupied' | 'maintenance'> = {
+  vacant: 'vacant',
+  leased: 'occupied',
+  occupied: 'occupied',
+  maintenance: 'maintenance',
+  /** Offboarded / inactive — no active lease in PropOS. */
+  archived: 'vacant',
+  /** STR inventory; stored as vacant in LTR sense (Airbnb chip comes from Hospitable link). */
+  airbnb: 'vacant',
+  /** Renovation or capital project in progress. */
+  project: 'maintenance',
+  /** Manager office / non-residential — treat as not leased. */
+  office: 'vacant',
+}
+
+/** AppSheet / bulk-template type labels → properties.property_type enum. */
+export const PROPERTY_TYPE_ALIASES: Record<string, string> = {
+  house: 'house',
+  duplex: 'duplex',
+  apartment_building: 'apartment_building',
+  condo: 'condo',
+  townhouse: 'townhouse',
+  other: 'other',
+  'single family': 'house',
+  'single-family': 'house',
+  single: 'house',
+  'multi unit': 'apartment_building',
+  'multi-unit': 'apartment_building',
+  multiunit: 'apartment_building',
+  apartment: 'apartment_building',
+  commercial: 'other',
+}
+
+function aliasLookupKeys(raw: string): string[] {
+  const trimmed = raw.trim().toLowerCase()
+  if (!trimmed) return []
+  const spaced = trimmed.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const underscored = spaced.replace(/\s+/g, '_')
+  return [...new Set([trimmed, spaced, underscored])]
+}
+
+/** Map AppSheet/Canary status label to DB units.status value. Empty → ''. */
+export function normalizePropertyStatus(raw: string): string {
+  for (const key of aliasLookupKeys(raw)) {
+    const mapped = PROPERTY_STATUS_ALIASES[key]
+    if (mapped) return mapped
+  }
+  return raw.trim().toLowerCase()
+}
+
+/** Map AppSheet/Canary property type label to DB property_type enum. Empty → ''. */
+export function normalizePropertyType(raw: string): string {
+  for (const key of aliasLookupKeys(raw)) {
+    const mapped = PROPERTY_TYPE_ALIASES[key]
+    if (mapped) return mapped
+  }
+  const fallback = aliasLookupKeys(raw).at(-1) ?? ''
+  return fallback.replace(/\s+/g, '_')
+}
+
+/** Strip %, $, commas and parse management fee — returns NaN when not numeric. */
+export function parseManagementFeeValue(raw: string): number | null {
+  if (!raw.trim()) return null
+  const n = Number(raw.trim().replace(/%/g, '').replace(/[$,\s]/g, ''))
+  return Number.isNaN(n) ? NaN : n
+}
+
+/** True when the raw AppSheet/Canary status means the unit should be archived on import. */
+export function isPropertyStatusArchived(raw: string): boolean {
+  for (const key of aliasLookupKeys(raw)) {
+    if (key === 'archived') return true
+  }
+  return false
+}
+
+/** Normalize AppSheet-friendly property row values before validation/insert. */
+export function normalizePropertyImportRow(row: Record<string, string>): Record<string, string> {
+  const next = { ...row }
+  if (row.property_type) next.property_type = normalizePropertyType(row.property_type)
+  if (row.status) next.status = normalizePropertyStatus(row.status)
+  if (row.management_fee_value?.trim()) {
+    const fee = parseManagementFeeValue(row.management_fee_value)
+    if (fee != null && !Number.isNaN(fee)) next.management_fee_value = String(fee)
+  }
+  return next
+}
+
+// ---------- AppSheet / Canary value aliases (leases import) ----------
+
+/** AppSheet / Canary UI lease status labels → leases.status (DB check constraint). */
+export const LEASE_STATUS_ALIASES: Record<string, 'active' | 'expired' | 'terminated'> = {
+  active: 'active',
+  expired: 'expired',
+  terminated: 'terminated',
+  /** Lease still active, nearing end date. */
+  expiring: 'active',
+  /** Future start — stored as active until end_date passes. */
+  upcoming: 'active',
+  /** Marketing / listing state — unit may be vacant but lease row is pre-lease. */
+  listed: 'active',
+  leased: 'active',
+  /** Past lease — same as expired. */
+  past: 'expired',
+  /** Forced exit — stored as terminated. */
+  evicted: 'terminated',
+  cancelled: 'terminated',
+  canceled: 'terminated',
+}
+
+/** Map AppSheet/Canary lease status label to DB leases.status. Empty → ''. */
+export function normalizeLeaseStatus(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  for (const key of aliasLookupKeys(raw)) {
+    const mapped = LEASE_STATUS_ALIASES[key]
+    if (mapped) return mapped
+  }
+  return trimmed.toLowerCase()
+}
+
+/**
+ * Parse a CSV property_address field (full AppSheet line or street-only) into street + city.
+ * Strips trailing province, postal code, and country segments.
+ */
+export function parseImportPropertyAddress(raw: string): { street: string; city: string } {
+  const trimmed = raw.trim()
+  if (!trimmed) return { street: '', city: '' }
+
+  const parts = trimmed.split(',').map((p) => p.trim()).filter(Boolean)
+  if (parts.length === 0) return { street: '', city: '' }
+  if (parts.length === 1) return { street: parts[0], city: '' }
+
+  const street = parts[0]
+  const city = parts[1]
+  // "12 Duckworth St, NL" — second segment is province only, not a city name.
+  if (parts.length === 2 && /^[A-Za-z]{2}$/.test(parts[1])) {
+    return { street, city: '' }
+  }
+  return { street, city }
+}
+
+/** Normalize AppSheet-friendly lease row values before validation/insert. */
+export function normalizeLeaseImportRow(row: Record<string, string>): Record<string, string> {
+  const next = { ...row }
+  if (row.status !== undefined) next.status = normalizeLeaseStatus(row.status)
+  if (row.lease_term_type !== undefined) next.lease_term_type = normalizeLeaseTermTypeImport(row.lease_term_type)
+  return next
+}
+
+function normalizeLeaseTermTypeImport(raw: string): string {
+  const v = raw.trim().toLowerCase()
+  if (!v) return ''
+  if (v.includes('month')) return 'month_to_month'
+  if (v.includes('fixed')) return 'fixed_term'
+  return v.replace(/[\s-]+/g, '_')
+}
 
 // ---------- CSV ----------
 

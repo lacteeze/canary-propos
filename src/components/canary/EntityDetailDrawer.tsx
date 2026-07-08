@@ -3,7 +3,10 @@
 import React, { useCallback, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
+  createTenantAndLinkToLease,
+  deleteLease,
   updateLeaseField,
+  updateLeaseTenant,
   updatePersonField,
   updatePortfolioField,
   updateProjectField,
@@ -12,8 +15,11 @@ import {
   type PropertyDetailsInput,
 } from '@/app/actions/entity-updates'
 import { getOrCreatePropertyThread, getThreadMessages, sendChatMessage, type ChatMessage } from '@/app/actions/chat'
-import type { CanaryDb, CanaryPerson, CanaryProperty } from '@/lib/canary/types'
+import { LEASE_TERM_LABELS } from '@/lib/canary/lease-term'
+import type { CanaryDb, CanaryLease, CanaryPerson, CanaryProperty } from '@/lib/canary/types'
+import { leaseDbStatusFromDisplay } from '@/lib/canary/types'
 import AuditLogPanel from './AuditLogPanel'
+import DatePickerField, { formatDisplayDate } from './DatePickerField'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -38,24 +44,258 @@ interface EntityDetailDrawerProps {
 const PROPERTY_STATUSES = ['Vacant', 'Leased', 'Maintenance']
 const LEASE_RENEWAL = ['—', 'pending', 'sent', 'accepted', 'declined']
 const LEASE_DB_STATUS = ['active', 'expired', 'terminated']
+const LEASE_TERM_TYPE = ['fixed_term', 'month_to_month']
 const PROJECT_STATUSES = ['Estimate', 'Requires Estimate', 'Reviewing Estimates', 'Approved to Schedule', 'In Progress', 'Completed', 'Closed']
 const PROJECT_PRIORITIES = ['1 - Urgent', '2 - High', '3 - Medium', '4 - Low']
+
+const LEASE_TENANT_ADD = '__add_new_tenant__'
+
+const selectStyle: React.CSSProperties = {
+  background: 'var(--input)',
+  border: '1px solid var(--border)',
+  borderRadius: 7,
+  padding: '4px 8px',
+  fontWeight: 600,
+  fontSize: 13,
+  width: '100%',
+  maxWidth: '100%',
+}
+
+const miniInputStyle: React.CSSProperties = {
+  width: '100%',
+  background: 'var(--input)',
+  border: '1px solid var(--border)',
+  borderRadius: 7,
+  padding: '6px 10px',
+  fontWeight: 600,
+  fontSize: 13,
+}
+
+function LeaseTenantSection({
+  lease,
+  tenants,
+  peopleById,
+  canEdit,
+  priv,
+  tenantNames,
+  onNavigate,
+  onSaved,
+}: {
+  lease: CanaryLease
+  tenants: CanaryPerson[]
+  peopleById: Map<string, CanaryPerson>
+  canEdit: boolean
+  priv: boolean
+  tenantNames: (info: string | null | undefined) => string
+  onNavigate: (d: { kind: DrawerKind; id: string }) => void
+  onSaved: () => void
+}) {
+  const linked = lease.tenantIds ? peopleById.get(lease.tenantIds) : undefined
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+  const [newName, setNewName] = useState('')
+  const [newEmail, setNewEmail] = useState('')
+  const [newPhone, setNewPhone] = useState('')
+
+  const sortedTenants = [...tenants].sort((a, b) => a.name.localeCompare(b.name))
+
+  const handleSelect = async (value: string) => {
+    if (value === LEASE_TENANT_ADD) {
+      setShowAddForm(true)
+      setErr('')
+      return
+    }
+    setSaving(true)
+    setErr('')
+    const res = await updateLeaseTenant(lease.id, value || null)
+    setSaving(false)
+    if (res.success) {
+      setShowAddForm(false)
+      onSaved()
+    } else {
+      setErr(res.error ?? 'Failed')
+    }
+  }
+
+  const handleCreate = async () => {
+    setSaving(true)
+    setErr('')
+    const res = await createTenantAndLinkToLease(lease.id, {
+      name: newName,
+      email: newEmail,
+      phone: newPhone,
+    })
+    setSaving(false)
+    if (res.success) {
+      setShowAddForm(false)
+      setNewName('')
+      setNewEmail('')
+      setNewPhone('')
+      onSaved()
+    } else {
+      setErr(res.error ?? 'Failed')
+    }
+  }
+
+  const rows: { label: string; value: React.ReactNode; onClick?: () => void }[] = []
+
+  if (canEdit) {
+    rows.push({
+      label: linked ? 'Change tenant' : 'Link tenant',
+      value: (
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <select
+            value={lease.tenantIds || ''}
+            disabled={saving}
+            onChange={(e) => handleSelect(e.target.value)}
+            style={selectStyle}
+            aria-label="Select tenant"
+          >
+            <option value="">— No tenant linked —</option>
+            {sortedTenants.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}{t.email ? ` · ${t.email}` : ''}
+              </option>
+            ))}
+            <option value={LEASE_TENANT_ADD}>+ Add new tenant…</option>
+          </select>
+          {err && <span style={{ color: 'var(--red)', fontSize: 11 }}>{err}</span>}
+        </span>
+      ),
+    })
+
+    if (showAddForm) {
+      rows.push({
+        label: 'New tenant',
+        value: (
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <input
+              type="text"
+              placeholder="Full name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              style={miniInputStyle}
+              aria-label="Tenant name"
+            />
+            <input
+              type="email"
+              placeholder="Email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              style={miniInputStyle}
+              aria-label="Tenant email"
+            />
+            <input
+              type="tel"
+              placeholder="Phone (optional)"
+              value={newPhone}
+              onChange={(e) => setNewPhone(e.target.value)}
+              style={miniInputStyle}
+              aria-label="Tenant phone"
+            />
+            <span style={{ display: 'flex', gap: 6 }}>
+              <button
+                type="button"
+                onClick={handleCreate}
+                disabled={saving || !newName.trim() || !newEmail.trim()}
+                style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 6, padding: '4px 12px', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
+              >
+                Create & link
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowAddForm(false); setErr('') }}
+                style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 6, padding: '4px 12px', fontSize: 12, cursor: 'pointer', color: 'var(--dim)' }}
+              >
+                Cancel
+              </button>
+            </span>
+          </span>
+        ),
+      })
+    }
+  }
+
+  if (linked) {
+    rows.push(
+      {
+        label: 'Name',
+        value: linked.name,
+        onClick: () => onNavigate({ kind: 'person', id: linked.id }),
+      },
+      {
+        label: 'Email',
+        value: linked.email || '—',
+        onClick: () => onNavigate({ kind: 'person', id: linked.id }),
+      },
+      ...(linked.phone ? [{ label: 'Phone', value: linked.phone }] : []),
+    )
+  } else if (!canEdit) {
+    const names = tenantNames(lease.tenantInfo)
+    if (names) {
+      names.split(', ').forEach((n) => {
+        rows.push({
+          label: '•',
+          value: priv
+            ? (lease.tenantInfo.split(',').find((s) => s.includes(n)) || n).trim()
+            : n,
+        })
+      })
+    } else if (lease.appsheetTenantIds) {
+      rows.push({
+        label: 'AppSheet IDs',
+        value: <span style={{ color: 'var(--dim)', fontSize: 12 }}>{lease.appsheetTenantIds}</span>,
+      })
+    } else if (lease.tenantContactsRaw) {
+      rows.push({
+        label: 'Import data',
+        value: <span style={{ color: 'var(--dim)', fontSize: 12, whiteSpace: 'pre-wrap' }}>{lease.tenantContactsRaw}</span>,
+      })
+    } else {
+      rows.push({ label: '', value: 'No tenants on record' })
+    }
+  } else if (!linked && !showAddForm) {
+    if (lease.tenantContactsRaw) {
+      rows.push({
+        label: 'Import data',
+        value: <span style={{ color: 'var(--dim)', fontSize: 12, whiteSpace: 'pre-wrap' }}>{lease.tenantContactsRaw}</span>,
+      })
+    } else if (tenantNames(lease.tenantInfo)) {
+      rows.push({
+        label: 'Import data',
+        value: <span style={{ color: 'var(--dim)', fontSize: 12 }}>{tenantNames(lease.tenantInfo)}</span>,
+      })
+    }
+    if (lease.appsheetTenantIds) {
+      rows.push({
+        label: 'AppSheet IDs',
+        value: <span style={{ color: 'var(--dim)', fontSize: 12 }}>{lease.appsheetTenantIds}</span>,
+      })
+    }
+  }
+
+  return <Section key="tenants" title="Tenants" rows={rows} />
+}
 
 function StatusSelect({
   value,
   options,
   onSave,
   disabled,
+  formatOption,
 }: {
   value: string
   options: string[]
   onSave: (v: string) => Promise<{ success: boolean; error?: string }>
   disabled?: boolean
+  formatOption?: (v: string) => string
 }) {
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+  const label = formatOption ?? ((v: string) => v)
 
-  if (disabled) return <span style={{ fontWeight: 600 }}>{value || '—'}</span>
+  if (disabled) return <span style={{ fontWeight: 600 }}>{label(value) || '—'}</span>
 
   return (
     <span>
@@ -72,7 +312,7 @@ function StatusSelect({
         style={{ background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 8px', fontWeight: 600, fontSize: 13 }}
       >
         {options.map((o) => (
-          <option key={o} value={o}>{o}</option>
+          <option key={o} value={o}>{label(o)}</option>
         ))}
       </select>
       {err && <span style={{ color: 'var(--red)', fontSize: 11, marginLeft: 6 }}>{err}</span>}
@@ -101,21 +341,27 @@ function InlineField({
   const [err, setErr] = useState('')
 
   if (disabled) {
-    return <span style={{ fontWeight: 600, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{value || '—'}</span>
+    const display = type === 'date' ? (formatDisplayDate(value) || '—') : (value || '—')
+    return <span style={{ fontWeight: 600, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{display}</span>
+  }
+
+  const enterEdit = () => {
+    setDraft(value)
+    setEditing(true)
+    setErr('')
   }
 
   if (!editing) {
+    const display = type === 'date' ? (formatDisplayDate(value) || '—') : (value || '—')
     return (
-      <span style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
-        <span style={{ fontWeight: 600, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{value || '—'}</span>
-        <button
-          type="button"
-          onClick={() => { setDraft(value); setEditing(true); setErr('') }}
-          style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', fontSize: 11, color: 'var(--dim)', flex: 'none' }}
-        >
-          Edit
-        </button>
-      </span>
+      <button
+        type="button"
+        className="cy-inline-field"
+        onClick={enterEdit}
+        aria-label={`Edit ${label}`}
+      >
+        {display}
+      </button>
     )
   }
 
@@ -133,12 +379,16 @@ function InlineField({
 
   return (
     <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <InputEl
-        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-        {...({ value: draft, onChange: (e: any) => setDraft(e.target.value), type: type === 'textarea' ? undefined : type } as any)}
-        rows={type === 'textarea' ? 3 : undefined}
-        style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 7, padding: '6px 10px', fontWeight: 600, fontSize: 13, resize: type === 'textarea' ? 'vertical' : undefined }}
-      />
+      {type === 'date' ? (
+        <DatePickerField value={draft} onChange={setDraft} />
+      ) : (
+        <InputEl
+          /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+          {...({ value: draft, onChange: (e: any) => setDraft(e.target.value), type: type === 'textarea' ? undefined : type } as any)}
+          rows={type === 'textarea' ? 3 : undefined}
+          style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 7, padding: '6px 10px', fontWeight: 600, fontSize: 13, resize: type === 'textarea' ? 'vertical' : undefined }}
+        />
+      )}
       <span style={{ display: 'flex', gap: 6 }}>
         <button type="button" onClick={save} disabled={saving} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 6, padding: '4px 12px', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Save</button>
         <button type="button" onClick={() => setEditing(false)} style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 6, padding: '4px 12px', fontSize: 12, cursor: 'pointer', color: 'var(--dim)' }}>Cancel</button>
@@ -440,6 +690,7 @@ export default function EntityDetailDrawer({
   const router = useRouter()
   const [auditKey, setAuditKey] = useState(0)
   const [editingProperty, setEditingProperty] = useState(false)
+  const [deletingLease, setDeletingLease] = useState(false)
 
   React.useEffect(() => {
     setEditingProperty(false)
@@ -484,7 +735,7 @@ export default function EntityDetailDrawer({
             {
               label: 'Status (DB)',
               value: canEdit ? (
-                <StatusSelect value={l.status === 'Past' ? 'expired' : 'active'} options={LEASE_DB_STATUS} onSave={wrapSave((v) => updateLeaseField(l.id, 'status', v))} />
+                <StatusSelect value={leaseDbStatusFromDisplay(l.status)} options={LEASE_DB_STATUS} onSave={wrapSave((v) => updateLeaseField(l.id, 'status', v))} />
               ) : l.status,
             },
             {
@@ -502,23 +753,37 @@ export default function EntityDetailDrawer({
               value: <InlineField value={l.deposit} label="deposit" confirm onSave={wrapSave((v) => updateLeaseField(l.id, 'deposit_amount', v))} disabled={!canEdit} />,
             },
             {
+              label: 'Term type',
+              value: canEdit ? (
+                <StatusSelect
+                  value={l.termType}
+                  options={LEASE_TERM_TYPE}
+                  formatOption={(v) => LEASE_TERM_LABELS[v as keyof typeof LEASE_TERM_LABELS] ?? v}
+                  onSave={wrapSave((v) => updateLeaseField(l.id, 'lease_term_type', v))}
+                />
+              ) : (LEASE_TERM_LABELS[l.termType] ?? l.termType),
+            },
+            {
               label: 'Start',
               value: <InlineField value={l.start} label="start date" type="date" confirm onSave={wrapSave((v) => updateLeaseField(l.id, 'start_date', v))} disabled={!canEdit} />,
             },
             {
-              label: 'End',
+              label: l.termType === 'month_to_month' ? 'End (optional)' : 'End',
               value: <InlineField value={l.end} label="end date" type="date" confirm onSave={wrapSave((v) => updateLeaseField(l.id, 'end_date', v))} disabled={!canEdit} />,
             },
             { label: 'Months', value: l.months || '—' },
           ]}
         />,
-        <Section
+        <LeaseTenantSection
           key="tenants"
-          title="Tenants"
-          rows={(tenantNames(l.tenantInfo) ? tenantNames(l.tenantInfo).split(', ') : []).map((n) => ({
-            label: '•',
-            value: priv ? (l.tenantInfo.split(',').find((s) => s.includes(n)) || n).trim() : n,
-          })).concat(tenantNames(l.tenantInfo) ? [] : [{ label: '', value: 'No tenants on record' }])}
+          lease={l}
+          tenants={db.people.filter((p) => p.roles.includes('tenant'))}
+          peopleById={peopleById}
+          canEdit={canEdit}
+          priv={priv}
+          tenantNames={tenantNames}
+          onNavigate={onNavigate}
+          onSaved={refresh}
         />,
       ]
       const related = db.projects.filter((j) => j.property === l.property)
@@ -541,7 +806,7 @@ export default function EntityDetailDrawer({
     else {
       title = short(p.address)
       sub = p.address
-      kindLabel = 'Property · ' + (p.status || '')
+      kindLabel = p.archivedAt ? 'Property · Archived' : 'Property · ' + (p.status || '')
       propertyForEdit = p
       sections = [
         <Section
@@ -585,6 +850,7 @@ export default function EntityDetailDrawer({
               ) : (p.hospitablePropertyId || '—'),
             },
             { label: 'Pets', value: p.petFriendly || '—' },
+            ...(p.archivedAt ? [{ label: 'Archived', value: new Date(p.archivedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) }] : []),
           ]}
         />,
       ]
@@ -721,7 +987,7 @@ export default function EntityDetailDrawer({
           <Section key="owners" title="Owners" rows={owners.map((o) => ({ label: o.role, value: o.name + (o.email ? ' · ' + o.email : ''), onClick: () => onNavigate({ kind: 'person', id: o.id }) }))} />
         )
       }
-      const pprops = db.properties.filter((p) => p.portfolioId === pf.id)
+      const pprops = db.properties.filter((p) => p.portfolioId === pf.id && !p.archivedAt)
       sections.push(
         <Section key="props" title={`Properties (${pprops.length})`} rows={pprops.map((p) => ({ label: p.status || '—', value: short(p.address), onClick: () => onNavigate({ kind: 'property', id: p.id }) }))} />
       )
@@ -771,6 +1037,25 @@ export default function EntityDetailDrawer({
 
   if (!found) return null
 
+  const handleDeleteLease = async (lease: CanaryLease) => {
+    const msg = `Permanently delete lease at ${lease.property}?\n\nThis cannot be undone. Leases with payment records or checklists cannot be deleted.`
+    if (!window.confirm(msg)) return
+    setDeletingLease(true)
+    try {
+      const res = await deleteLease(lease.id)
+      if (!res.success) {
+        window.alert(res.error)
+        return
+      }
+      onClose()
+      router.refresh()
+    } finally {
+      setDeletingLease(false)
+    }
+  }
+
+  const leaseForDelete = drawer.kind === 'lease' ? db.leases.find((x) => x.id === drawer.id) : undefined
+
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(10,8,6,.55)', zIndex: 60, backdropFilter: 'blur(2px)' }} />
@@ -790,6 +1075,16 @@ export default function EntityDetailDrawer({
           {actions.map((da) => (
             <button key={da.label} type="button" className="cy-accent-btn" onClick={da.onClick} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '9px 14px', fontWeight: 700, cursor: 'pointer', margin: '6px 8px 6px 0', alignSelf: 'flex-start' }}>{da.label}</button>
           ))}
+          {leaseForDelete && canEdit && (
+            <button
+              type="button"
+              disabled={deletingLease}
+              onClick={() => handleDeleteLease(leaseForDelete)}
+              style={{ border: '1px solid var(--border)', background: 'none', color: 'var(--red)', borderRadius: 9, padding: '9px 14px', fontWeight: 600, cursor: deletingLease ? 'wait' : 'pointer', margin: '6px 8px 6px 0', alignSelf: 'flex-start', fontSize: 13 }}
+            >
+              {deletingLease ? 'Deleting…' : 'Delete lease'}
+            </button>
+          )}
         </div>
         <div style={{ flex: 1 }}>{sections}</div>
         {auditTable && <AuditLogPanel key={auditKey} tableName={auditTable} recordId={auditId} canEdit={canEdit} />}

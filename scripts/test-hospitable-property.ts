@@ -75,6 +75,7 @@ async function main() {
     console.log('  checkIn:', r.checkIn, 'checkOut:', r.checkOut)
     console.log('  status:', r.status)
     console.log('  reservationStatus:', JSON.stringify(r.reservationStatus?.current))
+    console.log('  guest object:', JSON.stringify(r.guest, null, 2))
     console.log('\nFull reservation keys:', Object.keys(r as object))
     console.log('Full reservation JSON:\n', JSON.stringify(r, null, 2))
   }

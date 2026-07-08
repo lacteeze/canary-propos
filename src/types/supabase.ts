@@ -482,6 +482,7 @@ export type Database = {
           insurance_details: string | null
           insurance_required: boolean
           lease_months: number | null
+          lease_term_type: Database["public"]["Enums"]["lease_term_type_enum"]
           leasing_fee_percent: number | null
           management_end_date: string | null
           management_fee_percent: number | null
@@ -505,7 +506,7 @@ export type Database = {
           start_date: string
           status: string
           tenant_contacts_raw: string | null
-          tenant_id: string
+          tenant_id: string | null
           termination_reason: string | null
           unit_id: string
           updated_at: string | null
@@ -531,6 +532,7 @@ export type Database = {
           insurance_details?: string | null
           insurance_required?: boolean
           lease_months?: number | null
+          lease_term_type?: Database["public"]["Enums"]["lease_term_type_enum"]
           leasing_fee_percent?: number | null
           management_end_date?: string | null
           management_fee_percent?: number | null
@@ -554,7 +556,7 @@ export type Database = {
           start_date: string
           status?: string
           tenant_contacts_raw?: string | null
-          tenant_id: string
+          tenant_id?: string | null
           termination_reason?: string | null
           unit_id: string
           updated_at?: string | null
@@ -580,6 +582,7 @@ export type Database = {
           insurance_details?: string | null
           insurance_required?: boolean
           lease_months?: number | null
+          lease_term_type?: Database["public"]["Enums"]["lease_term_type_enum"]
           leasing_fee_percent?: number | null
           management_end_date?: string | null
           management_fee_percent?: number | null
@@ -1134,6 +1137,7 @@ export type Database = {
       units: {
         Row: {
           amenities: string[] | null
+          archived_at: string | null
           asking_rent: number | null
           bathrooms: number
           bedrooms: number
@@ -1150,6 +1154,7 @@ export type Database = {
         }
         Insert: {
           amenities?: string[] | null
+          archived_at?: string | null
           asking_rent?: number | null
           bathrooms?: number
           bedrooms?: number
@@ -1166,6 +1171,7 @@ export type Database = {
         }
         Update: {
           amenities?: string[] | null
+          archived_at?: string | null
           asking_rent?: number | null
           bathrooms?: number
           bedrooms?: number
@@ -1344,7 +1350,7 @@ export type Database = {
       checklist_type: "move_in" | "move_out"
       inquiry_status: "new" | "contacted" | "closed"
       inquiry_type: "inquiry" | "application"
-      listing_status: "draft" | "published" | "unlisted"
+      listing_status: "draft" | "published" | "unlisted" | "renewal_sent"
       property_type_enum:
         | "house"
         | "duplex"
@@ -1353,6 +1359,7 @@ export type Database = {
         | "townhouse"
         | "other"
       renewal_status_enum: "pending" | "sent" | "accepted" | "declined"
+      lease_term_type_enum: "fixed_term" | "month_to_month"
       work_order_priority: "low" | "medium" | "high" | "urgent"
       work_order_status:
         | "draft"
@@ -1496,7 +1503,7 @@ export const Constants = {
       checklist_type: ["move_in", "move_out"],
       inquiry_status: ["new", "contacted", "closed"],
       inquiry_type: ["inquiry", "application"],
-      listing_status: ["draft", "published", "unlisted"],
+      listing_status: ["draft", "published", "unlisted", "renewal_sent"],
       property_type_enum: [
         "house",
         "duplex",
@@ -1506,6 +1513,7 @@ export const Constants = {
         "other",
       ],
       renewal_status_enum: ["pending", "sent", "accepted", "declined"],
+      lease_term_type_enum: ["fixed_term", "month_to_month"],
       work_order_priority: ["low", "medium", "high", "urgent"],
       work_order_status: [
         "draft",

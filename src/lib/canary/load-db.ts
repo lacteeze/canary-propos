@@ -2,15 +2,20 @@
 // Loads live Supabase data (scoped by RLS for the signed-in user) and maps it
 // into the CanaryDb shape consumed by the CanaryApp client.
 import { createClient } from '@/lib/supabase/server'
+import { normalizeLeaseTermType } from './lease-term'
 import type {
   CanaryDb,
   CanaryDraft,
+  CanaryInquiry,
   CanaryLease,
   CanaryPayment,
   CanaryPerson,
   CanaryPortfolio,
   CanaryProject,
   CanaryProperty,
+  DraftListingStatus,
+  InquiryStatus,
+  InquiryType,
 } from './types'
 
 const EXPIRY_WINDOW_DAYS = 90
@@ -26,14 +31,33 @@ function fullAddress(street: string, city: string | null): string {
   return city ? `${street}, ${city}` : street
 }
 
+/** Match property/lease timeline keys — include unit suffix only for multi-unit buildings. */
+function unitDisplayStreet(
+  streetAddress: string,
+  unitNumber: string | null | undefined,
+  propertyId: string,
+  allUnits: Array<{ properties?: { id: string } | null; unit_number?: string | null }>
+): string {
+  if (unitNumber && allUnits.filter((u) => u.properties?.id === propertyId).length > 1) {
+    return `${streetAddress} · Unit ${unitNumber}`
+  }
+  return streetAddress
+}
+
 function unitStatusLabel(status: string | null): string {
   if (status === 'occupied') return 'Leased'
   if (status === 'maintenance') return 'Maintenance'
   return 'Vacant'
 }
 
-function leaseStatusLabel(start: string, end: string | null, dbStatus: string): string {
-  if (dbStatus === 'terminated' || dbStatus === 'expired') return 'Past'
+function leaseStatusLabel(
+  start: string,
+  end: string | null,
+  dbStatus: string,
+  termType: string | null | undefined
+): string {
+  if (dbStatus === 'terminated') return 'Terminated'
+  if (dbStatus === 'expired') return 'Expired'
   const now = new Date()
   const s = new Date(start)
   if (Number.isNaN(s.getTime())) return 'Active'
@@ -43,7 +67,7 @@ function leaseStatusLabel(start: string, end: string | null, dbStatus: string): 
   if (Number.isNaN(e.getTime())) return 'Active'
   if (e < now) return 'Past'
   const soon = new Date(now.getTime() + EXPIRY_WINDOW_DAYS * 864e5)
-  if (e <= soon) return 'Expiring'
+  if (e <= soon && normalizeLeaseTermType(termType) !== 'month_to_month') return 'Expiring'
   return 'Active'
 }
 
@@ -123,19 +147,19 @@ export async function getCaller(): Promise<Caller | 'no-user' | 'no-person'> {
 export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
   const supabase = await createClient()
 
-  const [unitsRes, leasesRes, portfoliosRes, workOrdersRes, peopleRes, listingsRes, paymentsRes, expensesRes] =
+  const [unitsRes, leasesRes, portfoliosRes, workOrdersRes, peopleRes, listingsRes, inquiriesRes, paymentsRes, expensesRes] =
     await Promise.all([
       supabase
         .from('units')
         .select(
-          `id, unit_number, bedrooms, bathrooms, status, asking_rent, amenities, hospitable_property_id,
+          `id, unit_number, bedrooms, bathrooms, status, asking_rent, amenities, hospitable_property_id, archived_at,
            properties!property_id(id, street_address, city, province, property_type, portfolio_id, owner_id, management_fee_type, management_fee_value)`
         )
         .eq('org_id', orgId),
       supabase
         .from('leases')
         .select(
-          `id, start_date, end_date, monthly_rent, deposit_amount, status, renewal_status, proposed_rent,
+          `id, start_date, end_date, lease_term_type, monthly_rent, deposit_amount, status, renewal_status, proposed_rent,
            utilities_included, rental_credit, rental_credit_expiry, notes, lease_months,
            insurance_required, insurance_confirmed, policy_expires, insurance_details,
            management_start_date, management_end_date, management_fee_percent, leasing_fee_percent,
@@ -169,12 +193,26 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
       supabase
         .from('listings')
         .select(
-          `id, listing_title, listing_description, display_rent, status, available_from,
-           units!unit_id(id, bedrooms, bathrooms, amenities,
+          `id, listing_title, listing_description, display_rent, status, available_from, updated_at,
+           units!unit_id(id, unit_number, bedrooms, bathrooms, amenities,
              properties!property_id(id, street_address, city))`
         )
         .eq('org_id', orgId)
-        .in('status', ['draft', 'published']),
+        .in('status', ['draft', 'published', 'renewal_sent']),
+      supabase
+        .from('inquiries')
+        .select(
+          `id, listing_id, type, name, email, phone, status, created_at, move_in_date,
+           listings!listing_id(
+             id,
+             units!unit_id(
+               properties!property_id(street_address, city)
+             )
+           )`
+        )
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
+        .limit(200),
       supabase
         .from('payments')
         .select(
@@ -202,9 +240,14 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
   const workOrderRows = (workOrdersRes.data ?? []) as any[]
   const peopleRows = (peopleRes.data ?? []) as any[]
   const listingRows = (listingsRes.data ?? []) as any[]
+  const inquiryRows = (inquiriesRes.data ?? []) as any[]
   const paymentRows = (paymentsRes.data ?? []) as any[]
   const expenseRows = (expensesRes.data ?? []) as any[]
   /* eslint-enable @typescript-eslint/no-explicit-any */
+
+  if (listingsRes.error) {
+    console.error('[loadCanaryDb:listings]', listingsRes.error.message)
+  }
 
   const properties: CanaryProperty[] = unitRows
     .filter((u) => u.properties)
@@ -243,11 +286,22 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         mgmtFeeType: p.management_fee_type ?? 'percent',
         mgmtFeeValue: p.management_fee_value != null ? String(Number(p.management_fee_value)) : '',
         hospitablePropertyId: u.hospitable_property_id?.trim() ?? '',
+        archivedAt: u.archived_at ?? null,
       }
     })
 
+  const archivedAddresses = new Set(
+    properties.filter((p) => p.archivedAt).map((p) => p.address)
+  )
+
   const leases: CanaryLease[] = leaseRows
     .filter((l) => l.units?.properties)
+    .filter((l) => {
+      const prop = l.units.properties
+      const street =
+        l.units.unit_number ? `${prop.street_address} · Unit ${l.units.unit_number}` : prop.street_address
+      return !archivedAddresses.has(fullAddress(street, prop.city))
+    })
     .map((l) => {
       const prop = l.units.properties
       const street =
@@ -272,7 +326,8 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
       return {
         id: l.id,
         property: fullAddress(street, prop.city),
-        status: leaseStatusLabel(l.start_date, l.end_date, l.status),
+        status: leaseStatusLabel(l.start_date, l.end_date, l.status, l.lease_term_type),
+        termType: normalizeLeaseTermType(l.lease_term_type),
         start: l.start_date ?? '',
         end: l.end_date ?? '',
         rent: l.monthly_rent != null ? `$${Number(l.monthly_rent).toLocaleString('en-CA')}` : '',
@@ -331,6 +386,7 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
 
   const projects: CanaryProject[] = workOrderRows
     .filter((j) => j.properties)
+    .filter((j) => !archivedAddresses.has(fullAddress(j.properties.street_address, j.properties.city)))
     .map((j) => {
       const vendor = j.people
       const vendorName = vendor
@@ -353,6 +409,7 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
   const people: CanaryPerson[] = peopleRows.map((p) => ({
     id: p.id,
     name: [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email,
+    roles: (p.role as unknown as string[]) ?? [],
     role: personRoleLabel(p.role as unknown as string[]),
     email: p.email ?? '',
     phone: p.phone ?? '',
@@ -374,11 +431,17 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
 
   const drafts: CanaryDraft[] = listingRows
     .filter((d) => d.units?.properties)
-    .map((d) => ({
+    .map((d) => {
+      const prop = d.units.properties
+      const street = unitDisplayStreet(prop.street_address, d.units.unit_number, prop.id, unitRows)
+      return { d, prop, street, address: fullAddress(street, prop.city) }
+    })
+    .filter(({ address }) => !archivedAddresses.has(address))
+    .map(({ d, address }) => ({
       id: d.id,
       propId: d.units.id,
       unitId: d.units.id,
-      address: fullAddress(d.units.properties.street_address, d.units.properties.city),
+      address,
       rent: d.display_rent != null ? String(Number(d.display_rent)) : '',
       start: d.available_from ?? '',
       end: '',
@@ -388,7 +451,23 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
       pets: petsLabel(d.units.amenities, d.listing_description),
       utilities: utilitiesLabel(d.listing_description),
       description: d.listing_description ?? '',
-      published: d.status === 'published',
+      status: (d.status === 'renewal_sent' ? 'renewal_sent' : d.status === 'published' ? 'published' : 'draft') as DraftListingStatus,
+      sentAt: d.updated_at ? String(d.updated_at).slice(0, 10) : '',
+    }))
+
+  const inquiries: CanaryInquiry[] = inquiryRows
+    .filter((i) => i.listings?.units?.properties)
+    .map((i) => ({
+      id: i.id,
+      listingId: i.listing_id,
+      type: i.type as InquiryType,
+      name: i.name,
+      email: i.email,
+      phone: i.phone ?? '',
+      status: i.status as InquiryStatus,
+      submittedAt: String(i.created_at),
+      property: fullAddress(i.listings.units.properties.street_address, i.listings.units.properties.city),
+      moveIn: i.move_in_date ?? '',
     }))
 
   const payments: CanaryPayment[] = [
@@ -418,5 +497,5 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
       })),
   ].sort((a, b) => (a.date < b.date ? 1 : -1))
 
-  return { properties, leases, portfolios, projects, people, drafts, payments }
+  return { properties, leases, portfolios, projects, people, drafts, payments, inquiries }
 }

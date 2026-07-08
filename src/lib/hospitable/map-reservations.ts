@@ -1,4 +1,11 @@
 import type { CanaryProperty, CanaryStrBooking } from '@/lib/canary/types'
+import {
+  STR_DEFAULT_CHECK_IN_HOUR,
+  STR_DEFAULT_CHECK_IN_MINUTE,
+  STR_DEFAULT_CHECK_OUT_HOUR,
+  STR_DEFAULT_CHECK_OUT_MINUTE,
+  resolveTimestampFromFields,
+} from '@/lib/canary/timeline-times'
 import type { HospitableProperty, HospitableReservation } from './client'
 import { resolveHospitablePropertyAddresses } from './match-property'
 import { hospitablePropertyLabel } from './property-label'
@@ -30,6 +37,24 @@ function reservationDeparture(reservation: HospitableReservation): string | null
   )
 }
 
+function reservationCheckInFields(reservation: HospitableReservation): Array<string | null | undefined> {
+  return [
+    reservation.check_in,
+    reservation.checkIn,
+    reservation.arrival_date,
+    reservation.arrivalDate,
+  ]
+}
+
+function reservationCheckOutFields(reservation: HospitableReservation): Array<string | null | undefined> {
+  return [
+    reservation.check_out,
+    reservation.checkOut,
+    reservation.departure_date,
+    reservation.departureDate,
+  ]
+}
+
 function reservationPropertyId(reservation: HospitableReservation): string {
   const embedded = reservation.properties?.[0]
   if (typeof embedded === 'object' && embedded && 'id' in embedded && embedded.id) {
@@ -38,10 +63,18 @@ function reservationPropertyId(reservation: HospitableReservation): string {
   return reservation.property_id ?? reservation.propertyId ?? ''
 }
 
+function guestFirstName(g: NonNullable<HospitableReservation['guest']>): string {
+  return (g.first_name ?? g.firstName ?? '').trim()
+}
+
+function guestLastName(g: NonNullable<HospitableReservation['guest']>): string {
+  return (g.last_name ?? g.lastName ?? '').trim()
+}
+
 function guestLabel(reservation: HospitableReservation): string {
   const g = reservation.guest
   if (!g) return 'Guest'
-  const name = [g.firstName, g.lastName].filter(Boolean).join(' ').trim()
+  const name = [guestFirstName(g), guestLastName(g)].filter(Boolean).join(' ').trim()
   return name || 'Guest'
 }
 
@@ -80,6 +113,20 @@ export function mapReservationsToTimeline(
     const end = dateOnly(reservationDeparture(reservation))
     if (!start || !end) continue
 
+    const checkInAt = resolveTimestampFromFields(
+      reservationCheckInFields(reservation),
+      start,
+      STR_DEFAULT_CHECK_IN_HOUR,
+      STR_DEFAULT_CHECK_IN_MINUTE
+    )
+    const checkOutAt = resolveTimestampFromFields(
+      reservationCheckOutFields(reservation),
+      end,
+      STR_DEFAULT_CHECK_OUT_HOUR,
+      STR_DEFAULT_CHECK_OUT_MINUTE
+    )
+    if (!checkInAt || !checkOutAt) continue
+
     const embeddedProperty = reservation.properties?.[0]
     const propertyId = reservationPropertyId(reservation)
 
@@ -107,6 +154,8 @@ export function mapReservationsToTimeline(
       hospitablePropertyName: hp ? hospitablePropertyLabel(hp) : propertyKey,
       start,
       end,
+      checkInAt,
+      checkOutAt,
       guestLabel: guestLabel(reservation),
       platform: platformLabel(reservation.platform),
       status,

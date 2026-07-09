@@ -4,7 +4,7 @@
 // Faithful React port of the CanaryApp.dc design prototype, wired to live
 // Supabase data (loaded server-side in src/app/(canary)/app/page.tsx).
 import React, { useCallback, useMemo, useRef, useState, useTransition } from 'react'
-import { CalendarIcon, ChevronDown, Repeat2, Search, X } from 'lucide-react'
+import { CalendarIcon, ChevronDown, MessageSquare, Repeat2, Search, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { activateDraftListing, deleteDraftListing, saveDraftListing, savePaymentEntry } from '@/app/actions/canary'
@@ -201,7 +201,8 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const chatScrollRef = useRef<HTMLDivElement>(null)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [tlAnchor, setTlAnchor] = useState<number | null>(null)
-  const [tlZoomIdx, setTlZoomIdx] = useState(7)
+  // Default zoom: 1mo (index of { d: 30, label: '1mo' } in TL_ZOOM_PRESETS)
+  const [tlZoomIdx, setTlZoomIdx] = useState(4)
   const [tlSortDir, setTlSortDir] = useState<'asc' | 'desc'>('asc')
   const [tlStatusFilter, setTlStatusFilter] = useState<TlStatusKey[]>([])
   const [tlOverlapPick, setTlOverlapPick] = useState<{ label: string; action: () => void }[] | null>(null)
@@ -574,7 +575,6 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     { key: 'people', label: 'People', privOnly: true },
     { key: 'payments', label: 'Payments', hideFor: ['Vendor'] },
     { key: 'projects', label: 'Projects' },
-    { key: 'messages', label: 'Messages', privOnly: true },
   ]
   const navItems = allNav
     .filter((n) => !(n.privOnly && !priv))
@@ -870,6 +870,11 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     if (tlFilterActive) return r.bars.length > 0
     return !r.strOnly || r.bars.length > 0
   }).sort((a, b) => {
+    // Default: STR rows (bookings in window or STR-only addresses) first for check-in/out focus
+    const aStr = a.strOnly || a.bars.some((bar) => bar.kind === 'str')
+    const bStr = b.strOnly || b.bars.some((bar) => bar.kind === 'str')
+    if (aStr !== bStr) return aStr ? -1 : 1
+    // Within group: lease-end sort (↑/↓ lease end button)
     const dir = tlSortDir === 'desc' ? -1 : 1
     const byEnd = a.sortKey - b.sortKey
     if (byEnd !== 0) return byEnd * dir
@@ -1568,6 +1573,17 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
             ))}
           </nav>
           <div className="cy-header-tools">
+          {priv && (
+            <button
+              type="button"
+              className={`cy-messages-toggle${view === 'messages' ? ' cy-messages-toggle--active' : ''}`}
+              onClick={() => { setView('messages'); setDrawer(null); setMobileNavOpen(false) }}
+              aria-label="Messages"
+              title="Messages"
+            >
+              <MessageSquare size={16} strokeWidth={2} aria-hidden />
+            </button>
+          )}
           <div className={`cy-search${searchPanelOpen ? ' cy-search--open' : ''}${showAskAnswer && searchPanelOpen ? ' cy-search--ask' : ''}`} ref={searchWrapRef}>
             {searchExpanded ? (
               <div className="cy-search-expanded">

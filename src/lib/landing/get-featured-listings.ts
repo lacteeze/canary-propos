@@ -2,6 +2,8 @@ import { createPublicClient } from '@/lib/supabase/public'
 import { getOrgBySlug } from '@/lib/orgs'
 import { CARD_PHOTOS, type LandingListing } from './content'
 import { deriveTermTypeFromHighlights } from './listing-term'
+import { getListingPhotoPathsByPropertyIds } from '@/lib/storage/property-listing-media'
+import { signListingPhotoPaths } from '@/lib/storage/listing-photos'
 
 function formatCAD(amount: number): string {
   return new Intl.NumberFormat('en-CA', {
@@ -34,10 +36,27 @@ export async function getFeaturedListings(
     .eq('org_id', org.id)
     .limit(limit)
 
-  const storageBase = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/org-assets`
+  const rows = listings ?? []
+  const propertyIds = rows
+    .map((listing) => {
+      const unit = listing.units as { properties?: { id?: string } | null } | null
+      return unit?.properties?.id
+    })
+    .filter((id): id is string => !!id)
+
+  const pathsByProperty = await getListingPhotoPathsByPropertyIds(propertyIds)
+  const coverPaths = rows.map((listing) => {
+    const unit = listing.units as {
+      properties?: { id?: string; photo_paths?: string[] | null } | null
+    } | null
+    const property = unit?.properties
+    const fromMedia = property?.id ? pathsByProperty.get(property.id)?.[0] : undefined
+    return fromMedia || property?.photo_paths?.[0] || null
+  })
+  const signedCovers = await signListingPhotoPaths(coverPaths.map((p) => p ?? ''))
   const orgQuery = orgSlug ? `?org=${orgSlug}` : ''
 
-  return (listings ?? []).map((listing, index) => {
+  return rows.map((listing, index) => {
     const unit = listing.units as {
       bedrooms: number
       bathrooms: number
@@ -56,10 +75,6 @@ export async function getFeaturedListings(
     const amenities = unit?.amenities?.join(' ') ?? ''
     const petFriendly = /pet|dog|cat|friendly/i.test(amenities)
 
-    const photoFromStorage = property?.photo_paths?.[0]
-      ? `${storageBase}/${property.photo_paths[0]}`
-      : CARD_PHOTOS[index % CARD_PHOTOS.length]
-
     return {
       id: listing.id,
       short: shortAddress(address),
@@ -69,7 +84,7 @@ export async function getFeaturedListings(
       baths: String(unit?.bathrooms ?? '—').replace(/\.0$/, ''),
       extra: petFriendly ? '🐾 pet friendly' : (property?.city ?? ''),
       termType: deriveTermTypeFromHighlights(listing.highlights),
-      photo: photoFromStorage,
+      photo: signedCovers[index] || CARD_PHOTOS[index % CARD_PHOTOS.length],
       href: `/listings/${listing.id}${orgQuery}`,
     }
   })

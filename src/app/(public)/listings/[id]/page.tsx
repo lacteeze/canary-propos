@@ -6,13 +6,15 @@ import { InquiryForm } from '@/components/listings/InquiryForm'
 import { ApplicationForm } from '@/components/listings/ApplicationForm'
 import { SimilarListingsSection } from '@/components/landing/SimilarListingsCarousel'
 import { PublicHeader } from '@/components/public/PublicHeader'
-import { CARD_PHOTOS, getLandingCopy } from '@/lib/landing/content'
+import { getLandingCopy } from '@/lib/landing/content'
 import { getPublishedListings } from '@/lib/landing/get-published-listings'
 import { fontDisplay } from '@/lib/landing/typography'
 import { getDetailPageCarouselGroups } from '@/lib/listings/browse-utils'
 import { createPublicClient } from '@/lib/supabase/public'
 import { getOrgBySlug } from '@/lib/orgs'
 import { headers } from 'next/headers'
+import { getListingPhotoPathsForProperty } from '@/lib/storage/property-listing-media'
+import { resolveListingGalleryPhotos } from '@/lib/storage/listing-photos'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -21,12 +23,6 @@ interface PageProps {
 
 function formatCAD(n: number) {
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(n)
-}
-
-function resolvePhoto(path: string | undefined, storageBase: string, fallbackIndex: number) {
-  if (!path) return CARD_PHOTOS[fallbackIndex % CARD_PHOTOS.length]
-  if (path.startsWith('http')) return path
-  return `${storageBase}/${path}`
 }
 
 export default async function ListingDetailPage({ params, searchParams }: PageProps) {
@@ -58,6 +54,7 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
         amenities,
         asking_rent,
         properties (
+          id,
           street_address,
           city,
           province,
@@ -81,10 +78,13 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
     ? `${property.street_address}, ${property.city}, ${property.province}`
     : listing.listing_title
 
-  const storageBase = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/org-assets`
-  const photoPaths: string[] = property?.photo_paths ?? []
-  const heroPhoto = resolvePhoto(photoPaths[0], storageBase, id.charCodeAt(0))
-  const galleryPhotos = photoPaths.slice(1, 5).map((p: string) => resolvePhoto(p, storageBase, 0))
+  const fromMedia = property?.id ? await getListingPhotoPathsForProperty(property.id) : []
+  const photoPaths: string[] =
+    fromMedia.length > 0 ? fromMedia : (property?.photo_paths ?? [])
+  const { hero: heroPhoto, gallery: galleryPhotos } = await resolveListingGalleryPhotos(
+    photoPaths,
+    id.charCodeAt(0)
+  )
 
   const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
   const mapsQuery = encodeURIComponent(fullAddress)

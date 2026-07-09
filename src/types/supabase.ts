@@ -995,6 +995,57 @@ export type Database = {
           },
         ]
       }
+      property_media: {
+        Row: {
+          id: string
+          org_id: string
+          property_id: string
+          storage_path: string
+          visibility: string
+          sort_order: number
+          caption: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          property_id: string
+          storage_path: string
+          visibility: string
+          sort_order?: number
+          caption?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          property_id?: string
+          storage_path?: string
+          visibility?: string
+          sort_order?: number
+          caption?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "property_media_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "property_media_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       portfolios: {
         Row: {
           created_at: string | null

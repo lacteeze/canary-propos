@@ -20,6 +20,7 @@ import type { CanaryDb, CanaryLease, CanaryPerson, CanaryProperty } from '@/lib/
 import { leaseDbStatusFromDisplay } from '@/lib/canary/types'
 import AuditLogPanel from './AuditLogPanel'
 import DatePickerField, { formatDisplayDate } from './DatePickerField'
+import { PropertyPhotoUpload } from '@/components/properties/PropertyPhotoUpload'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -53,10 +54,10 @@ const LEASE_TENANT_ADD = '__add_new_tenant__'
 const selectStyle: React.CSSProperties = {
   background: 'var(--input)',
   border: '1px solid var(--border)',
-  borderRadius: 7,
-  padding: '4px 8px',
+  borderRadius: 999,
+  padding: '5px 10px',
   fontWeight: 600,
-  fontSize: 13,
+  fontSize: 12.5,
   width: '100%',
   maxWidth: '100%',
 }
@@ -65,10 +66,10 @@ const miniInputStyle: React.CSSProperties = {
   width: '100%',
   background: 'var(--input)',
   border: '1px solid var(--border)',
-  borderRadius: 7,
-  padding: '6px 10px',
+  borderRadius: 999,
+  padding: '5px 10px',
   fontWeight: 600,
-  fontSize: 13,
+  fontSize: 12.5,
 }
 
 function LeaseTenantSection({
@@ -484,7 +485,7 @@ function formLabel(text: string): React.ReactNode {
 
 const formFieldStyle: React.CSSProperties = {
   width: '100%', background: 'var(--input)', border: '1px solid var(--border)',
-  borderRadius: 8, padding: '8px 10px', fontWeight: 600, fontSize: 13, color: 'var(--text)',
+  borderRadius: 999, padding: '7px 11px', fontWeight: 600, fontSize: 12.5, color: 'var(--text)',
 }
 
 function PropertyEditForm({
@@ -562,14 +563,14 @@ function PropertyEditForm({
 
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(10,8,6,.6)', zIndex: 70 }} />
-      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 'min(520px,94vw)', maxHeight: '90vh', overflowY: 'auto', background: 'var(--panel)', border: '1px solid var(--border2)', borderRadius: 14, zIndex: 71, boxShadow: 'var(--shadow)', padding: 20 }}>
+      <div onClick={onClose} className="cy-modal-backdrop" style={{ zIndex: 70 }} />
+      <div className="cy-glass-modal" style={{ width: 'min(520px,94vw)', maxHeight: '90vh', padding: 18, zIndex: 71 }} role="dialog" aria-modal="true" aria-label="Edit property">
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 14 }}>
           <div>
-            <div style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 4 }}>Edit property</div>
+            <div className="cy-eyebrow" style={{ marginBottom: 4 }}>Edit property</div>
             <div style={{ fontWeight: 700, fontSize: 17 }}>{property.address}</div>
           </div>
-          <button type="button" onClick={onClose} style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: 'var(--dim)', flex: 'none' }}>✕</button>
+          <button type="button" className="cy-btn" onClick={onClose} style={{ flex: 'none' }}>✕</button>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -649,8 +650,8 @@ function PropertyEditForm({
         {err && <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 12 }}>{err}</div>}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 18, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={onClose} style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 9, padding: '9px 16px', fontSize: 13, cursor: 'pointer', color: 'var(--dim)', fontWeight: 600 }}>Cancel</button>
-          <button type="button" onClick={save} disabled={saving} className="cy-accent-btn" style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '9px 18px', fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>{saving ? 'Saving…' : 'Save changes'}</button>
+          <button type="button" className="cy-btn" onClick={onClose}>Cancel</button>
+          <button type="button" onClick={save} disabled={saving} className="cy-btn-primary cy-accent-btn" style={{ opacity: saving ? 0.6 : 1 }}>{saving ? 'Saving…' : 'Save changes'}</button>
         </div>
       </div>
     </>
@@ -661,12 +662,12 @@ type RowDef = { label: string; value: React.ReactNode; onClick?: () => void }
 
 function Section({ title, rows }: { title: string; rows: RowDef[] }) {
   return (
-    <div style={{ marginTop: 16 }}>
-      <div style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 8, borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>{title}</div>
+    <div style={{ marginTop: 14 }}>
+      <div className="cy-drawer-section-title">{title}</div>
       {rows.map((dr, ri) => (
-        <div key={ri} className={dr.onClick ? 'cy-hov' : undefined} onClick={dr.onClick} style={{ display: 'flex', gap: 12, padding: '8px 4px', fontSize: '13.5px', borderRadius: 7, cursor: dr.onClick ? 'pointer' : 'default', alignItems: 'flex-start' }}>
-          <span style={{ flex: '0 0 128px', color: 'var(--dim)' }}>{dr.label}</span>
-          <span style={{ flex: 1, minWidth: 0 }}>{dr.value}</span>
+        <div key={ri} className={dr.onClick ? 'cy-drawer-row cy-hov' : 'cy-drawer-row'} onClick={dr.onClick} style={{ cursor: dr.onClick ? 'pointer' : 'default' }}>
+          <span className="cy-drawer-row-label">{dr.label}</span>
+          <span className="cy-drawer-row-value">{dr.value}</span>
         </div>
       ))}
     </div>
@@ -696,6 +697,18 @@ export default function EntityDetailDrawer({
     setEditingProperty(false)
   }, [drawer?.kind, drawer?.id])
 
+  React.useEffect(() => {
+    if (!drawer) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (editingProperty) setEditingProperty(false)
+        else onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [drawer, onClose, editingProperty])
+
   const refresh = () => {
     setAuditKey((k) => k + 1)
     router.refresh()
@@ -716,6 +729,7 @@ export default function EntityDetailDrawer({
   let auditTable = ''
   let auditId = drawer.id
   let sections: React.ReactNode[] = []
+  let propertyPhotoSection: React.ReactNode = null
   let found = true
   let propertyForEdit: CanaryProperty | null = null
 
@@ -854,6 +868,16 @@ export default function EntityDetailDrawer({
           ]}
         />,
       ]
+      if (canEdit && p.propertyDbId && db.orgId) {
+        propertyPhotoSection = (
+          <PropertyPhotoUpload
+            propertyId={p.propertyDbId}
+            orgId={db.orgId}
+            gallery
+            onChanged={refresh}
+          />
+        )
+      }
       if (priv) {
         sections.push(
           <Section
@@ -1055,25 +1079,90 @@ export default function EntityDetailDrawer({
   }
 
   const leaseForDelete = drawer.kind === 'lease' ? db.leases.find((x) => x.id === drawer.id) : undefined
+  const isPropertyModal = drawer.kind === 'property'
+
+  const primaryPropertyAction = actions.find((a) => a.label.includes('Draft lease')) ?? actions[actions.length - 1]
+  const secondaryPropertyActions = primaryPropertyAction
+    ? actions.filter((a) => a !== primaryPropertyAction)
+    : actions
+
+  if (isPropertyModal) {
+    return (
+      <>
+        <div className="cy-property-modal-backdrop" onClick={onClose} aria-hidden="true" />
+        <div
+          className="cy-property-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="property-modal-title"
+        >
+          <header className="cy-property-modal-header">
+            <button type="button" className="cy-property-modal-back-btn" onClick={onClose} aria-label="Close property details">
+              ← Close
+            </button>
+            <div className="cy-property-modal-title-block">
+              <div className="cy-eyebrow" style={{ marginBottom: 3 }}>{kindLabel}</div>
+              <div id="property-modal-title" style={{ fontWeight: 700, fontSize: 17, letterSpacing: '-.01em', lineHeight: 1.25 }}>{title}</div>
+              {sub && <div style={{ color: 'var(--dim)', fontSize: 13, marginTop: 2 }}>{sub}</div>}
+            </div>
+            <div className="cy-property-modal-actions">
+              {propertyForEdit && canEdit && (
+                <button type="button" className="cy-property-modal-secondary-btn" onClick={() => setEditingProperty(true)}>✎ Edit</button>
+              )}
+              {secondaryPropertyActions.map((da) => (
+                <button key={da.label} type="button" className="cy-property-modal-secondary-btn" onClick={da.onClick}>{da.label}</button>
+              ))}
+              {primaryPropertyAction && (
+                <button key={primaryPropertyAction.label} type="button" className="cy-btn-primary cy-accent-btn" onClick={primaryPropertyAction.onClick}>{primaryPropertyAction.label}</button>
+              )}
+            </div>
+          </header>
+          <div className="cy-property-modal-body">
+            <div className="cy-property-modal-fields">
+              {sections}
+              {auditTable && <AuditLogPanel key={auditKey} tableName={auditTable} recordId={auditId} canEdit={canEdit} />}
+            </div>
+            <div className="cy-property-modal-media">
+              {propertyPhotoSection ?? (
+                <div className="cy-property-modal-media-empty">
+                  {canEdit ? 'Photos can be added once this property is linked to a database record.' : 'No photos available.'}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        {editingProperty && propertyForEdit && canEdit && (
+          <PropertyEditForm
+            property={propertyForEdit}
+            priv={priv}
+            portfolios={db.portfolios.map((pf) => ({ id: pf.id, name: pf.name }))}
+            owners={db.people.filter((pe) => pe.role === 'Client').map((pe) => ({ id: pe.id, name: pe.name }))}
+            onClose={() => setEditingProperty(false)}
+            onSaved={refresh}
+          />
+        )}
+      </>
+    )
+  }
 
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(10,8,6,.55)', zIndex: 60, backdropFilter: 'blur(2px)' }} />
-      <aside style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(480px,94vw)', background: 'var(--panel)', borderLeft: '1px solid var(--border2)', zIndex: 61, boxShadow: 'var(--shadow)', overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column' }}>
+      <div onClick={onClose} className="cy-modal-backdrop" aria-hidden="true" />
+      <aside className="cy-drawer">
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
           <div>
-            <div style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 4 }}>{kindLabel}</div>
-            <div style={{ fontWeight: 700, fontSize: 19, letterSpacing: '-.01em' }}>{title}</div>
+            <div className="cy-eyebrow" style={{ marginBottom: 3 }}>{kindLabel}</div>
+            <div style={{ fontWeight: 700, fontSize: 17, letterSpacing: '-.01em' }}>{title}</div>
             <div style={{ color: 'var(--dim)', fontSize: 13 }}>{sub}</div>
           </div>
-          <button type="button" onClick={onClose} style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: 'var(--dim)', flex: 'none' }}>✕</button>
+          <button type="button" className="cy-btn" onClick={onClose} style={{ flex: 'none' }}>✕</button>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 0 }}>
           {propertyForEdit && canEdit && (
-            <button type="button" onClick={() => setEditingProperty(true)} style={{ border: '1px solid var(--border)', background: 'var(--elev)', color: 'var(--text)', borderRadius: 9, padding: '9px 14px', fontWeight: 700, cursor: 'pointer', margin: '6px 8px 6px 0', alignSelf: 'flex-start', fontSize: 13 }}>✎ Edit property</button>
+            <button type="button" className="cy-property-modal-secondary-btn" onClick={() => setEditingProperty(true)}>✎ Edit property</button>
           )}
           {actions.map((da) => (
-            <button key={da.label} type="button" className="cy-accent-btn" onClick={da.onClick} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '9px 14px', fontWeight: 700, cursor: 'pointer', margin: '6px 8px 6px 0', alignSelf: 'flex-start' }}>{da.label}</button>
+            <button key={da.label} type="button" className="cy-btn-primary cy-accent-btn" onClick={da.onClick} style={{ margin: '4px 6px 4px 0', alignSelf: 'flex-start' }}>{da.label}</button>
           ))}
           {leaseForDelete && canEdit && (
             <button

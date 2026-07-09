@@ -36,6 +36,10 @@ export interface CanaryProperty {
   mgmtFeeValue: string
   /** ISO timestamp when archived — hidden from active views when set */
   archivedAt?: string | null
+  /** Listing/marketing photo storage paths (inherited by published listings) */
+  listingPhotoPaths: string[]
+  /** Staff-only photo storage paths (inspections, historical, pre-reno) */
+  privatePhotoPaths: string[]
 }
 
 export interface CanaryLease {
@@ -252,6 +256,7 @@ export interface CanaryPayment {
 }
 
 export interface CanaryDb {
+  orgId: string
   properties: CanaryProperty[]
   leases: CanaryLease[]
   portfolios: CanaryPortfolio[]

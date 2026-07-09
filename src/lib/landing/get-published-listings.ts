@@ -6,6 +6,9 @@ import {
   type ListingRow,
 } from '@/lib/listings/browse-utils'
 import type { BrowseListing } from '@/lib/listings/browse-types'
+import { getListingPhotoPathsByPropertyIds } from '@/lib/storage/property-listing-media'
+import { signListingPhotoPaths } from '@/lib/storage/listing-photos'
+import { CARD_PHOTOS } from '@/lib/landing/content'
 
 export async function getPublishedListings(
   orgSlug = process.env.NEXT_PUBLIC_DEFAULT_ORG_SLUG ?? 'canary'
@@ -25,10 +28,28 @@ export async function getPublishedListings(
     .eq('status', 'published')
     .eq('org_id', org.id)
 
-  const storageBase = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/org-assets`
+  const rows = (listings ?? []) as ListingRow[]
+  const propertyIds = rows
+    .map((r) => r.units?.properties?.id)
+    .filter((id): id is string => !!id)
+
+  const pathsByProperty = await getListingPhotoPathsByPropertyIds(propertyIds)
+  const coverPaths = rows.map((row, index) => {
+    const propertyId = row.units?.properties?.id
+    const fromMedia = propertyId ? pathsByProperty.get(propertyId)?.[0] : undefined
+    const fromLegacy = row.units?.properties?.photo_paths?.[0]
+    return fromMedia || fromLegacy || null
+  })
+  const signedCovers = await signListingPhotoPaths(coverPaths.map((p) => p ?? ''))
+
   const orgQuery = orgSlug ? `?org=${orgSlug}` : ''
 
-  return (listings ?? []).map((row, index) =>
-    mapListingRow(row as ListingRow, storageBase, orgQuery, index)
-  )
+  return rows.map((row, index) => {
+    const signed = signedCovers[index]
+    const mapped = mapListingRow(row, '', orgQuery, index)
+    return {
+      ...mapped,
+      photo: signed || CARD_PHOTOS[index % CARD_PHOTOS.length],
+    }
+  })
 }

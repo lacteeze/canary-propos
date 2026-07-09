@@ -3,7 +3,7 @@
 // Bulk CSV import view for the CanaryApp (managers/admins only).
 // Pick a dataset → download its template → upload a filled CSV →
 // preview + validate → import, with per-row error reporting.
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { importCsv, type ImportResult } from '@/app/actions/import'
 import {
@@ -36,10 +36,29 @@ function downloadTemplate(dataset: ImportDataset) {
   URL.revokeObjectURL(url)
 }
 
-export default function CanaryImport() {
+interface CanaryImportProps {
+  /** Pre-select dataset based on current view (e.g. properties → properties CSV). */
+  initialDataset?: ImportDataset
+  /** When set, only this dataset is shown (view-scoped import). */
+  lockDataset?: boolean
+  /** Modal mode — tighter layout, optional close button. */
+  modal?: boolean
+  onClose?: () => void
+}
+
+export default function CanaryImport({
+  initialDataset = 'people',
+  lockDataset = false,
+  modal = false,
+  onClose,
+}: CanaryImportProps) {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
-  const [dataset, setDataset] = useState<ImportDataset>('people')
+  const [dataset, setDataset] = useState<ImportDataset>(initialDataset)
+
+  useEffect(() => {
+    setDataset(initialDataset)
+  }, [initialDataset])
   const [csvText, setCsvText] = useState('')
   const [fileName, setFileName] = useState('')
   const [showColumns, setShowColumns] = useState(false)
@@ -91,14 +110,26 @@ export default function CanaryImport() {
 
   return (
     <section>
-      <div style={{ color: 'var(--dim)', fontSize: '13.5px', marginBottom: 14, maxWidth: 720 }}>
-        Import data in bulk from CSV files. Download the template for a dataset, fill it in a
-        spreadsheet, then upload it here. For a fresh setup, import in this order:{' '}
-        <b style={{ color: 'var(--text)' }}>{IMPORT_ORDER.map((k) => IMPORT_SPECS[k].label).join(' → ')}</b>{' '}
-        so references (owners, properties, tenants) resolve.
+      {modal && onClose && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div>
+            <div className="cy-eyebrow" style={{ marginBottom: 4 }}>Bulk import</div>
+            <div style={{ fontWeight: 700, fontSize: 19 }}>{spec.label}</div>
+          </div>
+          <button type="button" className="cy-btn" onClick={onClose}>✕</button>
+        </div>
+      )}
+      <div style={{ color: 'var(--dim)', fontSize: '13.5px', marginBottom: 14, maxWidth: modal ? undefined : 720 }}>
+        {lockDataset
+          ? <>Upload a filled <b style={{ color: 'var(--text)' }}>{spec.label}</b> CSV — download the template below if you need the expected columns.</>
+          : <>Import data in bulk from CSV files. Download the template for a dataset, fill it in a
+            spreadsheet, then upload it here. For a fresh setup, import in this order:{' '}
+            <b style={{ color: 'var(--text)' }}>{IMPORT_ORDER.map((k) => IMPORT_SPECS[k].label).join(' → ')}</b>{' '}
+            so references (owners, properties, tenants) resolve.</>}
       </div>
 
       {/* dataset picker */}
+      {!lockDataset && (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 10, marginBottom: 16 }}>
         {IMPORT_ORDER.map((key, idx) => {
           const s = IMPORT_SPECS[key]
@@ -130,13 +161,14 @@ export default function CanaryImport() {
           )
         })}
       </div>
+      )}
 
       {/* selected dataset panel */}
-      <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 18 }}>
+      <div style={{ background: modal ? 'transparent' : 'var(--panel)', border: modal ? 'none' : '1px solid var(--border)', borderRadius: 14, padding: modal ? 0 : 18 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 320px', minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{spec.label}</div>
-            <div style={{ color: 'var(--dim)', fontSize: '13px', marginTop: 4, lineHeight: 1.5 }}>{spec.description}</div>
+            {!modal && <div style={{ fontWeight: 700, fontSize: 16 }}>{spec.label}</div>}
+            <div style={{ color: 'var(--dim)', fontSize: '13px', marginTop: modal ? 0 : 4, lineHeight: 1.5 }}>{spec.description}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, flex: 'none', flexWrap: 'wrap' }}>
             <button

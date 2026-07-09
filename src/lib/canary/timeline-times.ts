@@ -1,5 +1,4 @@
 import type { LeaseTermType } from './lease-term'
-import { isMonthToMonthLease } from './lease-term'
 import type { CanaryStrBooking } from './types'
 
 /** STR default check-in: 4:00 PM on arrival date */
@@ -111,21 +110,52 @@ export function leaseBarRange(start: string, end: string): TimelineRange | null 
   return { startMs: s.getTime(), endMs: e.getTime() }
 }
 
-/** Resolve timeline bar span — month-to-month without end extends up to 12 months from start. */
+/**
+ * Resolve timeline bar span.
+ * Open-ended leases (no end date) extend through `throughMs` (usually the
+ * visible window end) so they fill the calendar for as long as the tenant
+ * could stay. `termType` is kept for call-site compatibility.
+ */
 export function leaseBarRangeForLease(
   start: string,
   end: string,
-  termType: LeaseTermType | string | null | undefined
+  _termType?: LeaseTermType | string | null,
+  throughMs?: number
 ): TimelineRange | null {
   const trimmedEnd = end?.trim()
   if (trimmedEnd) return leaseBarRange(start, trimmedEnd)
-  if (!isMonthToMonthLease(termType)) return null
+
   const startParts = parseDateOnlyLocal(start)
   if (!startParts) return null
+  const startMs = new Date(
+    startParts.y,
+    startParts.m,
+    startParts.d,
+    LEASE_START_HOUR,
+    LEASE_START_MINUTE,
+    0,
+    0
+  ).getTime()
+
+  if (throughMs != null && throughMs > startMs) {
+    return { startMs, endMs: throughMs }
+  }
+
+  // Fallback when no window is provided: 12 months from start.
   const synthetic = new Date(startParts.y, startParts.m, startParts.d)
   synthetic.setMonth(synthetic.getMonth() + 12)
-  const endStr = `${synthetic.getFullYear()}-${String(synthetic.getMonth() + 1).padStart(2, '0')}-${String(synthetic.getDate()).padStart(2, '0')}`
-  return leaseBarRange(start, endStr)
+  return {
+    startMs,
+    endMs: new Date(
+      synthetic.getFullYear(),
+      synthetic.getMonth(),
+      synthetic.getDate(),
+      LEASE_END_HOUR,
+      LEASE_END_MINUTE,
+      LEASE_END_SECOND,
+      LEASE_END_MS
+    ).getTime(),
+  }
 }
 
 export function draftBarRange(

@@ -230,7 +230,6 @@ export default async function PropertyDetailPage({ params }: PageProps) {
                 <PropertyPhotoUpload
                   propertyId={property.id}
                   orgId={callerPerson.org_id}
-                  existingPaths={property.photo_paths ?? []}
                 />
               ) : (
                 <p className="text-sm text-stone-400">No photos uploaded yet.</p>

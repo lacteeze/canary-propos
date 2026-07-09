@@ -147,7 +147,7 @@ export async function getCaller(): Promise<Caller | 'no-user' | 'no-person'> {
 export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
   const supabase = await createClient()
 
-  const [unitsRes, leasesRes, portfoliosRes, workOrdersRes, peopleRes, listingsRes, inquiriesRes, paymentsRes, expensesRes] =
+  const [unitsRes, leasesRes, portfoliosRes, workOrdersRes, peopleRes, listingsRes, inquiriesRes, paymentsRes, expensesRes, mediaRes] =
     await Promise.all([
       supabase
         .from('units')
@@ -231,6 +231,11 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         .eq('org_id', orgId)
         .order('expense_date', { ascending: false })
         .limit(500),
+      supabase
+        .from('property_media')
+        .select('property_id, storage_path, visibility, sort_order')
+        .eq('org_id', orgId)
+        .order('sort_order', { ascending: true }),
     ])
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -243,10 +248,23 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
   const inquiryRows = (inquiriesRes.data ?? []) as any[]
   const paymentRows = (paymentsRes.data ?? []) as any[]
   const expenseRows = (expensesRes.data ?? []) as any[]
+  const mediaRows = (mediaRes.data ?? []) as any[]
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
   if (listingsRes.error) {
     console.error('[loadCanaryDb:listings]', listingsRes.error.message)
+  }
+  if (mediaRes.error) {
+    console.error('[loadCanaryDb:property_media]', mediaRes.error.message)
+  }
+
+  const listingPhotosByProperty = new Map<string, string[]>()
+  const privatePhotosByProperty = new Map<string, string[]>()
+  for (const row of mediaRows) {
+    const map = row.visibility === 'private' ? privatePhotosByProperty : listingPhotosByProperty
+    const list = map.get(row.property_id) ?? []
+    list.push(row.storage_path)
+    map.set(row.property_id, list)
   }
 
   const properties: CanaryProperty[] = unitRows
@@ -287,6 +305,8 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         mgmtFeeValue: p.management_fee_value != null ? String(Number(p.management_fee_value)) : '',
         hospitablePropertyId: u.hospitable_property_id?.trim() ?? '',
         archivedAt: u.archived_at ?? null,
+        listingPhotoPaths: listingPhotosByProperty.get(p.id) ?? [],
+        privatePhotoPaths: privatePhotosByProperty.get(p.id) ?? [],
       }
     })
 
@@ -497,5 +517,5 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
       })),
   ].sort((a, b) => (a.date < b.date ? 1 : -1))
 
-  return { properties, leases, portfolios, projects, people, drafts, payments, inquiries }
+  return { orgId, properties, leases, portfolios, projects, people, drafts, payments, inquiries }
 }

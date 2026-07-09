@@ -4,14 +4,35 @@
 // Faithful React port of the CanaryApp.dc design prototype, wired to live
 // Supabase data (loaded server-side in src/app/(canary)/app/page.tsx).
 import React, { useCallback, useMemo, useRef, useState, useTransition } from 'react'
-import { CalendarIcon, X } from 'lucide-react'
+import { CalendarIcon, ChevronDown, Repeat2, Search, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { activateDraftListing, deleteDraftListing, saveDraftListing, savePaymentEntry } from '@/app/actions/canary'
 import { archiveProperties, unarchiveProperties, deleteProperties, mergeProperties } from '@/app/actions/entity-updates'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import CanaryImport from './CanaryImport'
+import CanaryActionFab, { importDatasetForView, type FabAction } from './CanaryActionFab'
+import CanaryAddPropertyModal from './CanaryAddPropertyModal'
 import DatePickerField from './DatePickerField'
 import EntityDetailDrawer, { type DrawerState } from './EntityDetailDrawer'
+import {
+  CARD_LAYOUT_PRESET,
+  KPI_LAYOUT_PRESET,
+  LayoutGrid,
+  SECTION_LAYOUT_PRESET,
+  useViewLayout,
+} from './layout'
 import MessagesView from './MessagesView'
 import PropertyOccupancyCalendar from './PropertyOccupancyCalendar'
 import type { CanaryDb, CanaryDraft, CanaryLease, CanaryPayment, CanaryPerson, CanaryPortfolio, CanaryProject, CanaryProperty, CanaryRole, CanaryStrBooking, DraftListingStatus, HospitableCalendarData } from '@/lib/canary/types'
@@ -30,6 +51,18 @@ const TL_ZOOM_PRESETS = [
   { d: 30, label: '1mo' }, { d: 60, label: '2mo' }, { d: 90, label: '3mo' }, { d: 182, label: '6mo' },
   { d: 270, label: '9mo' }, { d: 365, label: '1yr' }, { d: 547, label: '1.5yr' }, { d: 730, label: '2yr' },
 ]
+
+const TL_STATUS_OPTIONS = [
+  { key: 'active', label: 'Active', dot: 'var(--green)' },
+  { key: 'expiring', label: 'Expiring', dot: 'var(--red)' },
+  { key: 'upcoming', label: 'Upcoming', dot: 'var(--amber)' },
+  { key: 'draft', label: 'Drafts', dot: 'var(--accent)' },
+  { key: 'renewal_sent', label: 'Renewals sent', dot: 'var(--purple)' },
+  { key: 'str', label: 'STR stays', dot: 'var(--blue)' },
+  { key: 'past', label: 'Past', dot: 'var(--gray)' },
+] as const
+
+type TlStatusKey = (typeof TL_STATUS_OPTIONS)[number]['key']
 
 const PAY_CATEGORIES = ['Rent Charge', 'Rent Payment', 'Damage Deposit', 'Management Fee', 'Maintenance', 'Leasing Fee', 'Supplies', 'Cleaning', 'Utilities', 'Other']
 
@@ -90,7 +123,22 @@ function leaseEndSortTime(ls: CanaryLease[]): number | null {
 }
 
 type ChatMsg = { role: 'user' | 'assistant'; text: string }
+type AskNavTarget =
+  | { kind: 'view'; view: string }
+  | { kind: 'drawer'; drawer: DrawerState }
+type SearchHit = { key: string; label: string; meta: string; target: AskNavTarget }
 type Drawer = DrawerState
+
+function looksLikeQuestion(text: string): boolean {
+  const t = text.trim()
+  if (!t) return false
+  if (/\?$/.test(t)) return true
+  return /^(who|what|when|where|which|why|how|show|list|find|tell|summarize|summarise|compare|count|are|is|do|does|did|can|could|should|would)\b/i.test(t)
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 type SortState = { key: string; dir: 'asc' | 'desc' } | null
 type DraftForm = {
   id: string | null
@@ -121,47 +169,41 @@ interface CanaryAppProps {
 }
 
 // ---------- small render helpers ----------
-function Icon({ paths }: { paths: string[] }) {
-  return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" style={{ flex: 'none' }}>
-      {paths.map((p, i) => (<path key={i} d={p} />))}
-    </svg>
-  )
-}
+const ROLE_OPTIONS: { value: CanaryRole; label: string }[] = [
+  { value: 'Admin', label: 'Admin' },
+  { value: 'Manager', label: 'Manager' },
+  { value: 'Owner', label: 'Owner portal' },
+  { value: 'Tenant', label: 'Tenant portal' },
+  { value: 'Vendor', label: 'Vendor view' },
+]
 
-const ICONS: Record<string, string[]> = {
-  home: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'],
-  dashboard: ['M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z'],
-  leases: ['M3 4h18v18H3z', 'M3 9h18', 'M8 2v4', 'M16 2v4'],
-  properties: ['M3 11l9-8 9 8', 'M5 10v10h14V10'],
-  people: ['M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16.5 3.13a4 4 0 0 1 0 7.75'],
-  portfolios: ['M3 7h18v13H3z', 'M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'],
-  payments: ['M12 1v22', 'M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'],
-  projects: ['M9 11l3 3L22 4', 'M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'],
-  import: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M7 10l5 5 5-5', 'M12 15V3'],
-  messages: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z', 'M8 10h.01', 'M12 10h.01', 'M16 10h.01'],
+function userInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
-
-const monoLabel: React.CSSProperties = { fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--dim)' }
 
 export default function CanaryApp({ db, hospitableCalendar, userRole, userPersonId, canSwitchRoles, userName }: CanaryAppProps) {
   const router = useRouter()
   const [, startTransition] = useTransition()
 
-  const [view, setView] = useState('home')
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [view, setView] = useState('dashboard')
+  const [theme, setTheme] = useState<'dark' | 'light'>('light')
   const [role, setRole] = useState<CanaryRole>(userRole)
   const [personaId, setPersonaId] = useState(canSwitchRoles ? '' : userPersonId)
   const [chat, setChat] = useState<ChatMsg[]>([])
-  const [chatInput, setChatInput] = useState('')
   const [chatBusy, setChatBusy] = useState(false)
   const [search, setSearch] = useState('')
+  const [searchExpanded, setSearchExpanded] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const searchWrapRef = useRef<HTMLDivElement>(null)
+  const chatScrollRef = useRef<HTMLDivElement>(null)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [tlAnchor, setTlAnchor] = useState<number | null>(null)
   const [tlZoomIdx, setTlZoomIdx] = useState(7)
   const [tlSortDir, setTlSortDir] = useState<'asc' | 'desc'>('asc')
-  const [tlStatusFilter, setTlStatusFilter] = useState<Record<string, boolean>>({})
+  const [tlStatusFilter, setTlStatusFilter] = useState<TlStatusKey[]>([])
   const [tlOverlapPick, setTlOverlapPick] = useState<{ label: string; action: () => void }[] | null>(null)
   const [propFilter, setPropFilter] = useState('')
   const [peopleRole, setPeopleRole] = useState('')
@@ -185,15 +227,64 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const [mergeOpen, setMergeOpen] = useState(false)
   const [mergePrimaryId, setMergePrimaryId] = useState('')
   const [calView, setCalView] = useState<{ propId: string; address: string } | null>(null)
+  const [propertyModalOpen, setPropertyModalOpen] = useState(false)
+  const [importModalOpen, setImportModalOpen] = useState(false)
 
   // restore persisted UI prefs
   React.useEffect(() => {
     try {
       const t = localStorage.getItem('canary_theme')
       if (t === 'light' || t === 'dark') setTheme(t)
-      if (localStorage.getItem('canary_sidebar') === '1') setSidebarCollapsed(true)
     } catch { /* ignore */ }
   }, [])
+
+  const openSearch = useCallback(() => setSearchExpanded(true), [])
+  const closeSearch = useCallback(() => {
+    setSearchExpanded(false)
+    setSearch('')
+  }, [])
+
+  React.useEffect(() => {
+    if (view === 'home') setView('dashboard')
+  }, [view])
+
+  React.useEffect(() => {
+    if (searchExpanded) searchInputRef.current?.focus()
+  }, [searchExpanded])
+
+  React.useEffect(() => {
+    if (!searchExpanded) return
+    const onDown = (e: MouseEvent) => {
+      if (searchWrapRef.current && !searchWrapRef.current.contains(e.target as Node)) {
+        setSearchExpanded(false)
+        if (!chat.length && !chatBusy) setSearch('')
+      }
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [searchExpanded, chat.length, chatBusy])
+
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName
+      const inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement | null)?.isContentEditable
+      if (e.key === '/' && !inField) {
+        e.preventDefault()
+        openSearch()
+      }
+      if (e.key === 'Escape' && searchExpanded) {
+        e.preventDefault()
+        closeSearch()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [searchExpanded, openSearch, closeSearch])
+
+  React.useEffect(() => {
+    if (!chatScrollRef.current) return
+    chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
+  }, [chat, chatBusy])
 
   const priv = role === 'Admin' || role === 'Manager'
   const now = useMemo(() => new Date(), [])
@@ -280,7 +371,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
 
   const onRoleChange = useCallback((next: CanaryRole) => {
     setRole(next)
-    setView('home')
+    setView('dashboard')
     setDrawer(null)
     setPersonaId('')
   }, [])
@@ -312,21 +403,26 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     }).length
   }, [scopedStrBookings, todayMid])
   const activeLeases = scoped.leases.filter((l) => l.status === 'Active' || l.status === 'Expiring')
+  const activePortfolios = scoped.portfolios.filter((pf) => pf.status === 'Active')
   const occupied = props.filter((p) => p.status === 'Leased' || p.status === 'Airbnb').length
   const hasSuccessor = useCallback((l: CanaryLease) => scoped.leases.some((o) => o !== l && o.property === l.property && (o.status === 'Upcoming' || (() => { const os = parseDate(o.start); const le = parseDate(l.end); return !!os && !!le && os > le })())), [scoped.leases])
   const expNoRenew = activeLeases.filter((l) => { const e = parseDate(l.end); return !!e && e >= now && e <= soon && !hasSuccessor(l) })
   const rentRoll = activeLeases.reduce((s, l) => s + rentNum(l.rent), 0)
-  const kpis = [
-    { label: 'Properties', value: String(props.length), color: 'var(--text)' },
-    { label: 'Occupancy', value: props.length ? Math.round((occupied / props.length) * 100) + '%' : '—', color: 'var(--green)' },
-    { label: 'Active leases', value: String(activeLeases.length), color: 'var(--text)' },
-    { label: 'STR · next 90d', value: hospitableCalendar.connected ? String(strInWindow) : '—', color: 'var(--blue)' },
-    { label: 'Expiring · no renewal', value: String(expNoRenew.length), color: 'var(--red)' },
-    { label: 'Monthly rent roll', value: money(rentRoll), color: 'var(--text)' },
+  const showPortfoliosKpi = role !== 'Tenant' && role !== 'Vendor'
+  const kpis: { label: string; value: string; color: string; view?: string }[] = [
+    { label: 'Properties', value: String(props.length), color: 'var(--text)', view: 'properties' },
+    { label: 'Occupancy', value: props.length ? Math.round((occupied / props.length) * 100) + '%' : '—', color: 'var(--green)', view: 'properties' },
+    { label: 'Active leases', value: String(activeLeases.length), color: 'var(--text)', view: 'leases' },
+    { label: 'STR · next 90d', value: hospitableCalendar.connected ? String(strInWindow) : '—', color: 'var(--blue)', view: 'properties' },
+    { label: 'Expiring · no renewal', value: String(expNoRenew.length), color: 'var(--red)', view: 'leases' },
+    ...(showPortfoliosKpi
+      ? [{ label: 'Active portfolios', value: String(activePortfolios.length), color: 'var(--text)', view: 'portfolios' }]
+      : []),
+    { label: 'Monthly rent roll', value: money(rentRoll), color: 'var(--text)', view: 'payments' },
   ]
 
   // ---------- draft composer ----------
-  const startDraftFor = useCallback((prop: CanaryProperty | null, presets?: { start?: string; end?: string; rent?: string }) => {
+  const startDraftFor = useCallback((prop: CanaryProperty | null, presets?: { start?: string; end?: string; rent?: string; status?: DraftListingStatus }) => {
     const p = presets || {}
     const leaseRent = prop ? leaseRentForProperty(db.leases, prop.address) : ''
     const rent = (p.rent != null && p.rent !== '')
@@ -348,7 +444,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       pets: prop && /dog/i.test(prop.petFriendly || '') ? 'Dog friendly' : prop && /yes|pet/i.test(prop.petFriendly || '') ? 'Pet friendly' : 'No pets',
       utilities: prop && /yes|included/i.test(prop.utilitiesIncluded || '') ? 'Included' : 'Not included',
       description: prop?.description || '',
-      status: 'draft',
+      status: p.status || 'draft',
       address: prop?.address,
     })
     setDraftOpen(true)
@@ -439,13 +535,14 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     startTransition(() => router.refresh())
   }, [payForm, paySaving, router])
 
-  // ---------- chat ----------
+  // ---------- chat (Ask via header search) ----------
   const sendChat = useCallback(async (text: string) => {
     const t = (text || '').trim()
     if (!t || chatBusy) return
     const msgs: ChatMsg[] = [...chat, { role: 'user', text: t }]
     setChat(msgs)
-    setChatInput('')
+    setSearch('')
+    setSearchExpanded(true)
     setChatBusy(true)
     try {
       const res = await fetch('/api/canary/ask', {
@@ -471,16 +568,13 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
 
   // ---------- nav ----------
   const allNav: { key: string; label: string; privOnly?: boolean; hideFor?: CanaryRole[] }[] = [
-    { key: 'home', label: 'Ask' },
     { key: 'dashboard', label: 'Dashboard' },
-    { key: 'leases', label: 'Leases' },
+    { key: 'leases', label: 'Leasing' },
     { key: 'properties', label: 'Properties' },
     { key: 'people', label: 'People', privOnly: true },
-    { key: 'portfolios', label: 'Portfolios', hideFor: ['Tenant', 'Vendor'] },
     { key: 'payments', label: 'Payments', hideFor: ['Vendor'] },
     { key: 'projects', label: 'Projects' },
     { key: 'messages', label: 'Messages', privOnly: true },
-    { key: 'import', label: 'Import', privOnly: true },
   ]
   const navItems = allNav
     .filter((n) => !(n.privOnly && !priv))
@@ -522,9 +616,20 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     .sort((a, b) => (parseDate(b.submittedAt)?.getTime() ?? 0) - (parseDate(a.submittedAt)?.getTime() ?? 0))
     .slice(0, 6)
   const openRenewalsTimeline = useCallback(() => {
-    setTlStatusFilter({ active: false, expiring: false, upcoming: false, draft: false, renewal_sent: true, str: false, past: false })
+    setTlStatusFilter(['renewal_sent'])
     setView('leases')
   }, [])
+
+  // ---------- dashboard / card-grid layout (DnD + resize) ----------
+  const layoutUserKey = userPersonId || 'anon'
+  const kpiIds = useMemo(() => kpis.map((k) => k.label), [kpis])
+  const kpiLayout = useViewLayout('dashboard_kpis', kpiIds, layoutUserKey)
+  const dashSectionIds = useMemo(() => {
+    const ids = ['expiring', 'vacant', 'projects', 'drafts', 'renewals']
+    if (priv) ids.push('applications')
+    return ids
+  }, [priv])
+  const dashSectionLayout = useViewLayout('dashboard_sections', dashSectionIds, layoutUserKey)
 
   // ---------- timeline ----------
   const zoomIdx = Math.max(0, Math.min(TL_ZOOM_PRESETS.length - 1, tlZoomIdx))
@@ -547,17 +652,24 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   }
   const tlTodayLeft = pct(now).toFixed(2) + '%'
   const tlSliderOffset = Math.round((winStart.getTime() - todayMid.getTime()) / DAY)
-  const fdef: Record<string, boolean> = { active: true, expiring: true, upcoming: true, draft: true, renewal_sent: true, str: true, past: true }
-  const filt = { ...fdef, ...tlStatusFilter }
-  const filterMeta = [
-    { key: 'active', label: 'Active', dot: 'var(--green)' },
-    { key: 'expiring', label: 'Expiring', dot: 'var(--red)' },
-    { key: 'upcoming', label: 'Upcoming', dot: 'var(--amber)' },
-    { key: 'draft', label: 'Drafts', dot: 'var(--accent)' },
-    { key: 'renewal_sent', label: 'Renewals sent', dot: 'var(--purple)' },
-    { key: 'str', label: 'STR stays', dot: 'var(--blue)' },
-    { key: 'past', label: 'Past', dot: 'var(--gray)' },
-  ]
+  const tlFilterActive = tlStatusFilter.length > 0
+  const filt: Record<TlStatusKey, boolean> = {
+    active: !tlFilterActive || tlStatusFilter.includes('active'),
+    expiring: !tlFilterActive || tlStatusFilter.includes('expiring'),
+    upcoming: !tlFilterActive || tlStatusFilter.includes('upcoming'),
+    draft: !tlFilterActive || tlStatusFilter.includes('draft'),
+    renewal_sent: !tlFilterActive || tlStatusFilter.includes('renewal_sent'),
+    str: !tlFilterActive || tlStatusFilter.includes('str'),
+    past: !tlFilterActive || tlStatusFilter.includes('past'),
+  }
+  const tlStatusLabel = !tlFilterActive
+    ? 'All statuses'
+    : tlStatusFilter.length === 1
+      ? (TL_STATUS_OPTIONS.find((o) => o.key === tlStatusFilter[0])?.label ?? '1 status')
+      : `${tlStatusFilter.length} statuses`
+  const toggleTlStatus = (key: TlStatusKey) => {
+    setTlStatusFilter((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
+  }
 
   const timelineProps = useMemo(() => props.filter(matchProp), [props, q])
   const timelineAddressFor = useCallback(
@@ -596,14 +708,17 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const catOf = (l: CanaryLease) => {
     if (l.status === 'Upcoming') return 'upcoming'
     if (l.status === 'Active' || l.status === 'Expiring') {
-      if (isMonthToMonthLease(l.termType)) return 'active'
+      // No end date (or explicit month-to-month) → ongoing monthly tenancy
+      if (!l.end?.trim() || isMonthToMonthLease(l.termType)) return 'active'
       const e = parseDate(l.end)
       return (e && e <= soon && !hasSuccessor(l)) || l.status === 'Expiring' ? 'expiring' : 'active'
     }
     return 'past'
   }
+  const isOpenEndedMonthly = (l: CanaryLease) =>
+    !l.end?.trim() || isMonthToMonthLease(l.termType)
   const leaseTimelineStatusLabel = (l: CanaryLease, cat: ReturnType<typeof catOf>) => {
-    if (cat === 'active' && isMonthToMonthLease(l.termType)) return 'Monthly'
+    if (cat === 'active' && isOpenEndedMonthly(l)) return 'Monthly'
     return cat === 'expiring' ? 'Expiring' : cat === 'upcoming' ? 'Upcoming' : cat === 'active' ? 'Active' : (l.status || 'Past')
   }
   const leaseTimelineRent = (l: CanaryLease) => {
@@ -660,11 +775,11 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     const leaseEndMs = leaseEndSortTime(ls)
     const bars: TlBar[] = []
     ls.forEach((l) => {
-      const range = leaseBarRangeForLease(l.start, l.end, l.termType)
+      const range = leaseBarRangeForLease(l.start, l.end, l.termType, winEnd.getTime())
       if (!range || range.endMs < winStart.getTime() || range.startMs > winEnd.getTime()) return
       const cat = catOf(l)
       if (!filt[cat]) return
-      const isMonthly = cat === 'active' && isMonthToMonthLease(l.termType)
+      const isMonthly = cat === 'active' && isOpenEndedMonthly(l)
       const [bg, color] = isMonthly
         ? ['var(--orange)', 'var(--orange-text)']
         : cat === 'expiring'
@@ -676,10 +791,11 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
               : ['var(--gray)', 'var(--bg)']
       const barLabel = leaseTimelineLabel(l, cat)
       const rentPart = leaseTimelineRent(l)
+      const endLabel = l.end?.trim() ? l.end : 'ongoing'
       bars.push({
         left: pct(range.startMs).toFixed(2) + '%', width: Math.max(1.6, pct(range.endMs) - pct(range.startMs)).toFixed(2) + '%',
         bg, color, borderStyle: 'none', label: barLabel,
-        title: [leaseTimelineStatusLabel(l, cat), rentPart, (l.start || '') + ' → ' + (l.end || '')].filter(Boolean).join(' · '),
+        title: [leaseTimelineStatusLabel(l, cat), rentPart, (l.start || '') + ' → ' + endLabel].filter(Boolean).join(' · '),
         onClick: () => setDrawer({ kind: 'lease', id: l.id }),
         top: TL_BAR_TOP, height: TL_BAR_H, interactive: true, kind: 'lease', zIndex: 1,
         startMs: range.startMs, endMs: range.endMs,
@@ -750,7 +866,10 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const tlRows = [
     ...managedPropRows,
     ...strOnlyAddresses.map((address) => buildTimelineRow(timelineAddressFor(address), undefined, address)),
-  ].filter((r) => !r.strOnly || r.bars.length > 0).sort((a, b) => {
+  ].filter((r) => {
+    if (tlFilterActive) return r.bars.length > 0
+    return !r.strOnly || r.bars.length > 0
+  }).sort((a, b) => {
     const dir = tlSortDir === 'desc' ? -1 : 1
     const byEnd = a.sortKey - b.sortKey
     if (byEnd !== 0) return byEnd * dir
@@ -761,6 +880,8 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const statuses = ['', 'Vacant', 'Leased', 'Airbnb', 'Maintenance', 'Office', 'Archived']
   const chipFor = (st: string): [string, string] => st === 'Leased' ? ['var(--green)', 'var(--green-text)'] : st === 'Vacant' ? ['var(--amber)', 'var(--amber-text)'] : st === 'Airbnb' ? ['var(--blue)', 'var(--bg)'] : ['var(--elev)', 'var(--dim)']
   const filteredProps = props.filter(matchProp).filter((p) => !propFilter || propFilter === 'Archived' || p.status === propFilter)
+  const propCardIds = useMemo(() => filteredProps.map((p) => p.id), [filteredProps])
+  const propCardLayout = useViewLayout('properties_cards', propCardIds, layoutUserKey)
 
   const roles = ['', 'Client', 'Tenant', 'Vendor', 'Admin', 'Cleaner', 'Contact', 'Realtor', 'Accountant']
   const roleCounts: Record<string, number> = {}
@@ -769,6 +890,8 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
 
   const peopleById = useMemo(() => { const m = new Map<string, CanaryPerson>(); db.people.forEach((p) => m.set(p.id, p)); return m }, [db.people])
   const filteredPf = scoped.portfolios.filter((pf) => !q || pf.name.toLowerCase().includes(q))
+  const portfolioCardIds = useMemo(() => filteredPf.map((pc) => pc.id), [filteredPf])
+  const portfolioCardLayout = useViewLayout('portfolios_cards', portfolioCardIds, layoutUserKey)
   const pfOwnersOf = (pf: CanaryPortfolio) => (pf.ownerIds || '').split(',').map((s) => s.trim()).filter(Boolean).map((i) => peopleById.get(i)?.name).filter(Boolean).join(', ')
 
   const filteredPay = db.payments.filter((p) => (!payCat || p.category === payCat) && (!payType || p.type === payType) && (!q || (p.property + ' ' + p.description).toLowerCase().includes(q)))
@@ -796,7 +919,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   }
 
   const leaseStatusColor = (l: CanaryLease) =>
-    l.status === 'Active' && isMonthToMonthLease(l.termType)
+    l.status === 'Active' && isOpenEndedMonthly(l)
       ? 'var(--orange)'
       : l.status === 'Active'
         ? 'var(--green)'
@@ -821,7 +944,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       open: (l: CanaryLease) => () => setDrawer({ kind: 'lease', id: l.id }),
       cols: [
         { key: 'property', label: 'Property', flex: '1.8', bold: true, get: (l: CanaryLease) => short(l.property) },
-        { key: 'status', label: 'Status', flex: '1', color: leaseStatusColor, get: (l: CanaryLease) => (l.status === 'Active' && isMonthToMonthLease(l.termType) ? 'Monthly' : l.status) || '—' },
+        { key: 'status', label: 'Status', flex: '1', color: leaseStatusColor, get: (l: CanaryLease) => (l.status === 'Active' && isOpenEndedMonthly(l) ? 'Monthly' : l.status) || '—' },
         { key: 'tenants', label: 'Tenants', flex: '2', dim: true, get: (l: CanaryLease) => tenantNames(l.tenantInfo) || '—' },
         { key: 'start', label: 'Start', flex: '0 0 96px', mono: true, get: (l: CanaryLease) => l.start || '—' },
         { key: 'end', label: 'End', flex: '0 0 96px', mono: true, get: (l: CanaryLease) => l.end || '—' },
@@ -924,6 +1047,13 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const pdef = pageDefs[page]
   const viewLabels: Record<string, string> = { timeline: 'Timeline', table: 'Table', cards: 'Cards', list: 'List', kanban: 'Kanban', gantt: 'Gantt' }
   const curView = pdef ? pageViews[page] || pdef.views[0] : ''
+  const cycleView = useCallback(() => {
+    if (!pdef) return
+    const views = pdef.views
+    const idx = views.indexOf(curView)
+    const next = views[(idx + 1) % views.length]
+    setPageViews((s) => ({ ...s, [page]: next }))
+  }, [pdef, curView, page])
   const genRows = pdef ? pdef.rows : []
   const tblCap = 200
   const showDefault = pdef ? curView === pdef.views[0] && pdef.views[0] !== 'table' : true
@@ -1187,171 +1317,527 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     'Which portfolio has the most properties?',
   ]
 
-  const homeKpis = kpis.filter((k) => k.label !== 'Occupancy' && k.label !== 'Monthly rent roll')
+  const askPageHits: SearchHit[] = useMemo(() => {
+    const pages: { key: string; label: string; meta: string; privOnly?: boolean; hideFor?: CanaryRole[] }[] = [
+      { key: 'dashboard', label: 'Dashboard', meta: 'Overview & KPIs' },
+      { key: 'leases', label: 'Leasing', meta: 'Timeline & renewals' },
+      { key: 'properties', label: 'Properties', meta: 'Units & status' },
+      { key: 'people', label: 'People', meta: 'Contacts & roles', privOnly: true },
+      { key: 'payments', label: 'Payments', meta: 'Charges & credits', hideFor: ['Vendor'] },
+      { key: 'projects', label: 'Projects', meta: 'Maintenance & work' },
+      { key: 'messages', label: 'Messages', meta: 'Inbox', privOnly: true },
+      { key: 'portfolios', label: 'Portfolios', meta: 'Owner groupings', privOnly: true },
+    ]
+    return pages
+      .filter((p) => !(p.privOnly && !priv))
+      .filter((p) => !(p.hideFor && p.hideFor.includes(role)))
+      .filter((p) => !q || p.label.toLowerCase().includes(q) || p.meta.toLowerCase().includes(q))
+      .map((p) => ({ key: 'page-' + p.key, label: p.label, meta: p.meta, target: { kind: 'view' as const, view: p.key } }))
+  }, [priv, role, q])
+
+  const askEntityHits: SearchHit[] = useMemo(() => {
+    if (!q) return []
+    const hits: SearchHit[] = []
+    for (const p of props) {
+      if (!p.address.toLowerCase().includes(q)) continue
+      hits.push({
+        key: 'prop-' + p.id,
+        label: short(p.address),
+        meta: ['Property', p.status].filter(Boolean).join(' · '),
+        target: { kind: 'drawer', drawer: { kind: 'property', id: p.id } },
+      })
+      if (hits.length >= 8) break
+    }
+    for (const l of scoped.leases) {
+      if (!(l.property.toLowerCase().includes(q) || (l.tenantInfo || '').toLowerCase().includes(q))) continue
+      hits.push({
+        key: 'lease-' + l.id,
+        label: short(l.property),
+        meta: ['Lease', l.status, tenantNames(l.tenantInfo)].filter(Boolean).join(' · '),
+        target: { kind: 'drawer', drawer: { kind: 'lease', id: l.id } },
+      })
+      if (hits.length >= 14) break
+    }
+    if (priv) {
+      for (const pe of scoped.people) {
+        if (!(pe.name + ' ' + pe.email + ' ' + pe.company).toLowerCase().includes(q)) continue
+        hits.push({
+          key: 'person-' + pe.id,
+          label: pe.name,
+          meta: ['Person', pe.role].filter(Boolean).join(' · '),
+          target: { kind: 'drawer', drawer: { kind: 'person', id: pe.id } },
+        })
+        if (hits.length >= 18) break
+      }
+      for (const pf of scoped.portfolios) {
+        if (!pf.name.toLowerCase().includes(q)) continue
+        hits.push({
+          key: 'pf-' + pf.id,
+          label: pf.name,
+          meta: 'Portfolio',
+          target: { kind: 'drawer', drawer: { kind: 'portfolio', id: pf.id } },
+        })
+        if (hits.length >= 20) break
+      }
+    }
+    for (const j of scoped.projects) {
+      if (!(j.name + ' ' + j.property).toLowerCase().includes(q)) continue
+      hits.push({
+        key: 'proj-' + j.id,
+        label: j.name,
+        meta: ['Project', j.status, short(j.property)].filter(Boolean).join(' · '),
+        target: { kind: 'drawer', drawer: { kind: 'project', id: j.id } },
+      })
+      if (hits.length >= 24) break
+    }
+    return hits.slice(0, 10)
+  }, [q, props, scoped.leases, scoped.people, scoped.portfolios, scoped.projects, priv])
+
+  const goAskTarget = useCallback((target: AskNavTarget) => {
+    if (target.kind === 'view') {
+      setView(target.view)
+      setDrawer(null)
+    } else if (target.drawer) {
+      const kindToView: Record<string, string> = {
+        lease: 'leases',
+        property: 'properties',
+        person: 'people',
+        portfolio: 'portfolios',
+        project: 'projects',
+      }
+      setView(kindToView[target.drawer.kind] || view)
+      setDrawer(target.drawer)
+    }
+    setSearchExpanded(false)
+    setSearch('')
+    setMobileNavOpen(false)
+  }, [view])
+
+  const askLinkIndex = useMemo(() => {
+    const items: { label: string; target: AskNavTarget }[] = []
+    const pushUnique = (label: string, target: AskNavTarget) => {
+      const key = label.toLowerCase()
+      if (!key || items.some((i) => i.label.toLowerCase() === key)) return
+      items.push({ label, target })
+    }
+    for (const p of props) {
+      const s = short(p.address)
+      if (s) pushUnique(s, { kind: 'drawer', drawer: { kind: 'property', id: p.id } })
+      if (p.address) pushUnique(p.address, { kind: 'drawer', drawer: { kind: 'property', id: p.id } })
+    }
+    for (const l of scoped.leases) {
+      const s = short(l.property)
+      if (s) pushUnique(s, { kind: 'drawer', drawer: { kind: 'lease', id: l.id } })
+    }
+    for (const pf of scoped.portfolios) {
+      if (pf.name) pushUnique(pf.name, { kind: 'drawer', drawer: { kind: 'portfolio', id: pf.id } })
+    }
+    for (const j of scoped.projects) {
+      if (j.name) pushUnique(j.name, { kind: 'drawer', drawer: { kind: 'project', id: j.id } })
+    }
+    if (priv) {
+      for (const pe of scoped.people) {
+        if (pe.name) pushUnique(pe.name, { kind: 'drawer', drawer: { kind: 'person', id: pe.id } })
+      }
+    }
+    for (const page of askPageHits) {
+      pushUnique(page.label, page.target)
+    }
+    return items.sort((a, b) => b.label.length - a.label.length)
+  }, [props, scoped.leases, scoped.portfolios, scoped.projects, scoped.people, priv, askPageHits])
+
+  const renderAskText = useCallback((text: string) => {
+    if (!text) return null
+    type Seg = { t: string; target?: AskNavTarget }
+    const segs: Seg[] = [{ t: text }]
+    for (const link of askLinkIndex) {
+      if (link.label.length < 3) continue
+      const next: Seg[] = []
+      const re = new RegExp(escapeRegExp(link.label), 'i')
+      for (const seg of segs) {
+        if (seg.target) { next.push(seg); continue }
+        let rest = seg.t
+        let m = re.exec(rest)
+        while (m) {
+          if (m.index > 0) next.push({ t: rest.slice(0, m.index) })
+          next.push({ t: rest.slice(m.index, m.index + m[0].length), target: link.target })
+          rest = rest.slice(m.index + m[0].length)
+          m = re.exec(rest)
+        }
+        if (rest) next.push({ t: rest })
+      }
+      segs.length = 0
+      segs.push(...next)
+    }
+    return segs.map((seg, i) =>
+      seg.target ? (
+        <button
+          key={i}
+          type="button"
+          className="cy-ask-link"
+          onClick={() => goAskTarget(seg.target!)}
+        >
+          {seg.t}
+        </button>
+      ) : (
+        <span key={i}>{seg.t}</span>
+      )
+    )
+  }, [askLinkIndex, goAskTarget])
+
+  const submitAskFromSearch = useCallback(() => {
+    const t = search.trim()
+    if (!t || chatBusy) return
+    void sendChat(t)
+  }, [search, chatBusy, sendChat])
+
+  const onSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      submitAskFromSearch()
+    }
+  }, [submitAskFromSearch])
+
+  const searchPanelOpen = searchExpanded
+  const showAskAnswer = chat.length > 0 || chatBusy || looksLikeQuestion(search)
+  const showQuickHits = !!q || !chat.length
+
+  const defaultProvince = db.properties.find((p) => p.area)?.area || 'NL'
+
+  const handleFabAction = useCallback((action: FabAction) => {
+    if (action === 'property') {
+      setPropertyModalOpen(true)
+      return
+    }
+    if (action === 'lease') {
+      startDraftFor(null)
+      return
+    }
+    if (action === 'listing') {
+      startDraftFor(null, { status: 'published' })
+      return
+    }
+    if (action === 'expense') {
+      setPayForm(emptyPayForm())
+      setPayError('')
+      setPayFormOpen(true)
+      return
+    }
+    if (action === 'import') {
+      setImportModalOpen(true)
+    }
+  }, [startDraftFor, emptyPayForm])
 
   // ============================================================ render
   return (
-    <div className="cnry" data-theme={theme} style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: "'Instrument Sans', system-ui, sans-serif", fontSize: '14.5px', lineHeight: 1.45, display: 'flex' }}>
+    <div className="cnry cy-shell" data-theme={theme}>
 
-      {/* ============ SIDEBAR ============ */}
-      <aside style={{ flex: 'none', width: sidebarCollapsed ? 64 : 210, background: 'var(--panel)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', zIndex: 45, transition: 'width .18s ease' }}>
-        <button className="cy-hov" onClick={() => { setView('home'); setDrawer(null) }} title="Home" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', height: 57, border: 'none', borderBottom: '1px solid var(--border)', background: 'none', cursor: 'pointer', overflow: 'hidden', width: '100%', textAlign: 'left' }}>
-          <span style={{ width: 34, height: 34, flex: 'none', position: 'relative' }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/landing/logo-white.png" alt="Canary — home" style={{ position: 'absolute', inset: 0, width: 34, height: 34, objectFit: 'contain', display: theme === 'dark' ? 'block' : 'none' }} />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/landing/logo-black.png" alt="" style={{ position: 'absolute', inset: 0, width: 34, height: 34, objectFit: 'contain', display: theme === 'dark' ? 'none' : 'block' }} />
-          </span>
-          {!sidebarCollapsed && (
-            <div style={{ fontWeight: 700, fontSize: 17, letterSpacing: '-.01em', whiteSpace: 'nowrap', color: 'var(--text)' }}>Canary <span style={{ color: 'var(--dim)', fontWeight: 500 }}>PM</span></div>
-          )}
-        </button>
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '10px 10px', flex: 1, overflowY: 'auto' }}>
-          {navItems.map((n) => (
-            <button key={n.key} className="cy-hov" title={n.label} onClick={() => { setView(n.key); setDrawer(null) }} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', border: 'none', cursor: 'pointer', padding: '10px 11px', borderRadius: 10, fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', background: view === n.key ? 'var(--elev)' : 'transparent', color: view === n.key ? 'var(--accent)' : 'var(--dim)' }}>
-              <span style={{ display: 'flex', flex: 'none', alignItems: 'center', justifyContent: 'center', width: 20 }}><Icon paths={ICONS[n.key]} /></span>
-              {!sidebarCollapsed && <span>{n.label}</span>}
-            </button>
-          ))}
-        </nav>
-        <button className="cy-hov" onClick={() => { const v = !sidebarCollapsed; setSidebarCollapsed(v); try { localStorage.setItem('canary_sidebar', v ? '1' : '0') } catch { /* ignore */ } }} title="Collapse menu" style={{ display: 'flex', alignItems: 'center', gap: 12, border: 'none', borderTop: '1px solid var(--border)', background: 'none', cursor: 'pointer', padding: '12px 15px', color: 'var(--dim)', fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden' }}>
-          <span style={{ display: 'flex', flex: 'none', width: 20, justifyContent: 'center', fontSize: 16 }}>{sidebarCollapsed ? '»' : '«'}</span>
-          {!sidebarCollapsed && <span>Collapse</span>}
-        </button>
-      </aside>
-
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      <div className="cy-main-wrap">
         {/* ============ TOP BAR ============ */}
-        <header style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '12px 18px', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 40 }}>
-          <button className="cy-hov" onClick={() => setSidebarCollapsed((v) => !v)} title="Toggle menu" style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 11px', cursor: 'pointer', fontSize: 15, lineHeight: 1, color: 'var(--dim)', flex: 'none' }}>☰</button>
-          <div style={{ position: 'relative', flex: '1 1 160px', minWidth: 140 }}>
-            <input
-              ref={searchInputRef}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search property, tenant, person…"
-              style={{ width: '100%', boxSizing: 'border-box', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 10, padding: '9px 13px', paddingRight: search ? 34 : 13, outline: 'none' }}
-            />
-            {search && (
+        <header className="cy-header">
+          <button className="cy-header-brand cy-hov" onClick={() => { setView('dashboard'); setDrawer(null) }} title="Dashboard">
+            <span className="cy-header-brand-logo">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/landing/logo-white.png" alt="" style={{ position: 'absolute', inset: 0, width: 28, height: 28, objectFit: 'contain', display: theme === 'dark' ? 'block' : 'none' }} />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/landing/logo-black.png" alt="" style={{ position: 'absolute', inset: 0, width: 28, height: 28, objectFit: 'contain', display: theme === 'dark' ? 'none' : 'block' }} />
+            </span>
+            <span className="cy-header-brand-title">Canary <span className="cy-header-brand-sub">PM</span></span>
+          </button>
+          <button
+            type="button"
+            className="cy-topnav-menu-btn cy-btn"
+            onClick={() => setMobileNavOpen((v) => !v)}
+            aria-expanded={mobileNavOpen}
+            aria-controls="cy-topnav"
+            title="Menu"
+          >
+            ☰
+          </button>
+          <nav id="cy-topnav" className={`cy-topnav${mobileNavOpen ? ' cy-topnav--open' : ''}`} aria-label="Main">
+            {navItems.map((n) => (
+              <button
+                key={n.key}
+                type="button"
+                className={`cy-topnav-item${view === n.key ? ' cy-topnav-item--active' : ''}`}
+                title={n.label}
+                onClick={() => { setView(n.key); setDrawer(null); setMobileNavOpen(false) }}
+              >
+                {n.label}
+              </button>
+            ))}
+          </nav>
+          <div className="cy-header-tools">
+          <div className={`cy-search${searchPanelOpen ? ' cy-search--open' : ''}${showAskAnswer && searchPanelOpen ? ' cy-search--ask' : ''}`} ref={searchWrapRef}>
+            {searchExpanded ? (
+              <div className="cy-search-expanded">
+                <Search size={14} strokeWidth={2} className="cy-search-field-icon" aria-hidden />
+                <input
+                  ref={searchInputRef}
+                  className="cy-input cy-search-input--expanded"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={onSearchKeyDown}
+                  placeholder="Search or ask…"
+                  aria-label="Search or ask Canary"
+                  aria-expanded={searchPanelOpen}
+                  aria-controls="cy-search-panel"
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  className="cy-search-close"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={closeSearch}
+                  aria-label="Close search"
+                  title="Close search (Esc)"
+                >
+                  <X size={14} strokeWidth={2} />
+                </button>
+              </div>
+            ) : (
               <button
                 type="button"
-                className="cy-search-clear"
-                onClick={() => { setSearch(''); searchInputRef.current?.focus() }}
-                aria-label="Clear search"
-                title="Clear search"
-                style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, border: 'none', borderRadius: 6, background: 'transparent', cursor: 'pointer', color: 'var(--faint)', padding: 0 }}
+                className="cy-search-toggle"
+                onClick={openSearch}
+                aria-label="Search or ask"
+                title="Search or ask (press /)"
               >
-                <X size={14} strokeWidth={2} />
+                <Search size={16} strokeWidth={2} />
               </button>
             )}
+            {searchPanelOpen && (
+              <div id="cy-search-panel" className="cy-search-panel" role="dialog" aria-label="Search and Ask Canary">
+                {showQuickHits && (
+                  <div className="cy-search-panel-section">
+                    <div className="cy-search-panel-label">Jump to</div>
+                    {!q && (
+                      <div className="cy-search-hit-list">
+                        {askPageHits.map((hit) => (
+                          <button key={hit.key} type="button" className="cy-search-hit" onClick={() => goAskTarget(hit.target)}>
+                            <span className="cy-search-hit-label">{hit.label}</span>
+                            <span className="cy-search-hit-meta">{hit.meta}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {!!q && (
+                      <div className="cy-search-hit-list">
+                        {askPageHits.map((hit) => (
+                          <button key={hit.key} type="button" className="cy-search-hit" onClick={() => goAskTarget(hit.target)}>
+                            <span className="cy-search-hit-label">{hit.label}</span>
+                            <span className="cy-search-hit-meta">{hit.meta}</span>
+                          </button>
+                        ))}
+                        {askEntityHits.map((hit) => (
+                          <button key={hit.key} type="button" className="cy-search-hit" onClick={() => goAskTarget(hit.target)}>
+                            <span className="cy-search-hit-label">{hit.label}</span>
+                            <span className="cy-search-hit-meta">{hit.meta}</span>
+                          </button>
+                        ))}
+                        {!askPageHits.length && !askEntityHits.length && (
+                          <div className="cy-search-empty">No matching pages or records. Press Enter to ask Canary.</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="cy-search-panel-section cy-search-panel-ask">
+                  <div className="cy-search-panel-ask-head">
+                    <span className={`cy-search-ask-dot${chatBusy ? ' cy-search-ask-dot--busy' : ''}`} />
+                    <span className="cy-search-panel-label" style={{ margin: 0 }}>Ask Canary</span>
+                    <span className="cy-search-ask-status">{chatBusy ? 'thinking…' : 'live data'}</span>
+                    {!!chat.length && (
+                      <button type="button" className="cy-btn cy-search-ask-clear" onClick={() => setChat([])}>Clear</button>
+                    )}
+                  </div>
+
+                  {!chat.length && !chatBusy && (
+                    <div className="cy-search-ask-idle">
+                      <div className="cy-search-ask-hint">
+                        {looksLikeQuestion(search)
+                          ? 'Press Enter to ask this question.'
+                          : 'Type a keyword to filter, or ask a question and press Enter.'}
+                      </div>
+                      <div className="cy-search-sug-list">
+                        {chatSuggestions.map((s) => (
+                          <button key={s} type="button" className="cy-sug cy-btn" onClick={() => void sendChat(s)}>{s}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(chat.length > 0 || chatBusy) && (
+                    <div className="cy-search-ask-thread" ref={chatScrollRef}>
+                      {chat.map((cm, i) => (
+                        <div key={i} className={`cy-ask-bubble-row${cm.role === 'user' ? ' cy-ask-bubble-row--user' : ''}`}>
+                          <div className={`cy-ask-bubble${cm.role === 'user' ? ' cy-ask-bubble--user' : ' cy-ask-bubble--assistant'}`}>
+                            {cm.role === 'assistant' ? renderAskText(cm.text) : cm.text}
+                          </div>
+                        </div>
+                      ))}
+                      {chatBusy && (
+                        <div className="cy-ask-bubble-row">
+                          <div className="cy-ask-bubble cy-ask-bubble--assistant cy-ask-bubble--pending">Looking at your data…</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!!search.trim() && (
+                    <button
+                      type="button"
+                      className="cy-btn-primary cy-accent-btn cy-search-ask-submit"
+                      onClick={submitAskFromSearch}
+                      disabled={chatBusy}
+                    >
+                      {chatBusy ? '…' : 'Ask Canary'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-            {canSwitchRoles ? (
-              <select value={role} onChange={(e) => onRoleChange(e.target.value as CanaryRole)} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 9, padding: '8px 10px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
-                <option value="Admin">Admin</option>
-                <option value="Manager">Manager</option>
-                <option value="Owner">Owner portal</option>
-                <option value="Tenant">Tenant portal</option>
-                <option value="Vendor">Vendor view</option>
-              </select>
-            ) : (
-              <span style={{ color: 'var(--dim)', fontWeight: 600, fontSize: 13, border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', whiteSpace: 'nowrap' }}>{userName}</span>
-            )}
-            <a href="https://canary-propos.vercel.app" target="_blank" rel="noopener" style={{ textDecoration: 'none', color: 'var(--dim)', border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap' }}>Public site ↗</a>
-            <button onClick={() => { const t = theme === 'dark' ? 'light' : 'dark'; setTheme(t); try { localStorage.setItem('canary_theme', t) } catch { /* ignore */ } }} title="Toggle light / dark" style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 11px', cursor: 'pointer', fontSize: 14 }}>{theme === 'dark' ? '☀' : '☾'}</button>
-            <button onClick={signOut} title="Sign out" style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 13, color: 'var(--dim)', whiteSpace: 'nowrap' }}>Sign out</button>
-            {priv && (
-              <button className="cy-accent-btn" onClick={() => startDraftFor(null)} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '9px 15px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Lease</button>
-            )}
+          <div className="cy-header-actions">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="cy-profile-trigger"
+                aria-label="Account menu"
+              >
+                <span className="cy-profile-avatar" aria-hidden>
+                  {userInitials(userName || role)}
+                </span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                sideOffset={8}
+                data-theme={theme}
+                className="cnry cy-profile-menu min-w-56"
+              >
+                {canSwitchRoles && (
+                  <>
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>Portal view</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={role}
+                        onValueChange={(v) => onRoleChange(v as CanaryRole)}
+                      >
+                        {ROLE_OPTIONS.map((opt) => (
+                          <DropdownMenuRadioItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                <DropdownMenuGroup>
+                  <DropdownMenuItem
+                    onClick={() => window.open('https://canary-propos.vercel.app', '_blank', 'noopener,noreferrer')}
+                  >
+                    Public site
+                    <span className="cy-profile-menu-hint" aria-hidden>↗</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      const t = theme === 'dark' ? 'light' : 'dark'
+                      setTheme(t)
+                      try { localStorage.setItem('canary_theme', t) } catch { /* ignore */ }
+                    }}
+                  >
+                    {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+                    <span className="cy-profile-menu-hint" aria-hidden>
+                      {theme === 'dark' ? '☀' : '☾'}
+                    </span>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem variant="destructive" onClick={signOut}>
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           </div>
         </header>
 
         {/* ============ ROLE BANNER ============ */}
         {!priv && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '10px 18px', background: 'var(--panel)', borderBottom: '1px solid var(--border)' }}>
-            <span style={{ fontFamily: MONO, fontSize: '11.5px', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--accent)' }}>{roleBanner.label}</span>
+          <div className="cy-role-banner">
+            <span className="cy-eyebrow">{roleBanner.label}</span>
             {canSwitchRoles ? (
-              <select value={personaId} onChange={(e) => setPersonaId(e.target.value)} style={{ background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px', maxWidth: 320 }}>
+              <select className="cy-select" value={personaId} onChange={(e) => setPersonaId(e.target.value)} style={{ maxWidth: 320 }}>
                 {personaOptions.map((po) => (<option key={po.id} value={po.id}>{po.label}</option>))}
               </select>
             ) : (
               <span style={{ fontWeight: 600 }}>{userName}</span>
             )}
-            <span style={{ color: 'var(--dim)', fontSize: 13 }}>{roleBanner.note}</span>
+            <span style={{ color: 'var(--dim)', fontSize: 12.5 }}>{roleBanner.note}</span>
           </div>
         )}
 
-        <main style={{ padding: '14px 10px', width: '100%', margin: 0 }}>
+        <main className="cy-main">
 
-          {/* ============ VIEW SWITCHER + QUICK SORT ============ */}
+          {/* ============ VIEW SWITCHER ============ */}
           {pdef && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-              <div style={{ display: 'flex', gap: 2, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: 3 }}>
-                {pdef.views.map((v) => (
-                  <button key={v} onClick={() => setPageViews((s) => ({ ...s, [page]: v }))} style={{ border: 'none', cursor: 'pointer', padding: '6px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', background: curView === v ? 'var(--elev)' : 'transparent', color: curView === v ? 'var(--accent)' : 'var(--dim)' }}>{viewLabels[v]}</button>
-                ))}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-                <span style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.09em', textTransform: 'uppercase', color: 'var(--faint)' }}>Sort</span>
-                <select value={curSort?.key ?? ''} onChange={(e) => setSort(e.target.value, curSort?.dir ?? 'asc')} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 8px', fontSize: 13, cursor: 'pointer' }}>
-                  <option value="">Default order</option>
-                  {pdef.cols.map((c) => (<option key={c.key} value={c.key}>{c.label}</option>))}
-                </select>
-                <button onClick={() => { if (curSort) setSort(curSort.key, curSort.dir === 'asc' ? 'desc' : 'asc') }} title="Toggle sort direction" style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', fontSize: 13, color: 'var(--dim)' }}>{curSort?.dir === 'desc' ? '↓ desc' : '↑ asc'}</button>
-              </div>
-            </div>
-          )}
-
-          {/* ============ HOME · CHAT WITH DATA ============ */}
-          {view === 'home' && (
-            <section style={{ maxWidth: 920, margin: '0 auto' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 16 }}>
-                {homeKpis.map((hk) => (
-                  <div key={hk.label} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '12px 16px' }}>
-                    <div style={{ ...monoLabel, marginBottom: 4 }}>{hk.label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-.02em', color: hk.color }}>{hk.value}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 16, display: 'flex', flexDirection: 'column', minHeight: '56vh' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
-                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: chatBusy ? 'var(--amber)' : 'var(--green)' }} />
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>Ask Canary</div>
-                  <span style={{ color: 'var(--faint)', fontSize: '12.5px' }}>{chatBusy ? 'thinking…' : 'connected to your live data'}</span>
-                  {!!chat.length && (
-                    <button onClick={() => setChat([])} style={{ marginLeft: 'auto', border: '1px solid var(--border)', background: 'none', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', color: 'var(--dim)', fontSize: '12.5px' }}>Clear</button>
-                  )}
-                </div>
-
-                <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {!chat.length && !chatBusy && (
-                    <div style={{ margin: 'auto', textAlign: 'center', maxWidth: 520, padding: '20px 0' }}>
-                      <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>What would you like to know?</div>
-                      <div style={{ color: 'var(--dim)', fontSize: 14, marginBottom: 18 }}>Ask anything about your properties, leases, people, or projects — answers come straight from your live data.</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'stretch' }}>
-                        {chatSuggestions.map((s) => (
-                          <button key={s} className="cy-sug" onClick={() => sendChat(s)} style={{ border: '1px solid var(--border)', background: 'var(--elev)', color: 'var(--text)', borderRadius: 10, padding: '10px 14px', fontSize: '13.5px', fontWeight: 600, cursor: 'pointer', textAlign: 'left' }}>{s}</button>
+            <div className="cy-toolbar">
+              <button
+                type="button"
+                className="cy-view-toggle"
+                onClick={cycleView}
+                title="Switch view"
+                aria-label={`Switch view (currently ${viewLabels[curView]})`}
+              >
+                {viewLabels[curView]}
+                <Repeat2 size={14} aria-hidden="true" />
+              </button>
+              {view === 'leases' && showDefault && (
+                <>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className="cy-btn" style={{ minWidth: 140, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span className="cy-mono-label" style={{ color: 'var(--dim)' }}>Status</span>
+                      <span style={{ flex: 1, textAlign: 'left' }}>{tlStatusLabel}</span>
+                      <ChevronDown size={14} style={{ color: 'var(--dim)', flex: 'none' }} />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="min-w-52">
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel>Lease status</DropdownMenuLabel>
+                        {TL_STATUS_OPTIONS.map((f) => (
+                          <DropdownMenuCheckboxItem
+                            key={f.key}
+                            checked={tlStatusFilter.includes(f.key)}
+                            onCheckedChange={() => toggleTlStatus(f.key)}
+                          >
+                            <span style={{ width: 8, height: 8, borderRadius: 3, background: f.dot, flex: 'none' }} />
+                            {f.label}
+                          </DropdownMenuCheckboxItem>
                         ))}
-                      </div>
-                    </div>
-                  )}
-                  {chat.map((cm, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: cm.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                      <div style={{ maxWidth: '78%', padding: '10px 14px', borderRadius: cm.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px', background: cm.role === 'user' ? 'var(--accent)' : 'var(--elev)', color: cm.role === 'user' ? 'var(--accent-text)' : 'var(--text)', border: cm.role === 'user' ? 'none' : '1px solid var(--border)', fontSize: 14, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{cm.text}</div>
-                    </div>
-                  ))}
-                  {chatBusy && (
-                    <div style={{ display: 'flex' }}><div style={{ padding: '10px 14px', borderRadius: '12px 12px 12px 4px', background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--dim)', fontSize: '13.5px' }}>Looking at your data…</div></div>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', gap: 10, padding: '14px 16px', borderTop: '1px solid var(--border)' }}>
-                  <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendChat(chatInput) }} placeholder="e.g. Which leases end this fall without a renewal?" style={{ flex: 1, background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 10, padding: '11px 14px', outline: 'none' }} />
-                  <button className="cy-accent-btn" onClick={() => sendChat(chatInput)} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 10, padding: '11px 18px', fontWeight: 700, cursor: 'pointer' }}>{chatBusy ? '…' : 'Ask'}</button>
-                </div>
-              </div>
-            </section>
+                      </DropdownMenuGroup>
+                      {tlFilterActive && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => setTlStatusFilter([])}>
+                            Clear · show all
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <button className="cy-btn" onClick={() => setTlAnchor(todayMid.getTime() - Math.round(spanDays / 4) * DAY)}>Today</button>
+                  <div className="cy-zoom-toggle">
+                    <button onClick={() => { setTlZoomIdx(Math.max(0, zoomIdx - 1)); setTlAnchor(winStart.getTime()) }}>−</button>
+                    <span>{TL_ZOOM_PRESETS[zoomIdx].label}</span>
+                    <button onClick={() => { setTlZoomIdx(Math.min(TL_ZOOM_PRESETS.length - 1, zoomIdx + 1)); setTlAnchor(winStart.getTime()) }}>+</button>
+                  </div>
+                  <button className="cy-btn" onClick={() => setTlAnchor(winStart.getTime() - spanDays * DAY)}>←</button>
+                  <button className="cy-btn" onClick={() => setTlAnchor(winStart.getTime() + spanDays * DAY)}>→</button>
+                </>
+              )}
+            </div>
           )}
 
           {/* ============ DASHBOARD ============ */}
@@ -1367,189 +1853,199 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                   <button className="cy-hov" onClick={() => setView('projects')} style={{ flex: 'none', border: '1px solid var(--border)', background: 'var(--elev)', color: 'var(--text)', borderRadius: 9, padding: '8px 13px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>View projects →</button>
                 </div>
               )}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 18 }}>
-                {kpis.map((k) => (
-                  <div key={k.label} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px' }}>
-                    <div style={{ ...monoLabel, marginBottom: 6 }}>{k.label}</div>
-                    <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-.02em', color: k.color }}>{k.value}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 14 }}>
-                <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15 }}>Expiring soon · no renewal</div>
-                    <button onClick={() => setView('leases')} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Timeline →</button>
-                  </div>
-                  {dashExpiring.map((l) => (
-                    <div key={l.id} className="cy-hov" onClick={() => setDrawer({ kind: 'lease', id: l.id })} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--red)', flex: 'none' }} />
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.short}</div>
-                        <div style={{ color: 'var(--dim)', fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.tenants}</div>
-                      </div>
-                      <div style={{ textAlign: 'right', flex: 'none' }}>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{l.endLabel}</div>
-                        <div style={{ color: 'var(--red)', fontSize: 12, fontWeight: 600 }}>{l.daysLeft}</div>
-                      </div>
-                    </div>
-                  ))}
-                  {!dashExpiring.length && <div style={{ color: 'var(--dim)', padding: 8 }}>Nothing expiring without a renewal. 🎉</div>}
-                </div>
-                <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15 }}>Vacant properties</div>
-                    <button onClick={() => setView('properties')} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>All properties →</button>
-                  </div>
-                  {dashVacant.map((p) => (
-                    <div key={p.id} className="cy-hov" onClick={() => setDrawer({ kind: 'property', id: p.id })} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--amber)', flex: 'none' }} />
-                      <div style={{ minWidth: 0, flex: 1, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.short}</div>
-                      <div style={{ color: 'var(--dim)', fontSize: '12.5px', flex: 'none' }}>{p.meta}</div>
-                    </div>
-                  ))}
-                  {!dashVacant.length && <div style={{ color: 'var(--dim)', padding: 8 }}>No vacancies right now.</div>}
-                </div>
-                <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15 }}>Open projects</div>
-                    <button onClick={() => setView('projects')} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>All projects →</button>
-                  </div>
-                  {dashProjects.map((pr) => (
-                    <div key={pr.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--blue)', flex: 'none' }} />
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pr.name}</div>
-                        <div style={{ color: 'var(--dim)', fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(pr.property)}</div>
-                      </div>
-                      <span style={{ flex: 'none', fontSize: '11.5px', fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--dim)', whiteSpace: 'nowrap' }}>{pr.status}</span>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15 }}>Draft listings</div>
-                    {priv && <button onClick={() => startDraftFor(null)} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>+ New draft</button>}
-                  </div>
-                  {dashDrafts.map((d) => {
-                    const badge = draftStatusBadge(d.status)
-                    return (
-                    <div key={d.id} className="cy-hov" onClick={() => openDraft(d)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 3, border: d.status === 'renewal_sent' ? 'none' : '2px solid var(--accent)', background: d.status === 'renewal_sent' ? 'var(--purple)' : 'transparent', flex: 'none' }} />
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(d.address)}</div>
-                        <div style={{ color: 'var(--dim)', fontSize: '12.5px' }}>{(d.rent ? '$' + d.rent + '/mo · ' : '') + (d.start || 'no date')}</div>
-                      </div>
-                      <span style={{ flex: 'none', fontSize: '11.5px', fontWeight: 700, padding: '3px 8px', borderRadius: 6, color: badge.color, border: '1px solid var(--border)', background: 'var(--elev)' }}>{badge.label}</span>
-                    </div>
-                    )
-                  })}
-                  {!dashDrafts.length && (
-                    <div style={{ color: 'var(--dim)', padding: 8, fontSize: '13.5px' }}>No draft leases yet. Start one from a property or the <b>+ Lease</b> button — published drafts appear on the public site.</div>
-                  )}
-                </div>
-                <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15 }}>Renewals &amp; offers sent</div>
-                    <button onClick={openRenewalsTimeline} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>Timeline →</button>
-                  </div>
-                  {dashRenewals.map((d) => (
-                    <div key={d.id} className="cy-hov" onClick={() => openDraft(d)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--purple)', flex: 'none' }} />
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(d.address)}</div>
-                        <div style={{ color: 'var(--dim)', fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tenantForAddress(d.address)}</div>
-                      </div>
-                      <div style={{ textAlign: 'right', flex: 'none' }}>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{d.rent ? '$' + d.rent + '/mo' : '—'}</div>
-                        <div style={{ color: 'var(--dim)', fontSize: 12 }}>{d.sentAt ? fmtD(parseDate(d.sentAt)) : '—'}</div>
-                      </div>
-                    </div>
-                  ))}
-                  {!dashRenewals.length && <div style={{ color: 'var(--dim)', padding: 8 }}>No renewals or offers awaiting tenant response.</div>}
-                </div>
-                {priv && (
-                  <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 16, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-                      <div style={{ fontWeight: 700, fontSize: 15 }}>Applications sent</div>
-                      <button onClick={() => router.push('/inquiries')} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>All inquiries →</button>
-                    </div>
-                    {dashApplications.map((i) => {
-                      const badge = inquiryStatusBadge(i.status)
-                      return (
-                        <div key={i.id} className="cy-hov" onClick={() => router.push('/inquiries')} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
-                          <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--amber)', flex: 'none' }} />
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{i.name}</div>
-                            <div style={{ color: 'var(--dim)', fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(i.property)}</div>
-                          </div>
-                          <div style={{ textAlign: 'right', flex: 'none' }}>
-                            <div style={{ color: 'var(--dim)', fontSize: 12 }}>{fmtD(parseDate(i.submittedAt))}</div>
-                            <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 8px', borderRadius: 6, color: badge.color, border: '1px solid var(--border)', background: 'var(--elev)' }}>{badge.label}</span>
-                          </div>
+              <LayoutGrid
+                preset={KPI_LAYOUT_PRESET}
+                orderedIds={kpiLayout.orderedIds}
+                sizes={kpiLayout.sizes}
+                onReorder={kpiLayout.reorder}
+                onSizeChange={kpiLayout.setSize}
+                columns={12}
+                gapPx={10}
+                style={{ marginBottom: 14 }}
+                items={kpis.map((k) => ({
+                  id: k.label,
+                  className: `cy-kpi${k.view ? ' cy-hov' : ''}`,
+                  role: k.view ? 'button' : undefined,
+                  tabIndex: k.view ? 0 : undefined,
+                  onActivate: k.view ? () => { setView(k.view!); setDrawer(null) } : undefined,
+                  children: (
+                    <>
+                      <div className="cy-mono-label" style={{ marginBottom: 4 }}>{k.label}</div>
+                      <div className="cy-kpi-value" style={{ color: k.color }}>{k.value}</div>
+                    </>
+                  ),
+                }))}
+              />
+              <LayoutGrid
+                preset={SECTION_LAYOUT_PRESET}
+                orderedIds={dashSectionLayout.orderedIds}
+                sizes={dashSectionLayout.sizes}
+                onReorder={dashSectionLayout.reorder}
+                onSizeChange={dashSectionLayout.setSize}
+                columns={12}
+                gapPx={10}
+                items={[
+                  {
+                    id: 'expiring',
+                    className: 'cy-section-card',
+                    children: (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <div className="cy-section-title">Expiring soon · no renewal</div>
+                          <button className="cy-btn-ghost" data-no-layout-dnd onClick={() => setView('leases')}>Timeline →</button>
                         </div>
-                      )
-                    })}
-                    {!dashApplications.length && <div style={{ color: 'var(--dim)', padding: 8 }}>No applications awaiting review.</div>}
-                  </div>
-                )}
-              </div>
+                        {dashExpiring.map((l) => (
+                          <div key={l.id} className="cy-hov" onClick={() => setDrawer({ kind: 'lease', id: l.id })} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
+                            <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--red)', flex: 'none' }} />
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.short}</div>
+                              <div style={{ color: 'var(--dim)', fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.tenants}</div>
+                            </div>
+                            <div style={{ textAlign: 'right', flex: 'none' }}>
+                              <div style={{ fontWeight: 600, fontSize: 13 }}>{l.endLabel}</div>
+                              <div style={{ color: 'var(--red)', fontSize: 12, fontWeight: 600 }}>{l.daysLeft}</div>
+                            </div>
+                          </div>
+                        ))}
+                        {!dashExpiring.length && <div style={{ color: 'var(--dim)', padding: 8 }}>Nothing expiring without a renewal. 🎉</div>}
+                      </>
+                    ),
+                  },
+                  {
+                    id: 'vacant',
+                    className: 'cy-section-card',
+                    children: (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+                          <div style={{ fontWeight: 700, fontSize: 15 }}>Vacant properties</div>
+                          <button className="cy-btn-ghost" data-no-layout-dnd onClick={() => setView('properties')}>All properties →</button>
+                        </div>
+                        {dashVacant.map((p) => (
+                          <div key={p.id} className="cy-hov" onClick={() => setDrawer({ kind: 'property', id: p.id })} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
+                            <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--amber)', flex: 'none' }} />
+                            <div style={{ minWidth: 0, flex: 1, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.short}</div>
+                            <div style={{ color: 'var(--dim)', fontSize: '12.5px', flex: 'none' }}>{p.meta}</div>
+                          </div>
+                        ))}
+                        {!dashVacant.length && <div style={{ color: 'var(--dim)', padding: 8 }}>No vacancies right now.</div>}
+                      </>
+                    ),
+                  },
+                  {
+                    id: 'projects',
+                    className: 'cy-section-card',
+                    children: (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+                          <div style={{ fontWeight: 700, fontSize: 15 }}>Open projects</div>
+                          <button className="cy-btn-ghost" data-no-layout-dnd onClick={() => setView('projects')}>All projects →</button>
+                        </div>
+                        {dashProjects.map((pr) => (
+                          <div key={pr.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--blue)', flex: 'none' }} />
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pr.name}</div>
+                              <div style={{ color: 'var(--dim)', fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(pr.property)}</div>
+                            </div>
+                            <span style={{ flex: 'none', fontSize: '11.5px', fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--dim)', whiteSpace: 'nowrap' }}>{pr.status}</span>
+                          </div>
+                        ))}
+                      </>
+                    ),
+                  },
+                  {
+                    id: 'drafts',
+                    className: 'cy-section-card',
+                    children: (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+                          <div style={{ fontWeight: 700, fontSize: 15 }}>Draft listings</div>
+                        </div>
+                        {dashDrafts.map((d) => {
+                          const badge = draftStatusBadge(d.status)
+                          return (
+                            <div key={d.id} className="cy-hov" onClick={() => openDraft(d)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
+                              <span style={{ width: 8, height: 8, borderRadius: 3, border: d.status === 'renewal_sent' ? 'none' : '2px solid var(--accent)', background: d.status === 'renewal_sent' ? 'var(--purple)' : 'transparent', flex: 'none' }} />
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(d.address)}</div>
+                                <div style={{ color: 'var(--dim)', fontSize: '12.5px' }}>{(d.rent ? '$' + d.rent + '/mo · ' : '') + (d.start || 'no date')}</div>
+                              </div>
+                              <span style={{ flex: 'none', fontSize: '11.5px', fontWeight: 700, padding: '3px 8px', borderRadius: 6, color: badge.color, border: '1px solid var(--border)', background: 'var(--elev)' }}>{badge.label}</span>
+                            </div>
+                          )
+                        })}
+                        {!dashDrafts.length && (
+                          <div style={{ color: 'var(--dim)', padding: 8, fontSize: '13.5px' }}>No draft leases yet. Use the <b>+</b> button below to start one — published drafts appear on the public site.</div>
+                        )}
+                      </>
+                    ),
+                  },
+                  {
+                    id: 'renewals',
+                    className: 'cy-section-card',
+                    children: (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+                          <div style={{ fontWeight: 700, fontSize: 15 }}>Renewals &amp; offers sent</div>
+                          <button className="cy-btn-ghost" data-no-layout-dnd onClick={openRenewalsTimeline}>Timeline →</button>
+                        </div>
+                        {dashRenewals.map((d) => (
+                          <div key={d.id} className="cy-hov" onClick={() => openDraft(d)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
+                            <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--purple)', flex: 'none' }} />
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(d.address)}</div>
+                              <div style={{ color: 'var(--dim)', fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tenantForAddress(d.address)}</div>
+                            </div>
+                            <div style={{ textAlign: 'right', flex: 'none' }}>
+                              <div style={{ fontWeight: 600, fontSize: 13 }}>{d.rent ? '$' + d.rent + '/mo' : '—'}</div>
+                              <div style={{ color: 'var(--dim)', fontSize: 12 }}>{d.sentAt ? fmtD(parseDate(d.sentAt)) : '—'}</div>
+                            </div>
+                          </div>
+                        ))}
+                        {!dashRenewals.length && <div style={{ color: 'var(--dim)', padding: 8 }}>No renewals or offers awaiting tenant response.</div>}
+                      </>
+                    ),
+                  },
+                  ...(priv
+                    ? [{
+                        id: 'applications',
+                        className: 'cy-section-card',
+                        children: (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+                              <div style={{ fontWeight: 700, fontSize: 15 }}>Applications sent</div>
+                              <button data-no-layout-dnd onClick={() => router.push('/inquiries')} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>All inquiries →</button>
+                            </div>
+                            {dashApplications.map((i) => {
+                              const badge = inquiryStatusBadge(i.status)
+                              return (
+                                <div key={i.id} className="cy-hov" onClick={() => router.push('/inquiries')} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
+                                  <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--amber)', flex: 'none' }} />
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{i.name}</div>
+                                    <div style={{ color: 'var(--dim)', fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(i.property)}</div>
+                                  </div>
+                                  <div style={{ textAlign: 'right', flex: 'none' }}>
+                                    <div style={{ color: 'var(--dim)', fontSize: 12 }}>{fmtD(parseDate(i.submittedAt))}</div>
+                                    <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 8px', borderRadius: 6, color: badge.color, border: '1px solid var(--border)', background: 'var(--elev)' }}>{badge.label}</span>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                            {!dashApplications.length && <div style={{ color: 'var(--dim)', padding: 8 }}>No applications awaiting review.</div>}
+                          </>
+                        ),
+                      }]
+                    : []),
+                ]}
+              />
             </section>
           )}
 
           {/* ============ LEASES TIMELINE ============ */}
           {view === 'leases' && showDefault && (
             <section>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {filterMeta.map((f) => (
-                    <button key={f.key} onClick={() => setTlStatusFilter({ ...filt, [f.key]: !filt[f.key] })} style={{ border: `1px solid ${filt[f.key] ? 'var(--border2)' : 'var(--border)'}`, background: filt[f.key] ? 'var(--elev)' : 'transparent', color: filt[f.key] ? 'var(--text)' : 'var(--faint)', borderRadius: 8, padding: '6px 11px', fontWeight: 600, fontSize: '12.5px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 3, background: f.dot }} />{f.label}
-                    </button>
-                  ))}
-                  {(hospitableCalendar.connected || !hospitableCalendar.statusMessage.startsWith('Add HOSPITABLE')) && (
-                    <span
-                      title={hospitableCalendar.connected
-                        ? `Hospitable calendar · ${hospitableCalendar.statusMessage}\nBlue bars = confirmed STR stays · dashed = pending request · gaps = vacant nights`
-                        : hospitableCalendar.statusMessage}
-                      style={{
-                        border: `1px solid ${hospitableCalendar.connected ? 'var(--border)' : 'var(--amber)'}`,
-                        background: hospitableCalendar.connected ? 'transparent' : 'color-mix(in srgb, var(--amber) 10%, transparent)',
-                        color: hospitableCalendar.connected ? 'var(--faint)' : 'var(--amber)',
-                        borderRadius: 8,
-                        padding: '6px 11px',
-                        fontWeight: 600,
-                        fontSize: '12.5px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        cursor: 'default',
-                      }}
-                    >
-                      <span style={{ width: 8, height: 8, borderRadius: 3, background: hospitableCalendar.connected ? 'var(--blue)' : 'var(--amber)', opacity: hospitableCalendar.connected ? 1 : 0.7 }} />
-                      {hospitableCalendar.connected ? `STR · ${scopedStrBookings.length}` : 'STR'}
-                    </span>
-                  )}
-                </div>
-                <button onClick={() => setTlAnchor(todayMid.getTime() - Math.round(spanDays / 4) * DAY)} style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 14px', fontWeight: 600, cursor: 'pointer' }}>Today</button>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 9, padding: 3 }}>
-                  <button onClick={() => { setTlZoomIdx(Math.max(0, zoomIdx - 1)); setTlAnchor(winStart.getTime()) }} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '5px 10px', color: 'var(--dim)', fontSize: 15 }}>−</button>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--dim)', padding: '0 4px' }}>{TL_ZOOM_PRESETS[zoomIdx].label}</span>
-                  <button onClick={() => { setTlZoomIdx(Math.min(TL_ZOOM_PRESETS.length - 1, zoomIdx + 1)); setTlAnchor(winStart.getTime()) }} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '5px 10px', color: 'var(--dim)', fontSize: 15 }}>+</button>
-                </div>
-                <button onClick={() => setTlAnchor(winStart.getTime() - spanDays * DAY)} style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', cursor: 'pointer', color: 'var(--dim)' }}>←</button>
-                <button onClick={() => setTlAnchor(winStart.getTime() + spanDays * DAY)} style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', cursor: 'pointer', color: 'var(--dim)' }}>→</button>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10, marginBottom: 14 }}>
-                {kpis.map((k) => (
-                  <div key={k.label} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 14px' }}>
-                    <div style={{ ...monoLabel, fontSize: 10 }}>{k.label}</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: k.color }}>{k.value}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
+              <div className="cy-card" style={{ overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
                   <div style={{ minWidth: 760 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'clamp(150px,20vw,250px) 1fr', borderBottom: '1px solid var(--border)' }}>
@@ -1628,9 +2124,9 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
           {/* ============ PROPERTIES ============ */}
           {view === 'properties' && (
             <section>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+              <div className="cy-toolbar">
                 {statuses.map((st) => (
-                  <button key={st || 'all'} onClick={() => setPropFilter(st)} style={{ border: `1px solid ${propFilter === st ? 'var(--border2)' : 'var(--border)'}`, background: propFilter === st ? 'var(--elev)' : 'transparent', color: propFilter === st ? 'var(--text)' : 'var(--dim)', borderRadius: 8, padding: '6px 12px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                  <button key={st || 'all'} className={`cy-pill${propFilter === st ? ' cy-pill--active' : ''}`} onClick={() => setPropFilter(st)}>
                     {st || 'All'}
                     {st === 'Archived' && archivedProps.length ? <span style={{ opacity: 0.6, fontFamily: MONO, fontSize: 11, marginLeft: 4 }}>{archivedProps.length}</span> : null}
                   </button>
@@ -1641,7 +2137,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                 </span>
               </div>
               {priv && selectedPropIds.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14, padding: '10px 14px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--elev)' }}>
+                <div className="cy-bulk-bar">
                   <span style={{ fontWeight: 700, fontSize: 13 }}>{selectedPropIds.length} selected</span>
                   {viewingArchived ? (
                     <button className="cy-accent-btn" disabled={bulkBusy} onClick={runBulkUnarchive} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '8px 14px', fontWeight: 700, cursor: bulkBusy ? 'wait' : 'pointer' }}>
@@ -1669,25 +2165,38 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                 </div>
               )}
               {showDefault && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: 12 }}>
-                  {(genRows as CanaryProperty[]).map((p) => {
+                <LayoutGrid
+                  preset={CARD_LAYOUT_PRESET}
+                  orderedIds={propCardLayout.orderedIds}
+                  sizes={propCardLayout.sizes}
+                  onReorder={propCardLayout.reorder}
+                  onSizeChange={propCardLayout.setSize}
+                  columns={12}
+                  gapPx={12}
+                  items={(genRows as CanaryProperty[]).map((p) => {
                     const [chipBg, chipColor] = chipFor(p.status)
-                    return (
-                      <div key={p.id} className="cy-hov-card" onClick={() => setDrawer({ kind: 'property', id: p.id })} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '15px 16px', cursor: 'pointer', minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                          <div style={{ fontWeight: 700, fontSize: 15, minWidth: 0 }}>{short(p.address)}</div>
-                          <span style={{ flex: 'none', fontSize: 11, fontWeight: 700, letterSpacing: '.04em', padding: '3px 9px', borderRadius: 6, background: chipBg, color: chipColor }}>{p.status || '—'}</span>
-                        </div>
-                        <div style={{ color: 'var(--dim)', fontSize: '12.5px', margin: '2px 0 10px' }}>{[p.city, p.area].filter(Boolean).join(' · ') || p.address.split(',').slice(1, 2).join('').trim()}</div>
-                        <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--dim)', flexWrap: 'wrap' }}>
-                          <span><b style={{ color: 'var(--text)' }}>{p.beds || '—'}</b> bed</span>
-                          <span><b style={{ color: 'var(--text)' }}>{p.baths || '—'}</b> bath</span>
-                          <span style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--text)' }}>{p.rate ? money(p.rate) + '/mo' : ''}</span>
-                        </div>
-                      </div>
-                    )
+                    return {
+                      id: p.id,
+                      className: 'cy-hov-card cy-card',
+                      style: { padding: '12px 14px' },
+                      onActivate: () => setDrawer({ kind: 'property', id: p.id }),
+                      children: (
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                            <div style={{ fontWeight: 700, fontSize: 15, minWidth: 0 }}>{short(p.address)}</div>
+                            <span style={{ flex: 'none', fontSize: 11, fontWeight: 700, letterSpacing: '.04em', padding: '3px 9px', borderRadius: 6, background: chipBg, color: chipColor }}>{p.status || '—'}</span>
+                          </div>
+                          <div style={{ color: 'var(--dim)', fontSize: '12.5px', margin: '2px 0 10px' }}>{[p.city, p.area].filter(Boolean).join(' · ') || p.address.split(',').slice(1, 2).join('').trim()}</div>
+                          <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--dim)', flexWrap: 'wrap' }}>
+                            <span><b style={{ color: 'var(--text)' }}>{p.beds || '—'}</b> bed</span>
+                            <span><b style={{ color: 'var(--text)' }}>{p.baths || '—'}</b> bath</span>
+                            <span style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--text)' }}>{p.rate ? money(p.rate) + '/mo' : ''}</span>
+                          </div>
+                        </>
+                      ),
+                    }
                   })}
-                </div>
+                />
               )}
             </section>
           )}
@@ -1695,19 +2204,19 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
           {/* ============ PEOPLE ============ */}
           {view === 'people' && (
             <section>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+              <div className="cy-toolbar">
                 {roles.map((r) => (
-                  <button key={r || 'all'} onClick={() => setPeopleRole(r)} style={{ border: `1px solid ${peopleRole === r ? 'var(--border2)' : 'var(--border)'}`, background: peopleRole === r ? 'var(--elev)' : 'transparent', color: peopleRole === r ? 'var(--text)' : 'var(--dim)', borderRadius: 8, padding: '6px 12px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                  <button key={r || 'all'} className={`cy-pill${peopleRole === r ? ' cy-pill--active' : ''}`} onClick={() => setPeopleRole(r)}>
                     {r || 'All'} <span style={{ opacity: 0.6, fontFamily: MONO, fontSize: 11 }}>{r ? String(roleCounts[r] || 0) : String(scoped.people.length)}</span>
                   </button>
                 ))}
                 <span style={{ color: 'var(--dim)', fontSize: 13, marginLeft: 'auto' }}>{filteredPeople.length + ' people'}</span>
               </div>
               {showDefault && (
-                <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
+                <div className="cy-card" style={{ overflow: 'hidden' }}>
                   {(genRows as CanaryPerson[]).slice(0, 120).map((pe) => (
                     <div key={pe.id} className="cy-hov" onClick={() => setDrawer({ kind: 'person', id: pe.id })} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer', minWidth: 0 }}>
-                      <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--elev)', border: '1px solid var(--border)', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 13, color: 'var(--dim)', flex: 'none' }}>{(pe.name || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}</div>
+                      <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--elev)', border: '1px solid var(--border)', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 12, color: 'var(--dim)', flex: 'none' }}>{(pe.name || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}</div>
                       <div style={{ minWidth: 0, flex: 2 }}>
                         <div style={{ fontWeight: 650, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pe.name || '—'}</div>
                         <div style={{ color: 'var(--dim)', fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pe.email}</div>
@@ -1726,23 +2235,36 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
           {/* ============ PORTFOLIOS ============ */}
           {view === 'portfolios' && showDefault && (
             <section>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(310px,1fr))', gap: 12 }}>
-                {(genRows as CanaryPortfolio[]).map((pc) => {
+              <LayoutGrid
+                preset={CARD_LAYOUT_PRESET}
+                orderedIds={portfolioCardLayout.orderedIds}
+                sizes={portfolioCardLayout.sizes}
+                onReorder={portfolioCardLayout.reorder}
+                onSizeChange={portfolioCardLayout.setSize}
+                columns={12}
+                gapPx={12}
+                items={(genRows as CanaryPortfolio[]).map((pc) => {
                   const active = pc.status === 'Active'
-                  return (
-                    <div key={pc.id} className="cy-hov-card" onClick={() => setDrawer({ kind: 'portfolio', id: pc.id })} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '15px 16px', cursor: 'pointer', minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                        <div style={{ fontWeight: 700, fontSize: 15, minWidth: 0 }}>{pc.name}</div>
-                        <span style={{ flex: 'none', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 6, background: active ? 'var(--green)' : 'var(--elev)', color: active ? 'var(--green-text)' : 'var(--dim)' }}>{pc.status || '—'}</span>
-                      </div>
-                      <div style={{ color: 'var(--dim)', fontSize: '12.5px', margin: '3px 0 10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pfOwnersOf(pc) || '—'}</div>
-                      <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--dim)' }}>
-                        <span><b style={{ color: 'var(--text)' }}>{props.filter((p) => p.portfolioId === pc.id).length}</b> properties</span>
-                      </div>
-                    </div>
-                  )
+                  return {
+                    id: pc.id,
+                    className: 'cy-hov-card cy-card',
+                    style: { padding: '12px 14px' },
+                    onActivate: () => setDrawer({ kind: 'portfolio', id: pc.id }),
+                    children: (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                          <div style={{ fontWeight: 700, fontSize: 15, minWidth: 0 }}>{pc.name}</div>
+                          <span style={{ flex: 'none', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 6, background: active ? 'var(--green)' : 'var(--elev)', color: active ? 'var(--green-text)' : 'var(--dim)' }}>{pc.status || '—'}</span>
+                        </div>
+                        <div style={{ color: 'var(--dim)', fontSize: '12.5px', margin: '3px 0 10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pfOwnersOf(pc) || '—'}</div>
+                        <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--dim)' }}>
+                          <span><b style={{ color: 'var(--text)' }}>{props.filter((p) => p.portfolioId === pc.id).length}</b> properties</span>
+                        </div>
+                      </>
+                    ),
+                  }
                 })}
-              </div>
+              />
             </section>
           )}
 
@@ -1762,47 +2284,17 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                 <span style={{ color: 'var(--dim)', fontSize: 13 }}>{filteredPay.length + ' transactions'}</span>
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 16, alignItems: 'center' }}>
                   <span style={{ fontSize: 13, color: 'var(--dim)' }}>Net <b style={{ color: payNetN < 0 ? 'var(--red)' : 'var(--green)', fontSize: 15 }}>{money(Math.abs(payNetN)) || '$0'}</b></span>
-                  {priv && <button onClick={() => { setPayForm(curPayForm); setPayFormOpen((v) => !v); setPayError('') }} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '9px 14px', fontWeight: 700, cursor: 'pointer' }}>+ Payment</button>}
                 </div>
               </div>
-
-              {payFormOpen && (
-                <div style={{ background: 'var(--panel)', border: '1px solid var(--border2)', borderRadius: 14, padding: 16, marginBottom: 14 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10, alignItems: 'end' }}>
-                    <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Date</span>
-                      <div style={{ marginTop: 4 }}>
-                        <DatePickerField value={curPayForm.date} onChange={(v) => setPayForm({ ...curPayForm, date: v })} />
-                      </div>
-                    </label>
-                    <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Property</span>
-                      <select value={curPayForm.property} onChange={setPayField('property')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }}>
-                        <option value="">— select —</option>
-                        {propOptions.map((o) => (<option key={o.id} value={o.id}>{o.short}</option>))}
-                      </select></label>
-                    <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Category</span>
-                      <select value={curPayForm.category} onChange={setPayField('category')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }}>
-                        {PAY_CATEGORIES.map((c) => (<option key={c} value={c}>{c}</option>))}
-                      </select></label>
-                    <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Description</span><input value={curPayForm.description} onChange={setPayField('description')} placeholder="e.g. June rent" style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }} /></label>
-                    <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Amount $</span><input type="number" value={curPayForm.amount} onChange={setPayField('amount')} placeholder="0.00" style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }} /></label>
-                    <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Type</span>
-                      <select value={curPayForm.type} onChange={setPayField('type')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }}>
-                        <option value="Credit">Credit</option><option value="Debit">Debit</option>
-                      </select></label>
-                    <button onClick={submitPayment} disabled={paySaving} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '10px 14px', fontWeight: 700, cursor: 'pointer', opacity: paySaving ? 0.6 : 1 }}>{paySaving ? 'Saving…' : 'Save'}</button>
-                  </div>
-                  {payError && <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 10 }}>{payError}</div>}
-                </div>
-              )}
             </section>
           )}
 
           {/* ============ PROJECTS ============ */}
           {view === 'projects' && (
             <section>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+              <div className="cy-toolbar">
                 {projStatuses.map((st) => (
-                  <button key={st || 'all'} onClick={() => setProjFilter(st)} style={{ border: `1px solid ${projFilter === st ? 'var(--border2)' : 'var(--border)'}`, background: projFilter === st ? 'var(--elev)' : 'transparent', color: projFilter === st ? 'var(--text)' : 'var(--dim)', borderRadius: 8, padding: '6px 12px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                  <button key={st || 'all'} className={`cy-pill${projFilter === st ? ' cy-pill--active' : ''}`} onClick={() => setProjFilter(st)}>
                     {st || 'All'} <span style={{ opacity: 0.6, fontFamily: MONO, fontSize: 11 }}>{st ? String(pjCounts[st] || 0) : String(scoped.projects.length)}</span>
                   </button>
                 ))}
@@ -1824,8 +2316,6 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
             </section>
           )}
 
-          {/* ============ IMPORT ============ */}
-          {view === 'import' && priv && <CanaryImport />}
 
           {/* ============ MESSAGES ============ */}
           {view === 'messages' && priv && (
@@ -1881,7 +2371,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                   })}
                   {!genRows.length && (
                     <div style={{ padding: '28px 20px', color: 'var(--dim)', fontSize: '13.5px' }}>
-                      {page === 'payments' ? 'Ledger is empty — add entries with + Payment, or record rent payments from leases.' : 'Nothing matches your filters.'}
+                      {page === 'payments' ? 'Ledger is empty — add entries with the + button below, or record rent payments from leases.' : 'Nothing matches your filters.'}
                     </div>
                   )}
                   {genRows.length > tblCap && <div style={{ padding: '12px 16px', color: 'var(--dim)', fontSize: 13 }}>Showing {tblCap} of {genRows.length} — refine with search.</div>}
@@ -1991,15 +2481,15 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       {/* ============ MERGE PROPERTIES MODAL ============ */}
       {mergeOpen && (
         <>
-          <div onClick={() => setMergeOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(10,8,6,.55)', zIndex: 70, backdropFilter: 'blur(2px)' }} />
-          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 'min(560px,94vw)', maxHeight: '92vh', overflowY: 'auto', background: 'var(--panel)', border: '1px solid var(--border2)', borderRadius: 18, zIndex: 71, boxShadow: 'var(--shadow)', padding: 22 }}>
+          <div onClick={() => setMergeOpen(false)} className="cy-modal-backdrop" style={{ zIndex: 70 }} />
+          <div className="cy-glass-modal" style={{ width: 'min(560px,94vw)', maxHeight: '92vh', padding: 18, zIndex: 71 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
               <div>
-                <div style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 4 }}>Merge duplicates</div>
+                <div className="cy-eyebrow" style={{ marginBottom: 4 }}>Merge duplicates</div>
                 <div style={{ fontWeight: 700, fontSize: 19 }}>Pick the property to keep</div>
                 <div style={{ color: 'var(--dim)', fontSize: '13px', marginTop: 6 }}>All leases, listings, and work orders from the others will move to the primary. Orphan property rows are removed.</div>
               </div>
-              <button onClick={() => setMergeOpen(false)} style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: 'var(--dim)' }}>✕</button>
+              <button className="cy-btn" onClick={() => setMergeOpen(false)}>✕</button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {selectedPropRows.map((p) => (
@@ -2014,8 +2504,8 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
               ))}
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
-              <button onClick={() => setMergeOpen(false)} style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '9px 14px', fontWeight: 600, cursor: 'pointer', color: 'var(--dim)' }}>Cancel</button>
-              <button className="cy-accent-btn" onClick={runMerge} disabled={bulkBusy || !mergePrimaryId} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '10px 18px', fontWeight: 700, cursor: bulkBusy ? 'wait' : 'pointer', opacity: bulkBusy ? 0.6 : 1 }}>
+              <button className="cy-btn" onClick={() => setMergeOpen(false)}>Cancel</button>
+              <button className="cy-btn-primary cy-accent-btn" onClick={runMerge} disabled={bulkBusy || !mergePrimaryId} style={{ opacity: bulkBusy ? 0.6 : 1 }}>
                 {bulkBusy ? 'Merging…' : `Merge into ${short(selectedPropRows.find((p) => p.id === mergePrimaryId)?.address ?? 'primary')}`}
               </button>
             </div>
@@ -2026,14 +2516,14 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       {/* ============ DRAFT LEASE COMPOSER ============ */}
       {draftOpen && (
         <>
-          <div onClick={() => { setDraftOpen(false); setDraft(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(10,8,6,.55)', zIndex: 70, backdropFilter: 'blur(2px)' }} />
-          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 'min(680px,94vw)', maxHeight: '92vh', overflowY: 'auto', background: 'var(--panel)', border: '1px solid var(--border2)', borderRadius: 18, zIndex: 71, boxShadow: 'var(--shadow)', padding: 22 }}>
+          <div onClick={() => { setDraftOpen(false); setDraft(null) }} className="cy-modal-backdrop" style={{ zIndex: 70 }} />
+          <div className="cy-glass-modal" style={{ width: 'min(680px,94vw)', maxHeight: '92vh', padding: 18, zIndex: 71 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
               <div>
-                <div style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 4 }}>Draft lease · listing</div>
+                <div className="cy-eyebrow" style={{ marginBottom: 4 }}>Draft lease · listing</div>
                 <div style={{ fontWeight: 700, fontSize: 19 }}>{curDraft.id ? 'Edit draft — ' + short(curDraft.address || '') : 'New draft lease'}</div>
               </div>
-              <button onClick={() => { setDraftOpen(false); setDraft(null) }} style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: 'var(--dim)' }}>✕</button>
+              <button className="cy-btn" onClick={() => { setDraftOpen(false); setDraft(null) }}>✕</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
               <label style={{ gridColumn: '1/-1', display: 'block' }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Property</span>
@@ -2166,6 +2656,77 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
             <button type="button" onClick={() => setTlOverlapPick(null)} style={{ marginTop: 10, border: 'none', background: 'none', color: 'var(--dim)', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '4px 0' }}>Cancel</button>
           </div>
         </div>
+      )}
+
+      {/* ============ FLOATING ACTION BUTTON ============ */}
+      <CanaryActionFab view={view} priv={priv} onAction={handleFabAction} />
+
+      {/* ============ ADD PROPERTY MODAL ============ */}
+      {propertyModalOpen && (
+        <CanaryAddPropertyModal
+          onClose={() => setPropertyModalOpen(false)}
+          defaultProvince={defaultProvince}
+          owners={db.people}
+          portfolios={db.portfolios}
+        />
+      )}
+
+      {/* ============ IMPORT DATA MODAL ============ */}
+      {importModalOpen && (
+        <>
+          <div onClick={() => setImportModalOpen(false)} className="cy-modal-backdrop" style={{ zIndex: 70 }} />
+          <div className="cy-glass-modal" style={{ width: 'min(820px,94vw)', maxHeight: '92vh', padding: 18, zIndex: 71 }} role="dialog" aria-modal="true" aria-label="Import data">
+            <CanaryImport
+              initialDataset={importDatasetForView(view) ?? 'people'}
+              lockDataset={!!importDatasetForView(view)}
+              modal
+              onClose={() => setImportModalOpen(false)}
+            />
+          </div>
+        </>
+      )}
+
+      {/* ============ EXPENSE / PAYMENT MODAL ============ */}
+      {payFormOpen && (
+        <>
+          <div onClick={() => { setPayFormOpen(false); setPayForm(null) }} className="cy-modal-backdrop" style={{ zIndex: 70 }} />
+          <div className="cy-glass-modal" style={{ width: 'min(720px,94vw)', maxHeight: '92vh', padding: 18, zIndex: 71 }} role="dialog" aria-modal="true" aria-label="Record expense">
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div>
+                <div className="cy-eyebrow" style={{ marginBottom: 4 }}>Payments ledger</div>
+                <div style={{ fontWeight: 700, fontSize: 19 }}>Record expense</div>
+              </div>
+              <button type="button" className="cy-btn" onClick={() => { setPayFormOpen(false); setPayForm(null) }}>✕</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10, alignItems: 'end' }}>
+              <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Date</span>
+                <div style={{ marginTop: 4 }}>
+                  <DatePickerField value={curPayForm.date} onChange={(v) => setPayForm({ ...curPayForm, date: v })} />
+                </div>
+              </label>
+              <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Property</span>
+                <select value={curPayForm.property} onChange={setPayField('property')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }}>
+                  <option value="">— select —</option>
+                  {propOptions.map((o) => (<option key={o.id} value={o.id}>{o.short}</option>))}
+                </select></label>
+              <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Category</span>
+                <select value={curPayForm.category} onChange={setPayField('category')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }}>
+                  {PAY_CATEGORIES.map((c) => (<option key={c} value={c}>{c}</option>))}
+                </select></label>
+              <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Description</span><input value={curPayForm.description} onChange={setPayField('description')} placeholder="e.g. June rent" style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }} /></label>
+              <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Amount $</span><input type="number" value={curPayForm.amount} onChange={setPayField('amount')} placeholder="0.00" style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }} /></label>
+              <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Type</span>
+                <select value={curPayForm.type} onChange={setPayField('type')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }}>
+                  <option value="Credit">Credit</option><option value="Debit">Debit</option>
+                </select></label>
+            </div>
+            {payError && <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 12 }}>{payError}</div>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+              <button type="button" className="cy-btn" onClick={() => { setPayFormOpen(false); setPayForm(null) }}>Cancel</button>
+              <button type="button" className="cy-btn-primary cy-accent-btn" onClick={submitPayment} disabled={paySaving} style={{ opacity: paySaving ? 0.6 : 1 }}>{paySaving ? 'Saving…' : 'Save entry'}</button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )

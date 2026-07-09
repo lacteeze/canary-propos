@@ -25,9 +25,15 @@ const DAY_MS = 864e5
 const MONTHS_BEHIND = 3
 const MONTHS_AHEAD = 9
 
-const PROPERTY_STATUSES = ['Vacant', 'Leased', 'Maintenance'] as const
+const PROPERTY_STATUSES = ['Vacant', 'Leased', 'STR', 'Maintenance'] as const
 const PROPERTY_TYPES = ['house', 'duplex', 'apartment_building', 'condo', 'townhouse', 'other'] as const
 const PET_OPTIONS = ['No pets', 'Pet friendly', 'Cat friendly', 'Dog friendly', 'By approval'] as const
+
+function propertyStatusOption(status: string | null | undefined): string {
+  if (!status) return 'Vacant'
+  if (status === 'Airbnb') return 'STR'
+  return (PROPERTY_STATUSES as readonly string[]).includes(status) ? status : 'Vacant'
+}
 
 type CalMode = 'occupancy' | 'tasks'
 type MobilePane = 'calendar' | 'details'
@@ -163,9 +169,7 @@ function PropertyQuickEdit({
   money: (n: number | null | undefined) => string
   onSaved: () => void
 }) {
-  const [status, setStatus] = useState(
-    PROPERTY_STATUSES.includes(property.status as (typeof PROPERTY_STATUSES)[number]) ? property.status : 'Vacant',
-  )
+  const [status, setStatus] = useState(propertyStatusOption(property.status))
   const [propertyType, setPropertyType] = useState(property.type.replace(/ /g, '_') || 'house')
   const [city, setCity] = useState(property.city)
   const [province, setProvince] = useState(property.area)
@@ -185,7 +189,7 @@ function PropertyQuickEdit({
   const [ok, setOk] = useState(false)
 
   useEffect(() => {
-    setStatus(PROPERTY_STATUSES.includes(property.status as (typeof PROPERTY_STATUSES)[number]) ? property.status : 'Vacant')
+    setStatus(propertyStatusOption(property.status))
     setPropertyType(property.type.replace(/ /g, '_') || 'house')
     setCity(property.city)
     setProvince(property.area)

@@ -94,7 +94,7 @@ export const IMPORT_SPECS: Record<ImportDataset, ImportSpec> = {
       { key: 'bedrooms', note: 'Whole number, defaults to 1', example: '2' },
       { key: 'bathrooms', note: 'Number, defaults to 1 (1.5 allowed)', example: '1.5' },
       { key: 'sq_footage', note: 'Whole number', example: '850' },
-      { key: 'status', note: 'vacant, occupied or maintenance — AppSheet: Leased→occupied, Archived→archived_at set, Airbnb→vacant, Project→maintenance', example: 'vacant' },
+      { key: 'status', note: 'vacant, occupied, maintenance, or str — AppSheet: Leased→occupied, Archived→archived_at set, Airbnb/STR→str, Project→maintenance', example: 'vacant' },
       { key: 'asking_rent', note: 'Monthly asking rent (numbers only)', example: '1600' },
       { key: 'management_fee_type', note: 'percent or flat', example: 'percent' },
       { key: 'management_fee_value', note: 'e.g. 10, 10%, or $150 — % and $ symbols stripped', example: '10' },
@@ -222,15 +222,16 @@ export const IMPORT_ORDER: ImportDataset[] = [
 // ---------- AppSheet / Canary value aliases (properties import) ----------
 
 /** AppSheet / Canary UI status labels → units.status (DB check constraint). */
-export const PROPERTY_STATUS_ALIASES: Record<string, 'vacant' | 'occupied' | 'maintenance'> = {
+export const PROPERTY_STATUS_ALIASES: Record<string, 'vacant' | 'occupied' | 'maintenance' | 'str'> = {
   vacant: 'vacant',
   leased: 'occupied',
   occupied: 'occupied',
   maintenance: 'maintenance',
   /** Offboarded / inactive — no active lease in PropOS. */
   archived: 'vacant',
-  /** STR inventory; stored as vacant in LTR sense (Airbnb chip comes from Hospitable link). */
-  airbnb: 'vacant',
+  /** Short-term rental inventory (Airbnb / VRBO / etc.). */
+  airbnb: 'str',
+  str: 'str',
   /** Renovation or capital project in progress. */
   project: 'maintenance',
   /** Manager office / non-residential — treat as not leased. */

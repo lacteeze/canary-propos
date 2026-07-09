@@ -20,6 +20,7 @@ const STATUS_OPTIONS = [
   { value: 'vacant', label: 'Vacant' },
   { value: 'occupied', label: 'Occupied' },
   { value: 'maintenance', label: 'Maintenance' },
+  { value: 'str', label: 'STR' },
 ]
 
 interface AddUnitFormProps {

@@ -47,6 +47,7 @@ function unitDisplayStreet(
 function unitStatusLabel(status: string | null): string {
   if (status === 'occupied') return 'Leased'
   if (status === 'maintenance') return 'Maintenance'
+  if (status === 'str') return 'STR'
   return 'Vacant'
 }
 

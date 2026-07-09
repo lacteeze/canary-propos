@@ -81,13 +81,18 @@ const UNIT_STATUS_MAP: Record<string, string> = {
   Vacant: 'vacant',
   Leased: 'occupied',
   Maintenance: 'maintenance',
+  STR: 'str',
+  Airbnb: 'str',
 }
 
 const UNIT_STATUS_REVERSE: Record<string, string> = {
   vacant: 'Vacant',
   occupied: 'Leased',
   maintenance: 'Maintenance',
+  str: 'STR',
 }
+
+const UNIT_DB_STATUSES = ['vacant', 'occupied', 'maintenance', 'str'] as const
 
 export async function updatePropertyField(
   unitId: string,
@@ -110,7 +115,7 @@ export async function updatePropertyField(
 
   if (field === 'status') {
     const dbVal = UNIT_STATUS_MAP[value] ?? value.toLowerCase()
-    if (!['vacant', 'occupied', 'maintenance'].includes(dbVal)) {
+    if (!(UNIT_DB_STATUSES as readonly string[]).includes(dbVal)) {
       return { success: false, error: 'Invalid status.' }
     }
     changes.push({ field: 'status', oldValue: UNIT_STATUS_REVERSE[unit.status] ?? unit.status, newValue: value })
@@ -159,7 +164,7 @@ const PET_LABELS = ['No pets', 'Pet friendly', 'Cat friendly', 'Dog friendly', '
 const PET_AMENITY_RE = /pet|cat|dog|approval/i
 
 const propertyDetailsSchema = z.object({
-  status: z.enum(['Vacant', 'Leased', 'Maintenance']),
+  status: z.enum(['Vacant', 'Leased', 'Maintenance', 'STR']),
   bedrooms: z.number().int().min(0).max(50),
   bathrooms: z.number().min(0).max(50),
   askingRent: z.number().min(0).nullable(),

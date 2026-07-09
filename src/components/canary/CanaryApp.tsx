@@ -405,7 +405,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   }, [scopedStrBookings, todayMid])
   const activeLeases = scoped.leases.filter((l) => l.status === 'Active' || l.status === 'Expiring')
   const activePortfolios = scoped.portfolios.filter((pf) => pf.status === 'Active')
-  const occupied = props.filter((p) => p.status === 'Leased' || p.status === 'Airbnb').length
+  const occupied = props.filter((p) => p.status === 'Leased' || p.status === 'Airbnb' || p.status === 'STR').length
   const hasSuccessor = useCallback((l: CanaryLease) => scoped.leases.some((o) => o !== l && o.property === l.property && (o.status === 'Upcoming' || (() => { const os = parseDate(o.start); const le = parseDate(l.end); return !!os && !!le && os > le })())), [scoped.leases])
   const expNoRenew = activeLeases.filter((l) => { const e = parseDate(l.end); return !!e && e >= now && e <= soon && !hasSuccessor(l) })
   const rentRoll = activeLeases.reduce((s, l) => s + rentNum(l.rent), 0)
@@ -849,6 +849,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       bars,
       rowHeight,
       strOnly: !p,
+      status: p?.status ?? '',
     }
   }
 
@@ -870,9 +871,17 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     if (tlFilterActive) return r.bars.length > 0
     return !r.strOnly || r.bars.length > 0
   }).sort((a, b) => {
-    // Default: STR rows (bookings in window or STR-only addresses) first for check-in/out focus
-    const aStr = a.strOnly || a.bars.some((bar) => bar.kind === 'str')
-    const bStr = b.strOnly || b.bars.some((bar) => bar.kind === 'str')
+    // Default: STR rows (status, bookings in window, or STR-only addresses) first for check-in/out focus
+    const aStr =
+      a.strOnly ||
+      a.status === 'STR' ||
+      a.status === 'Airbnb' ||
+      a.bars.some((bar) => bar.kind === 'str')
+    const bStr =
+      b.strOnly ||
+      b.status === 'STR' ||
+      b.status === 'Airbnb' ||
+      b.bars.some((bar) => bar.kind === 'str')
     if (aStr !== bStr) return aStr ? -1 : 1
     // Within group: lease-end sort (↑/↓ lease end button)
     const dir = tlSortDir === 'desc' ? -1 : 1
@@ -882,9 +891,19 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   })
 
   // ---------- filters / lists per page ----------
-  const statuses = ['', 'Vacant', 'Leased', 'Airbnb', 'Maintenance', 'Office', 'Archived']
-  const chipFor = (st: string): [string, string] => st === 'Leased' ? ['var(--green)', 'var(--green-text)'] : st === 'Vacant' ? ['var(--amber)', 'var(--amber-text)'] : st === 'Airbnb' ? ['var(--blue)', 'var(--bg)'] : ['var(--elev)', 'var(--dim)']
-  const filteredProps = props.filter(matchProp).filter((p) => !propFilter || propFilter === 'Archived' || p.status === propFilter)
+  const statuses = ['', 'Vacant', 'Leased', 'STR', 'Airbnb', 'Maintenance', 'Office', 'Archived']
+  const chipFor = (st: string): [string, string] =>
+    st === 'Leased' ? ['var(--green)', 'var(--green-text)']
+    : st === 'Vacant' ? ['var(--amber)', 'var(--amber-text)']
+    : st === 'STR' || st === 'Airbnb' ? ['var(--blue)', 'var(--bg)']
+    : ['var(--elev)', 'var(--dim)']
+  const filteredProps = props.filter(matchProp).filter((p) => {
+    if (!propFilter) return true
+    if (propFilter === 'Archived') return true
+    if (propFilter === 'STR') return p.status === 'STR' || p.status === 'Airbnb'
+    if (propFilter === 'Airbnb') return p.status === 'Airbnb' || p.status === 'STR'
+    return p.status === propFilter
+  })
   const propCardIds = useMemo(() => filteredProps.map((p) => p.id), [filteredProps])
   const propCardLayout = useViewLayout('properties_cards', propCardIds, layoutUserKey)
 
@@ -964,7 +983,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       }),
       open: (p: CanaryProperty) => () => setDrawer({ kind: 'property', id: p.id }),
       group: (p: CanaryProperty) => p.status || '—',
-      groupOrder: ['Vacant', 'Leased', 'Airbnb', 'Maintenance', 'Office'],
+      groupOrder: ['Vacant', 'Leased', 'STR', 'Airbnb', 'Maintenance', 'Office'],
       card: (p: CanaryProperty) => ({ title: short(p.address), sub: [[p.beds, 'bd'].join(' '), [p.baths, 'ba'].join(' '), [p.city, p.area].filter(Boolean).join(' ')].join(' · '), right: p.rate ? money(p.rate) : '', rightColor: 'var(--text)' }),
       cols: [
         { key: 'address', label: 'Address', flex: '2', bold: true, get: (p: CanaryProperty) => short(p.address) },

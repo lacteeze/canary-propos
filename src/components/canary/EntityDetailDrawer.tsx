@@ -42,7 +42,13 @@ interface EntityDetailDrawerProps {
   onOpenMessages?: (threadId: string) => void
 }
 
-const PROPERTY_STATUSES = ['Vacant', 'Leased', 'Maintenance']
+const PROPERTY_STATUSES = ['Vacant', 'Leased', 'STR', 'Maintenance']
+
+function propertyStatusOption(status: string | null | undefined): string {
+  if (!status) return 'Vacant'
+  if (status === 'Airbnb') return 'STR'
+  return PROPERTY_STATUSES.includes(status) ? status : 'Vacant'
+}
 const LEASE_RENEWAL = ['—', 'pending', 'sent', 'accepted', 'declined']
 const LEASE_DB_STATUS = ['active', 'expired', 'terminated']
 const LEASE_TERM_TYPE = ['fixed_term', 'month_to_month']
@@ -503,7 +509,7 @@ function PropertyEditForm({
   onClose: () => void
   onSaved: () => void
 }) {
-  const [status, setStatus] = useState(PROPERTY_STATUSES.includes(property.status) ? property.status : 'Vacant')
+  const [status, setStatus] = useState(propertyStatusOption(property.status))
   const [propertyType, setPropertyType] = useState(property.type.replace(/ /g, '_') || 'house')
   const [city, setCity] = useState(property.city)
   const [province, setProvince] = useState(property.area)
@@ -830,7 +836,7 @@ export default function EntityDetailDrawer({
             {
               label: 'Status',
               value: canEdit ? (
-                <StatusSelect value={p.status || 'Vacant'} options={PROPERTY_STATUSES} onSave={wrapSave((v) => updatePropertyField(p.id, 'status', v))} />
+                <StatusSelect value={propertyStatusOption(p.status)} options={PROPERTY_STATUSES} onSave={wrapSave((v) => updatePropertyField(p.id, 'status', v))} />
               ) : (p.status || '—'),
             },
             { label: 'Type', value: p.type || '—' },

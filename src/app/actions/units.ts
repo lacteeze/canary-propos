@@ -35,7 +35,7 @@ const unitSchema = z.object({
   bedrooms: z.number().int().min(0, 'Bedrooms must be 0 or more'),
   bathrooms: z.number().min(0.5, 'Bathrooms must be at least 0.5'),
   sq_footage: z.number().positive().optional().nullable(),
-  status: z.enum(['vacant', 'occupied', 'maintenance']),
+  status: z.enum(['vacant', 'occupied', 'maintenance', 'str']),
   asking_rent: z.number().positive().optional().nullable(),
   amenities: z.array(z.string()).optional().nullable(),
 })

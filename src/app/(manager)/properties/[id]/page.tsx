@@ -24,6 +24,7 @@ const STATUS_BADGE: Record<string, { bg: string; text: string; label: string }> 
   vacant: { bg: 'bg-green-100', text: 'text-green-700', label: 'Vacant' },
   occupied: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Occupied' },
   maintenance: { bg: 'bg-red-100', text: 'text-red-700', label: 'Maintenance' },
+  str: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'STR' },
 }
 
 interface PageProps {

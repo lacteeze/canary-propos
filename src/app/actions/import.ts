@@ -426,7 +426,7 @@ async function importPortfolios(ctx: Ctx, records: Record<string, string>[]): Pr
 }
 
 const PROPERTY_TYPES = ['house', 'duplex', 'apartment_building', 'condo', 'townhouse', 'other']
-const UNIT_STATUSES = ['vacant', 'occupied', 'maintenance']
+const UNIT_STATUSES = ['vacant', 'occupied', 'maintenance', 'str']
 
 const propertySchema = z.object({
   street_address: z.string().min(1, 'is required'),

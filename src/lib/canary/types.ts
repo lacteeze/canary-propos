@@ -234,13 +234,76 @@ export interface CanaryStrBooking {
   code: string
 }
 
+/** Owner-occupied calendar block — manual stay blocking STR availability. */
+export type OwnerOccupiedSource = 'hospitable' | 'local'
+
+export interface CanaryOwnerOccupiedBlock {
+  id: string
+  /** Timeline row key — matched Canary address or Hospitable label */
+  property: string
+  propertyId?: string
+  hospitablePropertyId?: string
+  /** Hospitable reservation id when source is hospitable */
+  hospitableReservationId?: string
+  start: string
+  end: string
+  checkInAt?: string
+  checkOutAt?: string
+  notes: string
+  source: OwnerOccupiedSource
+  /** Guest / owner label from Hospitable when applicable */
+  guestLabel?: string
+}
+
 export interface HospitableCalendarData {
   strBookings: CanaryStrBooking[]
+  ownerOccupiedBlocks: CanaryOwnerOccupiedBlock[]
   /** True when PAT is set and fetch succeeded */
   connected: boolean
   /** Human-readable status for empty/error states */
   statusMessage: string
   propertyCount: number
+}
+
+/** Ops / housekeeping task from Hospitable public API `/v2/tasks`. */
+export interface CanaryHospitableTask {
+  id: string
+  name: string
+  /** Matched Canary address or Hospitable property label */
+  property: string
+  hospitablePropertyId: string
+  hospitablePropertyName: string
+  guestLabel: string
+  /** YYYY-MM-DD due / start date */
+  dueDate: string
+  startAt: string
+  endAt: string
+  /** Display status (progress or assignment) */
+  status: string
+  progressStatus: string
+  assignmentStatus: string
+  type: string
+  typeId: number | null
+  teammate: string
+  reservationCode: string
+  reservationId: string
+  note: string
+  /** IANA timezone from Hospitable when provided */
+  timezone: string
+  /** Scheduled duration in hours */
+  durationHours: number | null
+  /** Hospitable service id when provided */
+  serviceId: number | null
+  /** ISO timestamp of last assignment status change */
+  assignmentUpdatedAt: string
+}
+
+export interface HospitableTasksData {
+  tasks: CanaryHospitableTask[]
+  connected: boolean
+  statusMessage: string
+  /** Count of open/active tasks (not completed/cancelled) */
+  openCount: number
 }
 
 export interface CanaryPayment {

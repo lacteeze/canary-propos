@@ -1,0 +1,161 @@
+/* macOS 27 UI Kit — design tokens (extracted from Apple macOS 27 UI Kit.sketch)
+ * Scoped to Canary shell via .cnry[data-ui='macos27']
+ * Source pages: Colors, Materials, Buttons, Menus, Popovers, Titlebars
+ */
+
+.cnry[data-ui='macos27'] {
+  /* Typography — SF Pro via system stack (Sketch embeds SF Compact / SF Pro) */
+  --mac-font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  --mac-font-rounded: -apple-system, BlinkMacSystemFont, 'SF Pro Rounded', 'SF Compact Rounded', system-ui, sans-serif;
+  --mac-font-mono: 'SF Mono', ui-monospace, 'IBM Plex Mono', monospace;
+
+  --mac-text-xs: 11px;
+  --mac-text-sm: 12px;
+  --mac-text-base: 13px;
+  --mac-text-md: 15px;
+  --mac-text-lg: 17px;
+
+  --mac-leading-tight: 1.2;
+  --mac-leading-normal: 1.35;
+
+  /* Control sizes (Sketch: 1 Mn → 5 XL) */
+  --mac-control-h-mini: 16px;
+  --mac-control-h-sm: 20px;
+  --mac-control-h-md: 24px;
+  --mac-control-h-lg: 28px;
+  --mac-control-h-xl: 32px;
+
+  /* Radii — macOS native controls (pill-shaped for Canary toolbar parity) */
+  --mac-radius-control: 999px;
+  --mac-radius-menu: 10px;
+  --mac-radius-popover: 12px;
+  --mac-radius-window: 12px;
+  --mac-radius-pill: 999px;
+
+  /* Vibrancy / blur (Materials page: Liquid Glass, Large UI, Medium UI) */
+  --mac-blur-panel: 24px;
+  --mac-blur-header: 20px;
+  --mac-blur-popover: 40px;
+
+  /* Light — system palette (Colors page vibrant swatches) */
+  --mac-red: #ff383c;
+  --mac-orange: #ff8d28;
+  --mac-yellow: #ffcc00;
+  --mac-green: #34c759;
+  --mac-teal: #00c8b3;
+  --mac-blue: #0088ff;
+  --mac-indigo: #6155f5;
+  --mac-purple: #cb30e0;
+  --mac-pink: #ff2d55;
+
+  --mac-accent: #007aff;
+  --mac-accent-hover: #0066d6;
+  --mac-accent-text: #ffffff;
+
+  /* Light surfaces */
+  --mac-bg: #f5f5f7;
+  --mac-bg-elevated: #ffffff;
+  --mac-panel: rgba(255, 255, 255, 0.78);
+  --mac-panel-solid: #ffffff;
+  --mac-elev: rgba(255, 255, 255, 0.55);
+  --mac-hover: rgba(0, 0, 0, 0.04);
+  --mac-selected: rgba(0, 122, 255, 0.14);
+  --mac-border: rgba(0, 0, 0, 0.08);
+  --mac-border-strong: rgba(0, 0, 0, 0.14);
+  --mac-text: rgba(0, 0, 0, 0.88);
+  --mac-text-secondary: rgba(0, 0, 0, 0.55);
+  --mac-text-tertiary: rgba(0, 0, 0, 0.38);
+  --mac-input-bg: rgba(255, 255, 255, 0.9);
+  --mac-glass-border: rgba(255, 255, 255, 0.65);
+  --mac-backdrop: rgba(0, 0, 0, 0.22);
+
+  /* Shadows — layered like native windows */
+  --mac-shadow-sm: 0 0.5px 1px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --mac-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
+  --mac-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.06);
+  --mac-shadow-menu: 0 8px 28px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.08);
+
+  /* Bridge into existing Canary token names (visual reskin, no logic changes) */
+  --radius-sm: var(--mac-radius-control);
+  --radius-md: var(--mac-radius-menu);
+  --radius-lg: var(--mac-radius-popover);
+  --radius-xl: var(--mac-radius-window);
+  --radius-pill: var(--mac-radius-pill);
+
+  --bg: var(--mac-bg);
+  --panel: var(--mac-panel-solid);
+  --elev: var(--mac-elev);
+  --hover: var(--mac-hover);
+  --border: var(--mac-border);
+  --border2: var(--mac-border-strong);
+  --text: var(--mac-text);
+  --dim: var(--mac-text-secondary);
+  --faint: var(--mac-text-tertiary);
+  --accent: var(--mac-accent);
+  --accent-hi: var(--mac-accent-hover);
+  --accent-text: var(--mac-accent-text);
+  --success: var(--mac-green);
+  --success-text: #ffffff;
+  --green: var(--success);
+  --green-text: var(--success-text);
+  --amber: var(--mac-yellow);
+  --amber-text: rgba(0, 0, 0, 0.75);
+  --orange: var(--mac-orange);
+  --orange-text: #ffffff;
+  --red: var(--mac-red);
+  --red-text: #ffffff;
+  --blue: var(--mac-blue);
+  --purple: var(--mac-purple);
+  --purple-text: #ffffff;
+  --gray: rgba(0, 0, 0, 0.28);
+  --input: var(--mac-input-bg);
+  --glass: var(--mac-panel);
+  --glass-border: var(--mac-glass-border);
+  --shadow-sm: var(--mac-shadow-sm);
+  --shadow: var(--mac-shadow-md);
+  --shadow-lg: var(--mac-shadow-lg);
+  --backdrop: var(--mac-backdrop);
+}
+
+.cnry[data-ui='macos27'][data-theme='dark'] {
+  --mac-accent: #ffcc00;
+  --mac-accent-hover: #ffe066;
+  --mac-accent-text: #141816;
+
+  --mac-red: #ff4245;
+  --mac-orange: #ff9230;
+  --mac-yellow: #ffd600;
+  --mac-green: #30d158;
+  --mac-teal: #00dac3;
+  --mac-blue: #0091ff;
+  --mac-indigo: #6d7cff;
+  --mac-purple: #db34f2;
+  --mac-pink: #ff375f;
+
+  /* Materials page: Material #292929/0.4, Large UI #1a1a1a/0.5 */
+  --mac-bg: #1c1c1e;
+  --mac-bg-elevated: #2c2c2e;
+  --mac-panel: rgba(41, 41, 41, 0.72);
+  --mac-panel-solid: #2c2c2e;
+  --mac-elev: rgba(255, 255, 255, 0.06);
+  --mac-hover: rgba(255, 255, 255, 0.08);
+  --mac-selected: rgba(255, 204, 0, 0.18);
+  --mac-border: rgba(255, 255, 255, 0.1);
+  --mac-border-strong: rgba(255, 255, 255, 0.16);
+  --mac-text: rgba(255, 255, 255, 0.92);
+  --mac-text-secondary: rgba(255, 255, 255, 0.62);
+  --mac-text-tertiary: rgba(255, 255, 255, 0.42);
+  --mac-input-bg: rgba(0, 0, 0, 0.35);
+  --mac-glass-border: rgba(255, 255, 255, 0.12);
+  --mac-backdrop: rgba(0, 0, 0, 0.45);
+
+  --mac-shadow-sm: 0 0.5px 1px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
+  --mac-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --mac-shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.55), 0 4px 16px rgba(0, 0, 0, 0.35);
+  --mac-shadow-menu: 0 10px 36px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.35);
+
+  --success: var(--mac-green);
+  --success-text: #0a1610;
+  --green: var(--success);
+  --green-text: var(--success-text);
+}

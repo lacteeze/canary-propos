@@ -60,6 +60,12 @@ export interface HospitableReservation {
     current?: { category?: string | null; sub_category?: string | null }
   } | null
   guest?: HospitableGuest | null
+  /** True when Hospitable classifies this as an owner stay */
+  ownerStay?: boolean | null
+  owner_stay?: boolean | null
+  stayType?: string | null
+  stay_type?: string | null
+  notes?: string | null
   properties?: Array<{
     id?: string
     name?: string | null
@@ -90,7 +96,14 @@ export interface HospitablePropertiesResponse {
 }
 
 function getPat(): string | undefined {
-  return process.env.HOSPITABLE_API_PAT?.trim() || undefined
+  const raw = process.env.HOSPITABLE_API_PAT?.trim()
+  if (!raw) return undefined
+  // Strip accidental wrapping quotes from dashboard / CLI paste
+  const unquoted =
+    (raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))
+      ? raw.slice(1, -1).trim()
+      : raw
+  return unquoted || undefined
 }
 
 export function isHospitableConfigured(): boolean {
@@ -190,4 +203,108 @@ export async function fetchReservations(params: FetchReservationsParams): Promis
   } while (page <= lastPage)
 
   return reservations
+}
+
+export interface HospitableTaskProperty {
+  id?: string
+  name?: string | null
+}
+
+export interface HospitableTaskReservation {
+  id?: string
+  code?: string | null
+}
+
+export interface HospitableTaskTeammate {
+  id?: string
+  name?: string | null
+}
+
+export interface HospitableTaskAssignment {
+  status?: string | null
+  updated_at?: string | null
+}
+
+export interface HospitableTask {
+  id: string
+  name?: string | null
+  note?: string | null
+  task_type?: number | null
+  service_id?: number | null
+  start_date?: string | null
+  end_date?: string | null
+  timezone?: string | null
+  duration_hours?: number | null
+  progress_status?: string | null
+  task_assignment?: HospitableTaskAssignment | null
+  property?: HospitableTaskProperty | null
+  reservation?: HospitableTaskReservation | null
+  teammate?: HospitableTaskTeammate | null
+}
+
+export interface HospitableTasksResponse {
+  data?: HospitableTask[]
+  meta?: {
+    current_page?: number
+    last_page?: number
+    total?: number
+    task_types?: Record<string, { label?: string; service_id?: number }>
+    service_types?: Record<string, { label?: string }>
+    assignment_statuses?: Record<string, { label?: string }>
+    progress_statuses?: Record<string, { label?: string }>
+  }
+}
+
+export interface FetchTasksParams {
+  propertyIds: string[]
+  /** Inclusive YYYY-MM-DD window on task start (optional) */
+  startDate?: string
+  endDate?: string
+}
+
+/** Max property IDs per /v2/tasks request to keep query strings reasonable. */
+const TASKS_PROPERTY_CHUNK = 40
+
+export async function fetchTasks(params: FetchTasksParams): Promise<{
+  tasks: HospitableTask[]
+  taskTypeLabels: Record<number, string>
+}> {
+  const { propertyIds, startDate, endDate } = params
+  if (!propertyIds.length) return { tasks: [], taskTypeLabels: {} }
+
+  const tasks: HospitableTask[] = []
+  const taskTypeLabels: Record<number, string> = {}
+
+  for (let i = 0; i < propertyIds.length; i += TASKS_PROPERTY_CHUNK) {
+    const chunk = propertyIds.slice(i, i + TASKS_PROPERTY_CHUNK)
+    let page = 1
+    let lastPage = 1
+
+    do {
+      const url = new URL(`${HOSPITABLE_API_BASE}/v2/tasks`)
+      for (const id of chunk) {
+        url.searchParams.append('properties[]', id)
+      }
+      if (startDate) url.searchParams.set('start_date', startDate)
+      if (endDate) url.searchParams.set('end_date', endDate)
+      url.searchParams.set('per_page', '100')
+      url.searchParams.set('page', String(page))
+
+      const payload = await hospitableFetch<HospitableTasksResponse>(url)
+      tasks.push(...(payload.data ?? []))
+
+      const types = payload.meta?.task_types
+      if (types) {
+        for (const [key, value] of Object.entries(types)) {
+          const n = Number(key)
+          if (!Number.isNaN(n) && value?.label) taskTypeLabels[n] = value.label
+        }
+      }
+
+      lastPage = payload.meta?.last_page ?? page
+      page += 1
+    } while (page <= lastPage)
+  }
+
+  return { tasks, taskTypeLabels }
 }

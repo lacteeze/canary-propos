@@ -85,7 +85,7 @@ export default function CanaryAddPropertyModal({
 
   return (
     <>
-      <div onClick={onClose} className="cy-modal-backdrop" style={{ zIndex: 70 }} />
+      <div onClick={onClose} className="cy-modal-backdrop cy-glass-modal-backdrop" style={{ zIndex: 70 }} />
       <div
         className="cy-glass-modal"
         style={{ width: 'min(640px,94vw)', maxHeight: '92vh', padding: 18, zIndex: 71 }}
@@ -115,7 +115,7 @@ export default function CanaryAddPropertyModal({
           </label>
           <label>
             <span style={labelStyle}>Province</span>
-            <select value={province} onChange={(e) => setProvince(e.target.value)} style={fieldStyle}>
+            <select className="cy-select cy-select--field" value={province} onChange={(e) => setProvince(e.target.value)}>
               {CANADIAN_PROVINCES.map((p) => (
                 <option key={p.value} value={p.value}>{p.label}</option>
               ))}
@@ -127,7 +127,7 @@ export default function CanaryAddPropertyModal({
           </label>
           <label>
             <span style={labelStyle}>Property type</span>
-            <select value={propertyType} onChange={(e) => setPropertyType(e.target.value)} style={fieldStyle}>
+            <select className="cy-select cy-select--field" value={propertyType} onChange={(e) => setPropertyType(e.target.value)}>
               {PROPERTY_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
@@ -136,7 +136,7 @@ export default function CanaryAddPropertyModal({
           {ownerOptions.length > 0 && (
             <label>
               <span style={labelStyle}>Owner</span>
-              <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} style={fieldStyle}>
+              <select className="cy-select cy-select--field" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
                 <option value="">— No owner —</option>
                 {ownerOptions.map((o) => (
                   <option key={o.id} value={o.id}>{o.name}</option>
@@ -147,7 +147,7 @@ export default function CanaryAddPropertyModal({
           {portfolios.length > 0 && (
             <label>
               <span style={labelStyle}>Portfolio</span>
-              <select value={portfolioId} onChange={(e) => setPortfolioId(e.target.value)} style={fieldStyle}>
+              <select className="cy-select cy-select--field" value={portfolioId} onChange={(e) => setPortfolioId(e.target.value)}>
                 <option value="">— No portfolio —</option>
                 {portfolios.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>

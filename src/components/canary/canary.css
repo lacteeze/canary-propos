@@ -6,7 +6,7 @@
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 20px;
-  --radius-pill: 999px;
+  --radius-pill: 9999px;
 
   /* Light default — soft neutral + forest green */
   --bg: #f0f2ef;
@@ -21,8 +21,10 @@
   --accent: #2f6b52;
   --accent-hi: #3a7d62;
   --accent-text: #ffffff;
-  --green: #4a8b6a;
-  --green-text: #f2f8f4;
+  --success: #4a8b6a;
+  --success-text: #f2f8f4;
+  --green: var(--success);
+  --green-text: var(--success-text);
   --amber: #c4923a;
   --amber-text: #3d2e12;
   --orange: #d98a4a;
@@ -43,20 +45,24 @@
 }
 
 .cnry[data-theme='dark'] {
-  --bg: #141816;
-  --panel: #1c211e;
-  --elev: #242b27;
-  --hover: #2c3530;
-  --border: #343f39;
-  --border2: #45524a;
-  --text: #eef2ef;
-  --dim: #9aab9f;
-  --faint: #6d7d72;
-  --accent: #4a9b72;
-  --accent-hi: #5aad82;
-  --accent-text: #0f1a14;
-  --green: #6aab82;
-  --green-text: #0f1a14;
+  --bg: #141414;
+  --panel: #1c1c1c;
+  --elev: #242424;
+  --hover: #2a2a2a;
+  --border: #343434;
+  --border2: #454545;
+  --text: #eef0ef;
+  --dim: #9a9ea0;
+  --faint: #6d7170;
+  --accent: #ffcc00;
+  --accent-hi: #ffe066;
+  --accent-text: #141816;
+  --accent-muted: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  --accent-border: color-mix(in srgb, var(--accent) 35%, var(--border));
+  --success: #4caf6a;
+  --success-text: #0a1610;
+  --green: var(--success);
+  --green-text: var(--success-text);
   --amber: #d4a85a;
   --amber-text: #1e1608;
   --orange: #e8a86a;
@@ -66,14 +72,14 @@
   --blue: #7a94c8;
   --purple: #9b82c8;
   --purple-text: #f0e8fc;
-  --gray: #5d6b62;
-  --input: #181e1b;
-  --glass: rgba(28, 33, 30, 0.96);
+  --gray: #5a5e5c;
+  --input: #181818;
+  --glass: rgba(28, 28, 28, 0.96);
   --glass-border: rgba(255, 255, 255, 0.08);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.2);
   --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.45), 0 4px 16px rgba(0, 0, 0, 0.25);
-  --backdrop: rgba(8, 10, 9, 0.62);
+  --backdrop: rgba(8, 8, 8, 0.62);
 }
 
 /* ---------- Shell ---------- */
@@ -109,6 +115,7 @@
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   z-index: 40;
+  overflow: visible;
 }
 
 .cnry .cy-header-left {
@@ -119,6 +126,9 @@
   min-width: 0;
   justify-self: start;
   grid-column: 1;
+  overflow: visible;
+  position: relative;
+  z-index: 2;
 }
 
 .cnry .cy-header-brand {
@@ -153,13 +163,6 @@
   font-weight: 500;
 }
 
-.cnry .cy-topnav-menu-btn {
-  display: none;
-  padding: 6px 10px !important;
-  font-size: 14px;
-  line-height: 1;
-}
-
 .cnry .cy-topnav {
   display: flex;
   align-items: center;
@@ -173,6 +176,8 @@
   padding: 2px 0;
   grid-column: 2;
   justify-self: center;
+  position: relative;
+  z-index: 1;
 }
 
 .cnry .cy-topnav::-webkit-scrollbar {
@@ -276,14 +281,15 @@
   z-index: 60;
 }
 
+/* Stay in left zone after logo — stop short of first topnav tab */
 .cnry .cy-search--open .cy-search-expanded {
-  width: min(320px, 72vw);
-  max-width: min(320px, 72vw);
+  width: min(280px, 28vw);
+  max-width: min(280px, 28vw);
 }
 
 .cnry .cy-search--ask .cy-search-expanded {
-  width: min(380px, 84vw);
-  max-width: min(380px, 84vw);
+  width: min(280px, 28vw);
+  max-width: min(280px, 28vw);
 }
 
 .cnry .cy-search-panel {
@@ -291,7 +297,8 @@
   top: calc(100% + 8px);
   left: 0;
   right: auto;
-  width: min(420px, calc(100vw - 24px));
+  width: 100%;
+  max-width: min(280px, 28vw);
   max-height: min(70vh, 560px);
   display: flex;
   flex-direction: column;
@@ -299,11 +306,16 @@
   overflow: hidden;
   border-radius: 14px;
   border: 1px solid var(--glass-border);
-  background: var(--glass);
+  /* Near-solid like property modal — less see-through than --glass */
+  background: color-mix(in srgb, var(--panel) 98%, transparent);
   box-shadow: var(--shadow-lg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   z-index: 70;
+}
+
+.cnry[data-theme='dark'] .cy-search-panel {
+  background: color-mix(in srgb, var(--panel) 98%, transparent);
 }
 
 .cnry .cy-search-panel-section {
@@ -340,7 +352,7 @@
   width: 100%;
   padding: 8px 10px;
   border: none;
-  border-radius: 9px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--text);
   text-align: left;
@@ -393,7 +405,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--green);
+  background: var(--accent);
   flex: none;
 }
 
@@ -437,7 +449,7 @@
   width: 100%;
   font-size: 12.5px;
   padding: 8px 10px;
-  border-radius: 9px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   background: var(--elev);
   color: var(--text);
@@ -511,29 +523,48 @@
   justify-content: center;
 }
 
-/* Portaled account menu — carries .cnry + data-theme so tokens apply outside the shell */
+/*
+ * Global Canary menu theme for portaled DropdownMenu content.
+ * Usage: className="cnry cy-menu" data-theme={theme}
+ * (cy-profile-menu kept as an alias for the account menu.)
+ */
+.cnry.cy-menu[data-slot='dropdown-menu-content'],
 .cnry.cy-profile-menu[data-slot='dropdown-menu-content'] {
   min-width: 14rem;
   padding: 6px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--glass-border) !important;
-  background: var(--glass) !important;
+  border: 1px solid var(--border) !important;
+  /* Solid panel for readability outside the shell */
+  background: color-mix(in srgb, var(--panel) 100%, transparent) !important;
   color: var(--text) !important;
   font-family: var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif;
   font-size: 13.5px;
   line-height: 1.4;
   box-shadow: var(--shadow-lg) !important;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   overflow: hidden;
   --tw-ring-shadow: 0 0 #0000 !important;
-  --popover: var(--glass);
+  --popover: var(--panel);
   --popover-foreground: var(--text);
   --muted-foreground: var(--dim);
   --destructive: var(--red);
   --ring: transparent;
 }
 
+.cnry.cy-menu[data-theme='light'][data-slot='dropdown-menu-content'],
+.cnry.cy-profile-menu[data-theme='light'][data-slot='dropdown-menu-content'] {
+  background: rgba(255, 255, 255, 1) !important;
+  border-color: rgba(228, 235, 230, 0.95) !important;
+}
+
+.cnry.cy-menu[data-theme='dark'][data-slot='dropdown-menu-content'],
+.cnry.cy-profile-menu[data-theme='dark'][data-slot='dropdown-menu-content'] {
+  background: rgba(28, 28, 28, 1) !important;
+  border-color: rgba(52, 52, 52, 0.95) !important;
+}
+
+.cnry.cy-menu [data-slot='dropdown-menu-label'],
 .cnry.cy-profile-menu [data-slot='dropdown-menu-label'] {
   padding: 8px 10px 4px;
   font-size: 11px;
@@ -543,12 +574,16 @@
   color: var(--faint);
 }
 
+.cnry.cy-menu [data-slot='dropdown-menu-item'],
+.cnry.cy-menu [data-slot='dropdown-menu-radio-item'],
+.cnry.cy-menu [data-slot='dropdown-menu-checkbox-item'],
 .cnry.cy-profile-menu [data-slot='dropdown-menu-item'],
-.cnry.cy-profile-menu [data-slot='dropdown-menu-radio-item'] {
+.cnry.cy-profile-menu [data-slot='dropdown-menu-radio-item'],
+.cnry.cy-profile-menu [data-slot='dropdown-menu-checkbox-item'] {
   gap: 8px;
   margin: 1px 0;
   padding: 8px 10px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   font-size: 13.5px;
   font-weight: 500;
   color: var(--text);
@@ -556,44 +591,80 @@
   outline: none;
 }
 
+.cnry.cy-menu [data-slot='dropdown-menu-item']:focus,
+.cnry.cy-menu [data-slot='dropdown-menu-item']:hover,
+.cnry.cy-menu [data-slot='dropdown-menu-radio-item']:focus,
+.cnry.cy-menu [data-slot='dropdown-menu-radio-item']:hover,
+.cnry.cy-menu [data-slot='dropdown-menu-checkbox-item']:focus,
+.cnry.cy-menu [data-slot='dropdown-menu-checkbox-item']:hover,
 .cnry.cy-profile-menu [data-slot='dropdown-menu-item']:focus,
 .cnry.cy-profile-menu [data-slot='dropdown-menu-item']:hover,
 .cnry.cy-profile-menu [data-slot='dropdown-menu-radio-item']:focus,
-.cnry.cy-profile-menu [data-slot='dropdown-menu-radio-item']:hover {
+.cnry.cy-profile-menu [data-slot='dropdown-menu-radio-item']:hover,
+.cnry.cy-profile-menu [data-slot='dropdown-menu-checkbox-item']:focus,
+.cnry.cy-profile-menu [data-slot='dropdown-menu-checkbox-item']:hover {
   background: color-mix(in srgb, var(--accent) 10%, var(--hover)) !important;
   color: var(--text) !important;
 }
 
+.cnry.cy-menu [data-slot='dropdown-menu-radio-item'][data-checked],
+.cnry.cy-menu [data-slot='dropdown-menu-radio-item'][aria-checked='true'],
+.cnry.cy-menu [data-slot='dropdown-menu-checkbox-item'][data-checked],
+.cnry.cy-menu [data-slot='dropdown-menu-checkbox-item'][aria-checked='true'],
 .cnry.cy-profile-menu [data-slot='dropdown-menu-radio-item'][data-checked],
-.cnry.cy-profile-menu [data-slot='dropdown-menu-radio-item'][aria-checked='true'] {
+.cnry.cy-profile-menu [data-slot='dropdown-menu-radio-item'][aria-checked='true'],
+.cnry.cy-profile-menu [data-slot='dropdown-menu-checkbox-item'][data-checked],
+.cnry.cy-profile-menu [data-slot='dropdown-menu-checkbox-item'][aria-checked='true'] {
   background: color-mix(in srgb, var(--accent) 12%, var(--elev));
   color: var(--accent);
 }
 
-.cnry.cy-profile-menu [data-slot='dropdown-menu-radio-item'] svg {
+.cnry.cy-menu [data-slot='dropdown-menu-radio-item'] svg,
+.cnry.cy-menu [data-slot='dropdown-menu-checkbox-item'] svg,
+.cnry.cy-profile-menu [data-slot='dropdown-menu-radio-item'] svg,
+.cnry.cy-profile-menu [data-slot='dropdown-menu-checkbox-item'] svg {
   color: var(--accent);
 }
 
+.cnry.cy-menu [data-slot='dropdown-menu-item'][data-variant='destructive'],
 .cnry.cy-profile-menu [data-slot='dropdown-menu-item'][data-variant='destructive'] {
   color: var(--red) !important;
 }
 
+.cnry.cy-menu [data-slot='dropdown-menu-item'][data-variant='destructive']:focus,
+.cnry.cy-menu [data-slot='dropdown-menu-item'][data-variant='destructive']:hover,
 .cnry.cy-profile-menu [data-slot='dropdown-menu-item'][data-variant='destructive']:focus,
 .cnry.cy-profile-menu [data-slot='dropdown-menu-item'][data-variant='destructive']:hover {
   background: color-mix(in srgb, var(--red) 12%, var(--hover)) !important;
   color: var(--red) !important;
 }
 
+.cnry.cy-menu [data-slot='dropdown-menu-separator'],
 .cnry.cy-profile-menu [data-slot='dropdown-menu-separator'] {
   margin: 6px 4px;
   height: 1px;
   background: color-mix(in srgb, var(--border) 80%, transparent) !important;
 }
 
-.cnry.cy-profile-menu .cy-profile-menu-hint {
+.cnry.cy-menu [data-slot='dropdown-menu-item'] svg,
+.cnry.cy-profile-menu [data-slot='dropdown-menu-item'] svg {
+  color: var(--dim);
+  flex: none;
+}
+
+.cnry.cy-menu .cy-menu-hint,
+.cnry.cy-profile-menu .cy-profile-menu-hint,
+.cnry.cy-menu .cy-profile-menu-hint {
   margin-left: auto;
   color: var(--faint);
   font-size: 12px;
+}
+
+.cnry.cy-menu .cy-menu-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
 }
 
 .cnry .cy-messages-toggle,
@@ -644,10 +715,12 @@
   z-index: 1;
 }
 
-.cnry .cy-search-input--expanded {
+/* Higher specificity than .cy-input so padding isn't overridden by the base input rule */
+.cnry .cy-input.cy-search-input--expanded {
   width: 100%;
   box-sizing: border-box;
-  padding: 7px 28px 7px 32px;
+  /* left: icon at 10px + 14px glyph + gap; right: close btn 22px at right:4px + gap */
+  padding: 7px 32px 7px 38px;
   font-size: 13px;
 }
 
@@ -837,6 +910,18 @@
   border-color: var(--border2);
 }
 
+.cnry .cy-btn--active {
+  border-color: color-mix(in srgb, var(--purple) 35%, var(--border));
+  background: color-mix(in srgb, var(--purple) 10%, var(--panel));
+  color: var(--purple);
+  box-shadow: var(--shadow-sm);
+}
+
+.cnry .cy-btn--active:hover {
+  border-color: color-mix(in srgb, var(--purple) 45%, var(--border));
+  color: var(--purple);
+}
+
 .cnry .cy-btn-primary {
   border: none;
   background: var(--accent);
@@ -864,10 +949,37 @@
   padding: 0;
 }
 
+.cnry .cy-btn-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  flex: none;
+}
+
+.cnry .cy-btn-sm {
+  padding: 2px 10px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.cnry .cy-status-chip {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+
 .cnry .cy-view-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex: none;
   border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
   background: color-mix(in srgb, var(--accent) 8%, var(--panel));
   border-radius: var(--radius-pill);
@@ -955,14 +1067,60 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
+/* Native <select> — compact toolbar / filter chip */
 .cnry .cy-select {
-  background: var(--panel);
+  appearance: none;
+  background-color: var(--panel);
+  background-image: linear-gradient(45deg, transparent 50%, var(--dim) 50%),
+    linear-gradient(135deg, var(--dim) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) calc(50% - 2px),
+    calc(100% - 9px) calc(50% - 2px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
-  padding: 6px 10px;
+  padding: 6px 28px 6px 10px;
   cursor: pointer;
+  font-family: inherit;
   font-weight: 600;
   font-size: 12.5px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+}
+
+.cnry .cy-select:hover {
+  border-color: var(--border2);
+  background-color: var(--elev);
+}
+
+.cnry .cy-select:focus {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* Native <select> — form / modal field (matches cy-input) */
+.cnry .cy-select--field {
+  width: 100%;
+  border-radius: var(--radius-pill);
+  background-color: var(--input);
+  padding: 9px 28px 9px 10px;
+  margin-top: 4px;
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+.cnry .cy-select--field:hover {
+  background-color: var(--elev);
+}
+
+.cnry .cy-select--compact {
+  padding: 4px 26px 4px 8px;
+  font-size: 13px;
+  border-radius: var(--radius-pill);
+  background-color: var(--input);
+  margin-top: 0;
 }
 
 /* ---------- Scrollbars ---------- */
@@ -1044,6 +1202,7 @@
 /* ---------- Date picker ---------- */
 .cnry .cy-date-picker-trigger {
   width: 100%;
+  font-family: inherit;
 }
 
 .cnry .cy-date-picker-trigger:hover {
@@ -1054,6 +1213,13 @@
 .cnry .cy-date-picker-icon {
   color: var(--text);
   opacity: 0.9;
+}
+
+.cnry .cy-date-picker-popover {
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-lg) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .cnry .cy-date-picker-nav:hover {
@@ -1091,14 +1257,46 @@
 }
 
 /* ---------- Glass modals & drawers ---------- */
-.cnry .cy-modal-backdrop,
-.cnry .cy-property-modal-backdrop {
+.cnry .cy-modal-backdrop {
   position: fixed;
   inset: 0;
   z-index: 60;
   background: var(--backdrop);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+}
+
+.cnry .cy-property-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: color-mix(in srgb, #080808 78%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.cnry[data-theme='light'] .cy-property-modal-backdrop {
+  background: color-mix(in srgb, #1a2420 52%, transparent);
+}
+
+.cnry .cy-drawer-backdrop {
+  background: color-mix(in srgb, #080808 78%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.cnry[data-theme='light'] .cy-drawer-backdrop {
+  background: color-mix(in srgb, #1a2420 52%, transparent);
+}
+
+.cnry .cy-glass-modal-backdrop {
+  background: color-mix(in srgb, #080808 78%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.cnry[data-theme='light'] .cy-glass-modal-backdrop {
+  background: color-mix(in srgb, #1a2420 52%, transparent);
 }
 
 .cnry .cy-glass-modal {
@@ -1108,12 +1306,10 @@
   transform: translate(-50%, -50%);
   z-index: 61;
   overflow-y: auto;
-  background: color-mix(in srgb, var(--panel) 96%, transparent);
-  border: 1px solid var(--glass-border);
+  background: var(--panel);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-lg), 0 24px 48px rgba(0, 0, 0, 0.35);
 }
 
 .cnry .cy-property-modal {
@@ -1126,12 +1322,10 @@
   max-height: min(90vh, 920px);
   display: flex;
   flex-direction: column;
-  background: color-mix(in srgb, var(--panel) 96%, transparent);
-  border: 1px solid var(--glass-border);
+  background: var(--panel);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-lg), 0 24px 48px rgba(0, 0, 0, 0.35);
   overflow: hidden;
 }
 
@@ -1142,7 +1336,7 @@
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  background: var(--panel);
 }
 
 .cnry .cy-property-modal-back-btn {
@@ -1215,7 +1409,7 @@
 .cnry .cy-property-modal-media {
   overflow-y: auto;
   padding: 14px 16px 18px;
-  background: color-mix(in srgb, var(--elev) 50%, transparent);
+  background: var(--elev);
 }
 
 .cnry .cy-property-modal-media-empty {
@@ -1238,12 +1432,10 @@
   right: 0;
   bottom: 0;
   width: min(460px, 94vw);
-  background: var(--glass);
-  border-left: 1px solid var(--glass-border);
+  background: var(--panel);
+  border-left: 1px solid var(--border);
   z-index: 61;
-  box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-lg), -8px 0 32px rgba(0, 0, 0, 0.25);
   overflow-y: auto;
   padding: 16px;
   display: flex;
@@ -1281,6 +1473,44 @@
   min-width: 0;
 }
 
+/* Task detail — centered modal (opaque, not side drawer) */
+.cnry .cy-task-modal-backdrop {
+  z-index: 62;
+  background: color-mix(in srgb, #080808 78%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.cnry[data-theme='light'] .cy-task-modal-backdrop {
+  background: color-mix(in srgb, #1a2420 52%, transparent);
+}
+
+.cnry .cy-task-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 63;
+  width: min(520px, 94vw);
+  max-height: min(88vh, 720px);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 18px 16px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg), 0 24px 48px rgba(0, 0, 0, 0.35);
+}
+
+.cnry .cy-task-property-card:disabled {
+  opacity: 1;
+}
+
+.cnry .cy-task-property-card:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
 /* ---------- Toolbar ---------- */
 .cnry .cy-toolbar {
   display: flex;
@@ -1290,6 +1520,13 @@
   margin-bottom: 10px;
 }
 
+.cnry .cy-toolbar-count {
+  color: var(--dim);
+  font-size: 13px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
 .cnry .cy-bulk-bar {
   display: flex;
   align-items: center;
@@ -1297,7 +1534,7 @@
   flex-wrap: wrap;
   margin-bottom: 10px;
   padding: 8px 12px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   background: var(--elev);
   box-shadow: var(--shadow-sm);
@@ -1309,7 +1546,7 @@
   align-items: center;
   gap: 10px;
   padding: 8px 6px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   cursor: pointer;
   font-size: 13px;
 }
@@ -1378,10 +1615,6 @@
     display: none;
   }
 
-  .cnry .cy-topnav-menu-btn {
-    display: inline-flex;
-  }
-
   .cnry .cy-header-tools {
     grid-column: auto;
     justify-self: auto;
@@ -1389,29 +1622,14 @@
   }
 
   .cnry .cy-topnav {
-    display: none;
     order: 10;
     width: 100%;
     flex: none;
-    flex-direction: column;
-    align-items: stretch;
     justify-content: flex-start;
-    gap: 2px;
-    overflow: visible;
-    padding: 6px 0 2px;
+    padding: 4px 0 2px;
     border-top: 1px solid var(--border);
     grid-column: auto;
     justify-self: auto;
-  }
-
-  .cnry .cy-topnav--open {
-    display: flex;
-  }
-
-  .cnry .cy-topnav-item {
-    justify-content: flex-start;
-    width: 100%;
-    padding: 8px 12px;
   }
 
   .cnry .cy-search-expanded {
@@ -1421,8 +1639,8 @@
 
   .cnry .cy-search--open .cy-search-expanded,
   .cnry .cy-search--ask .cy-search-expanded {
-    width: min(280px, 72vw);
-    max-width: 72vw;
+    width: min(340px, calc(100vw - 96px));
+    max-width: min(340px, calc(100vw - 96px));
   }
 
   .cnry .cy-search-panel {
@@ -1431,7 +1649,9 @@
     left: 12px;
     right: 12px;
     width: auto;
+    max-width: none;
     max-height: min(65vh, 520px);
+    background: color-mix(in srgb, var(--panel) 98%, transparent);
   }
 
   .cnry .cy-main {
@@ -1602,7 +1822,6 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: color-mix(in srgb, var(--panel) 97%, transparent);
 }
 
 .cnry .cy-cal-header {
@@ -1663,6 +1882,7 @@
   font-size: 12px;
   padding: 6px 12px;
   cursor: pointer;
+  border-radius: var(--radius-pill);
 }
 
 .cnry .cy-cal-mode-toggle button.is-active,

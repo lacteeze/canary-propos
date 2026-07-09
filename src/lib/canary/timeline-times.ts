@@ -1,5 +1,5 @@
 import type { LeaseTermType } from './lease-term'
-import type { CanaryStrBooking } from './types'
+import type { CanaryHospitableTask, CanaryOwnerOccupiedBlock, CanaryStrBooking } from './types'
 
 /** STR default check-in: 4:00 PM on arrival date */
 export const STR_DEFAULT_CHECK_IN_HOUR = 16
@@ -173,6 +173,37 @@ export function draftBarRange(
     if (endRange) endMs = endRange.endMs
   }
   return { startMs: startRange.startMs, endMs }
+}
+
+/** Hospitable task span for timeline overlay (due date or start/end window). */
+export function taskBarRange(
+  task: Pick<CanaryHospitableTask, 'dueDate' | 'startAt' | 'endAt'>
+): TimelineRange | null {
+  const startIso = task.startAt?.trim()
+  const endIso = task.endAt?.trim()
+  if (startIso && endIso) {
+    const s = parseTimestamp(startIso)
+    const e = parseTimestamp(endIso)
+    if (s && e && e.getTime() > s.getTime()) {
+      return { startMs: s.getTime(), endMs: e.getTime() }
+    }
+  }
+  const day = task.dueDate?.trim() || (startIso ? startIso.slice(0, 10) : '')
+  if (!day) return null
+  return leaseBarRange(day, day)
+}
+
+export function ownerOccupiedBarRange(block: CanaryOwnerOccupiedBlock): TimelineRange | null {
+  const checkIn =
+    block.checkInAt ??
+    resolveTimestampFromFields([], block.start, STR_DEFAULT_CHECK_IN_HOUR, STR_DEFAULT_CHECK_IN_MINUTE)
+  const checkOut =
+    block.checkOutAt ??
+    resolveTimestampFromFields([], block.end, STR_DEFAULT_CHECK_OUT_HOUR, STR_DEFAULT_CHECK_OUT_MINUTE)
+  const s = parseTimestamp(checkIn)
+  const e = parseTimestamp(checkOut)
+  if (!s || !e) return null
+  return { startMs: s.getTime(), endMs: e.getTime() }
 }
 
 export function strBarRange(booking: CanaryStrBooking): TimelineRange | null {

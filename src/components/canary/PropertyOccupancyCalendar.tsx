@@ -275,12 +275,12 @@ function PropertyQuickEdit({
       <div className="cy-cal-side-section-title">Quick edit</div>
       <div className="cy-cal-side-grid">
         <label>{formLabel('Status')}
-          <select value={status} onChange={(e) => setStatus(e.target.value)} style={fieldStyle}>
+          <select className="cy-select cy-select--field" value={status} onChange={(e) => setStatus(e.target.value)}>
             {PROPERTY_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </label>
         <label>{formLabel('Type')}
-          <select value={propertyType} onChange={(e) => setPropertyType(e.target.value)} style={fieldStyle}>
+          <select className="cy-select cy-select--field" value={propertyType} onChange={(e) => setPropertyType(e.target.value)}>
             {PROPERTY_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
           </select>
         </label>
@@ -300,7 +300,7 @@ function PropertyQuickEdit({
           <input type="number" min={0} value={rent} onChange={(e) => setRent(e.target.value)} style={fieldStyle} />
         </label>
         <label>{formLabel('Pets')}
-          <select value={pets} onChange={(e) => setPets(e.target.value)} style={fieldStyle}>
+          <select className="cy-select cy-select--field" value={pets} onChange={(e) => setPets(e.target.value)}>
             {PET_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         </label>
@@ -311,19 +311,19 @@ function PropertyQuickEdit({
           <div className="cy-cal-side-section-title">Staff only</div>
           <div className="cy-cal-side-grid">
             <label>{formLabel('Portfolio')}
-              <select value={portfolioId} onChange={(e) => setPortfolioId(e.target.value)} style={fieldStyle}>
+              <select className="cy-select cy-select--field" value={portfolioId} onChange={(e) => setPortfolioId(e.target.value)}>
                 <option value="">— None —</option>
                 {portfolios.map((pf) => <option key={pf.id} value={pf.id}>{pf.name}</option>)}
               </select>
             </label>
             <label>{formLabel('Owner')}
-              <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} style={fieldStyle}>
+              <select className="cy-select cy-select--field" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
                 <option value="">— None —</option>
                 {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
               </select>
             </label>
             <label>{formLabel('Fee type')}
-              <select value={feeType} onChange={(e) => setFeeType(e.target.value)} style={fieldStyle}>
+              <select className="cy-select cy-select--field" value={feeType} onChange={(e) => setFeeType(e.target.value)}>
                 <option value="percent">Percent (%)</option>
                 <option value="flat">Flat ($)</option>
               </select>
@@ -692,7 +692,7 @@ export default function PropertyOccupancyCalendar({
 
   return (
     <>
-      <div onClick={onClose} className="cy-modal-backdrop cy-cal-backdrop" aria-hidden />
+      <div onClick={onClose} className="cy-modal-backdrop cy-glass-modal-backdrop cy-cal-backdrop" aria-hidden />
       <div
         role="dialog"
         aria-modal="true"

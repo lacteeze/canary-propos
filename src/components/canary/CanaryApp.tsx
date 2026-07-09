@@ -4,7 +4,7 @@
 // Faithful React port of the CanaryApp.dc design prototype, wired to live
 // Supabase data (loaded server-side in src/app/(canary)/app/page.tsx).
 import React, { useCallback, useMemo, useRef, useState, useTransition } from 'react'
-import { CalendarIcon, ChevronDown, MessageSquare, Repeat2, Search, X } from 'lucide-react'
+import { Bell, CalendarIcon, ChevronDown, MessageSquare, Repeat2, Search, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { activateDraftListing, deleteDraftListing, saveDraftListing, savePaymentEntry } from '@/app/actions/canary'
@@ -26,6 +26,10 @@ import CanaryActionFab, { importDatasetForView, type FabAction } from './CanaryA
 import CanaryAddPropertyModal from './CanaryAddPropertyModal'
 import DatePickerField from './DatePickerField'
 import EntityDetailDrawer, { type DrawerState } from './EntityDetailDrawer'
+import AddOwnerOccupiedModal from './AddOwnerOccupiedModal'
+import OwnerOccupiedDetailDrawer from './OwnerOccupiedDetailDrawer'
+import BookingDetailDrawer from './BookingDetailDrawer'
+import TaskDetailDrawer from './TaskDetailDrawer'
 import {
   CARD_LAYOUT_PRESET,
   KPI_LAYOUT_PRESET,
@@ -35,12 +39,15 @@ import {
 } from './layout'
 import MessagesView from './MessagesView'
 import PropertyOccupancyCalendar from './PropertyOccupancyCalendar'
-import type { CanaryDb, CanaryDraft, CanaryLease, CanaryPayment, CanaryPerson, CanaryPortfolio, CanaryProject, CanaryProperty, CanaryRole, CanaryStrBooking, DraftListingStatus, HospitableCalendarData } from '@/lib/canary/types'
+import type { CanaryDb, CanaryDraft, CanaryHospitableTask, CanaryLease, CanaryOwnerOccupiedBlock, CanaryPayment, CanaryPerson, CanaryPortfolio, CanaryProject, CanaryProperty, CanaryRole, CanaryStrBooking, DraftListingStatus, HospitableCalendarData, HospitableTasksData } from '@/lib/canary/types'
+import { deleteLocalOwnerOccupiedBlock, loadLocalOwnerOccupiedBlocks } from '@/lib/canary/owner-occupied-storage'
+import { isOpenHospitableTask } from '@/lib/hospitable/map-tasks'
 import { draftStatusBadge, draftTimelineMeta, inquiryStatusBadge } from '@/lib/canary/types'
 import { isMonthToMonthLease, validateLeaseDates } from '@/lib/canary/lease-term'
 import type { LeaseTermType } from '@/lib/canary/lease-term'
-import { draftBarRange, leaseBarRangeForLease, strBarRange, tlRangesOverlap } from '@/lib/canary/timeline-times'
+import { draftBarRange, leaseBarRangeForLease, ownerOccupiedBarRange, strBarRange, taskBarRange, tlRangesOverlap } from '@/lib/canary/timeline-times'
 import { resolveToCanaryAddress } from '@/lib/hospitable/property-label'
+import '@/design-system/macos27/index.css'
 import './canary.css'
 
 const MONO = "'IBM Plex Mono', monospace"
@@ -59,6 +66,7 @@ const TL_STATUS_OPTIONS = [
   { key: 'draft', label: 'Drafts', dot: 'var(--accent)' },
   { key: 'renewal_sent', label: 'Renewals sent', dot: 'var(--purple)' },
   { key: 'str', label: 'STR stays', dot: 'var(--blue)' },
+  { key: 'owner_occupied', label: 'Owner occupied', dot: 'var(--amber)' },
   { key: 'past', label: 'Past', dot: 'var(--gray)' },
 ] as const
 
@@ -121,6 +129,13 @@ function leaseEndSortTime(ls: CanaryLease[]): number | null {
   }
   return nextUpcoming
 }
+function hasActiveOrExpiringLease(leases: CanaryLease[], address: string): boolean {
+  return leases.some((l) => l.property === address && (l.status === 'Active' || l.status === 'Expiring'))
+}
+function isVacantProperty(property: CanaryProperty, leases: CanaryLease[]): boolean {
+  if (property.archivedAt) return false
+  return !hasActiveOrExpiringLease(leases, property.address)
+}
 
 type ChatMsg = { role: 'user' | 'assistant'; text: string }
 type AskNavTarget =
@@ -162,6 +177,7 @@ type PayFormState = { date: string; property: string; category: string; descript
 interface CanaryAppProps {
   db: CanaryDb
   hospitableCalendar: HospitableCalendarData
+  hospitableTasks: HospitableTasksData
   userRole: CanaryRole
   userPersonId: string
   canSwitchRoles: boolean
@@ -184,7 +200,7 @@ function userInitials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-export default function CanaryApp({ db, hospitableCalendar, userRole, userPersonId, canSwitchRoles, userName }: CanaryAppProps) {
+export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, userRole, userPersonId, canSwitchRoles, userName }: CanaryAppProps) {
   const router = useRouter()
   const [, startTransition] = useTransition()
 
@@ -199,16 +215,24 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const searchInputRef = useRef<HTMLInputElement>(null)
   const searchWrapRef = useRef<HTMLDivElement>(null)
   const chatScrollRef = useRef<HTMLDivElement>(null)
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [tlAnchor, setTlAnchor] = useState<number | null>(null)
   // Default zoom: 1mo (index of { d: 30, label: '1mo' } in TL_ZOOM_PRESETS)
   const [tlZoomIdx, setTlZoomIdx] = useState(4)
   const [tlSortDir, setTlSortDir] = useState<'asc' | 'desc'>('asc')
   const [tlStatusFilter, setTlStatusFilter] = useState<TlStatusKey[]>([])
+  const [tlVacancyOnly, setTlVacancyOnly] = useState(false)
+  const [tlShowTasks, setTlShowTasks] = useState(false)
   const [tlOverlapPick, setTlOverlapPick] = useState<{ label: string; action: () => void }[] | null>(null)
+  const [taskDetailId, setTaskDetailId] = useState<string | null>(null)
+  const [bookingDetailId, setBookingDetailId] = useState<string | null>(null)
+  const [ownerOccupiedDetailId, setOwnerOccupiedDetailId] = useState<string | null>(null)
+  const [ownerStayModalOpen, setOwnerStayModalOpen] = useState(false)
+  const [ownerStayPrefillPropId, setOwnerStayPrefillPropId] = useState<string | undefined>()
+  const [localOwnerBlocks, setLocalOwnerBlocks] = useState<CanaryOwnerOccupiedBlock[]>([])
   const [propFilter, setPropFilter] = useState('')
   const [peopleRole, setPeopleRole] = useState('')
   const [projFilter, setProjFilter] = useState('')
+  const [taskFilter, setTaskFilter] = useState('Open')
   const [drawer, setDrawer] = useState<Drawer>(null)
   const [pageViews, setPageViews] = useState<Record<string, string>>({})
   const [pageSort, setPageSort] = useState<Record<string, SortState>>({})
@@ -386,6 +410,10 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const activeProps = useMemo(() => scoped.properties.filter((p) => !p.archivedAt), [scoped.properties])
   const archivedProps = useMemo(() => scoped.properties.filter((p) => p.archivedAt), [scoped.properties])
   const props = viewingArchived ? archivedProps : activeProps
+  React.useEffect(() => {
+    setLocalOwnerBlocks(loadLocalOwnerOccupiedBlocks(userPersonId))
+  }, [userPersonId])
+
   const scopedStrBookings = useMemo(() => {
     if (role === 'Tenant' || role === 'Vendor') return []
     const bookings = hospitableCalendar.strBookings
@@ -395,6 +423,56 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     }
     return bookings
   }, [hospitableCalendar.strBookings, role, props])
+  const scopedOwnerOccupied = useMemo(() => {
+    if (role === 'Tenant' || role === 'Vendor') return [] as CanaryOwnerOccupiedBlock[]
+    const hospitable = hospitableCalendar.ownerOccupiedBlocks ?? []
+    const merged = [...hospitable, ...localOwnerBlocks]
+    if (role === 'Owner') {
+      const addrs = new Set(props.map((p) => p.address))
+      return merged.filter((b) => addrs.has(b.property))
+    }
+    return merged
+  }, [hospitableCalendar.ownerOccupiedBlocks, localOwnerBlocks, role, props])
+  const scopedHospitableTasks = useMemo(() => {
+    if (role === 'Tenant' || role === 'Vendor') return [] as CanaryHospitableTask[]
+    const list = hospitableTasks.tasks
+    if (role === 'Owner') {
+      const addrs = new Set(props.map((p) => p.address))
+      return list.filter((t) => addrs.has(t.property))
+    }
+    return list
+  }, [hospitableTasks.tasks, role, props])
+  const openTaskCount = useMemo(
+    () => scopedHospitableTasks.filter(isOpenHospitableTask).length,
+    [scopedHospitableTasks]
+  )
+  const taskDetail = useMemo(
+    () => (taskDetailId ? scopedHospitableTasks.find((t) => t.id === taskDetailId) ?? null : null),
+    [scopedHospitableTasks, taskDetailId]
+  )
+  const bookingDetail = useMemo(
+    () => (bookingDetailId ? scopedStrBookings.find((b) => b.id === bookingDetailId) ?? null : null),
+    [scopedStrBookings, bookingDetailId]
+  )
+  const ownerOccupiedDetail = useMemo(
+    () => (ownerOccupiedDetailId ? scopedOwnerOccupied.find((b) => b.id === ownerOccupiedDetailId) ?? null : null),
+    [scopedOwnerOccupied, ownerOccupiedDetailId]
+  )
+  const openTaskDetail = useCallback((id: string) => setTaskDetailId(id), [])
+  const openBookingDetail = useCallback((id: string) => setBookingDetailId(id), [])
+  const openOwnerOccupiedDetail = useCallback((id: string) => setOwnerOccupiedDetailId(id), [])
+  const openOwnerStayModal = useCallback((propertyId?: string) => {
+    setOwnerStayPrefillPropId(propertyId)
+    setOwnerStayModalOpen(true)
+  }, [])
+  const handleOwnerBlockSaved = useCallback((block: CanaryOwnerOccupiedBlock) => {
+    setLocalOwnerBlocks((prev) => [...prev, block])
+  }, [])
+  const handleDeleteLocalOwnerBlock = useCallback((id: string) => {
+    deleteLocalOwnerOccupiedBlock(id, userPersonId)
+    setLocalOwnerBlocks((prev) => prev.filter((b) => b.id !== id))
+  }, [userPersonId])
+  const showTasksKpi = role !== 'Tenant' && role !== 'Vendor'
   const strInWindow = useMemo(() => {
     const today = todayMid.getTime()
     return scopedStrBookings.filter((b) => {
@@ -405,19 +483,40 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   }, [scopedStrBookings, todayMid])
   const activeLeases = scoped.leases.filter((l) => l.status === 'Active' || l.status === 'Expiring')
   const activePortfolios = scoped.portfolios.filter((pf) => pf.status === 'Active')
-  const occupied = props.filter((p) => p.status === 'Leased' || p.status === 'Airbnb' || p.status === 'STR').length
+  const vacantCount = useMemo(
+    () => activeProps.filter((p) => isVacantProperty(p, scoped.leases)).length,
+    [activeProps, scoped.leases],
+  )
   const hasSuccessor = useCallback((l: CanaryLease) => scoped.leases.some((o) => o !== l && o.property === l.property && (o.status === 'Upcoming' || (() => { const os = parseDate(o.start); const le = parseDate(l.end); return !!os && !!le && os > le })())), [scoped.leases])
   const expNoRenew = activeLeases.filter((l) => { const e = parseDate(l.end); return !!e && e >= now && e <= soon && !hasSuccessor(l) })
   const rentRoll = activeLeases.reduce((s, l) => s + rentNum(l.rent), 0)
   const showPortfoliosKpi = role !== 'Tenant' && role !== 'Vendor'
-  const kpis: { label: string; value: string; color: string; view?: string }[] = [
+  const showPeopleKpi = priv
+  const openVacancyTimeline = useCallback(() => {
+    setTlStatusFilter([])
+    setTlVacancyOnly(true)
+    setView('leases')
+    setDrawer(null)
+  }, [])
+  const kpis: { label: string; value: string; color: string; view?: string; onActivate?: () => void }[] = [
     { label: 'Properties', value: String(props.length), color: 'var(--text)', view: 'properties' },
-    { label: 'Occupancy', value: props.length ? Math.round((occupied / props.length) * 100) + '%' : '—', color: 'var(--green)', view: 'properties' },
-    { label: 'Active leases', value: String(activeLeases.length), color: 'var(--text)', view: 'leases' },
+    { label: 'Vacancy', value: String(vacantCount), color: 'var(--amber)', view: 'leases', onActivate: openVacancyTimeline },
+    { label: 'Leases', value: String(activeLeases.length), color: 'var(--text)', view: 'leases' },
     { label: 'STR · next 90d', value: hospitableCalendar.connected ? String(strInWindow) : '—', color: 'var(--blue)', view: 'properties' },
-    { label: 'Expiring · no renewal', value: String(expNoRenew.length), color: 'var(--red)', view: 'leases' },
+    { label: 'Expiring', value: String(expNoRenew.length), color: 'var(--red)', view: 'leases' },
     ...(showPortfoliosKpi
       ? [{ label: 'Portfolios', value: String(activePortfolios.length), color: 'var(--text)', view: 'portfolios' }]
+      : []),
+    ...(showPeopleKpi
+      ? [{ label: 'People', value: String(scoped.people.length), color: 'var(--text)', view: 'people' }]
+      : []),
+    ...(showTasksKpi
+      ? [{
+          label: 'Tasks',
+          value: hospitableTasks.connected ? String(openTaskCount) : '—',
+          color: 'var(--amber)',
+          view: 'tasks',
+        }]
       : []),
     { label: 'Monthly rent roll', value: money(rentRoll), color: 'var(--text)', view: 'payments' },
   ]
@@ -572,8 +671,6 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'leases', label: 'Leasing' },
     { key: 'properties', label: 'Properties' },
-    { key: 'people', label: 'People', privOnly: true },
-    { key: 'payments', label: 'Payments', hideFor: ['Vendor'] },
     { key: 'projects', label: 'Projects' },
   ]
   const navItems = allNav
@@ -639,12 +736,21 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const winEnd = new Date(winStart.getTime() + spanDays * DAY)
   const span = winEnd.getTime() - winStart.getTime()
   const pct = (d: Date | number) => Math.max(0, Math.min(100, ((typeof d === 'number' ? d : d.getTime()) - winStart.getTime()) / span * 100))
+  const tlDaily = spanDays <= 60
+  const tlMinWidth = tlDaily ? Math.max(760, 250 + spanDays * 26) : 760
+  const tlHeaderMonth = (() => {
+    const month = winStart.toLocaleDateString('en-CA', { month: 'short' })
+    return winStart.getFullYear() !== now.getFullYear() ? `${month} ${winStart.getFullYear()}` : month
+  })()
   const tlTicks: { left: string; label: string; weight: number }[] = []
   const pushTick = (t: Date, label: string, isYearStart: boolean) => tlTicks.push({ left: pct(t).toFixed(2) + '%', label, weight: isYearStart ? 700 : 500 })
   if (spanDays <= 7) {
     for (let t = new Date(winStart); t <= winEnd; t.setDate(t.getDate() + 1)) pushTick(new Date(t), t.toLocaleDateString('en-CA', { weekday: 'short', day: 'numeric' }), false)
-  } else if (spanDays <= 45) {
-    for (let t = new Date(winStart); t <= winEnd; t.setDate(t.getDate() + 7)) pushTick(new Date(t), t.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }), false)
+  } else if (spanDays <= 60) {
+    for (let t = new Date(winStart); t <= winEnd; t.setDate(t.getDate() + 1)) {
+      const d = new Date(t)
+      pushTick(d, String(d.getDate()), false)
+    }
   } else if (spanDays <= 450) {
     for (let t = new Date(winStart.getFullYear(), winStart.getMonth(), 1); t <= winEnd; t = new Date(t.getFullYear(), t.getMonth() + 1, 1)) pushTick(t, t.toLocaleDateString('en-CA', { month: 'short' }), t.getMonth() === 0)
   } else {
@@ -653,6 +759,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const tlTodayLeft = pct(now).toFixed(2) + '%'
   const tlSliderOffset = Math.round((winStart.getTime() - todayMid.getTime()) / DAY)
   const tlFilterActive = tlStatusFilter.length > 0
+  const tlAnyFilterActive = tlFilterActive || tlVacancyOnly
   const filt: Record<TlStatusKey, boolean> = {
     active: !tlFilterActive || tlStatusFilter.includes('active'),
     expiring: !tlFilterActive || tlStatusFilter.includes('expiring'),
@@ -660,18 +767,31 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     draft: !tlFilterActive || tlStatusFilter.includes('draft'),
     renewal_sent: !tlFilterActive || tlStatusFilter.includes('renewal_sent'),
     str: !tlFilterActive || tlStatusFilter.includes('str'),
+    owner_occupied: !tlFilterActive || tlStatusFilter.includes('owner_occupied'),
     past: !tlFilterActive || tlStatusFilter.includes('past'),
   }
-  const tlStatusLabel = !tlFilterActive
-    ? 'All statuses'
-    : tlStatusFilter.length === 1
-      ? (TL_STATUS_OPTIONS.find((o) => o.key === tlStatusFilter[0])?.label ?? '1 status')
-      : `${tlStatusFilter.length} statuses`
+  const tlFilterLabel = tlVacancyOnly && !tlStatusFilter.length
+    ? 'Vacancy only'
+    : !tlAnyFilterActive
+    ? 'Filters'
+    : `Filters · ${[
+        ...(tlVacancyOnly ? ['Vacancy only'] : []),
+        ...tlStatusFilter.map((key) => TL_STATUS_OPTIONS.find((o) => o.key === key)?.label ?? key),
+      ].join(', ')}`
   const toggleTlStatus = (key: TlStatusKey) => {
+    setTlVacancyOnly(false)
     setTlStatusFilter((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
   }
+  const clearTlFilters = useCallback(() => {
+    setTlStatusFilter([])
+    setTlVacancyOnly(false)
+  }, [])
 
-  const timelineProps = useMemo(() => props.filter(matchProp), [props, q])
+  const timelineProps = useMemo(() => {
+    const base = props.filter(matchProp)
+    if (!tlVacancyOnly) return base
+    return base.filter((p) => isVacantProperty(p, scoped.leases))
+  }, [props, q, tlVacancyOnly, scoped.leases])
   const timelineAddressFor = useCallback(
     (address: string) => resolveToCanaryAddress(address, props) ?? address,
     [props]
@@ -704,6 +824,25 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     })
     return m
   }, [scopedStrBookings, timelineAddressFor])
+  const ownerOccupiedByProp = useMemo(() => {
+    const m = new Map<string, CanaryOwnerOccupiedBlock[]>()
+    scopedOwnerOccupied.forEach((b) => {
+      const k = timelineAddressFor(b.property)
+      if (!m.has(k)) m.set(k, [])
+      m.get(k)!.push(b)
+    })
+    return m
+  }, [scopedOwnerOccupied, timelineAddressFor])
+  const tasksByProp = useMemo(() => {
+    const m = new Map<string, CanaryHospitableTask[]>()
+    scopedHospitableTasks.forEach((t) => {
+      if (!isOpenHospitableTask(t)) return
+      const k = timelineAddressFor(t.property)
+      if (!m.has(k)) m.set(k, [])
+      m.get(k)!.push(t)
+    })
+    return m
+  }, [scopedHospitableTasks, timelineAddressFor])
 
   const catOf = (l: CanaryLease) => {
     if (l.status === 'Upcoming') return 'upcoming'
@@ -728,9 +867,10 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const leaseTimelineLabel = (l: CanaryLease, cat: ReturnType<typeof catOf>) =>
     [leaseTimelineStatusLabel(l, cat), leaseTimelineRent(l)].filter(Boolean).join(' · ')
 
-  type TlBarKind = 'lease' | 'draft' | 'str'
+  type TlBarKind = 'lease' | 'draft' | 'str' | 'owner_occupied' | 'task'
   type TlBar = { left: string; width: string; bg: string; color: string; borderStyle: string; label: string; title: string; onClick?: () => void; top: number; height: number; interactive: boolean; kind: TlBarKind; zIndex: number; startMs: number; endMs: number; opacity?: number }
   const TL_BAR_H = 28
+  const TL_TASK_BAR_H = 18
   const TL_BAR_GAP = 4
   const TL_BAR_TOP = 12
   const assignBarLanes = (bars: TlBar[]) => {
@@ -770,7 +910,12 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     }
     setTlOverlapPick(hits.map((b) => ({ label: b.label, action: () => { setTlOverlapPick(null); b.onClick?.() } })))
   }
-  const buildTimelineRow = (address: string, p: CanaryProperty | undefined, labelAddress?: string) => {
+  const buildTimelineRow = (
+    address: string,
+    p: CanaryProperty | undefined,
+    labelAddress?: string,
+    externalBadge: 'STR' | 'TASK' | null = p ? null : 'STR',
+  ) => {
     const ls = leasesByProp.get(address) || []
     const leaseEndMs = leaseEndSortTime(ls)
     const bars: TlBar[] = []
@@ -835,20 +980,55 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
         borderStyle: pending ? '2px dashed var(--blue)' : 'none',
         label: b.guestLabel,
         title: `${b.platform} · ${b.guestLabel} · ${b.start} → ${b.end}${b.nights ? ` · ${b.nights}n` : ''}${b.code ? ` · ${b.code}` : ''}`,
-        top: TL_BAR_TOP, height: TL_BAR_H, interactive: false, kind: 'str', zIndex: 1,
+        onClick: () => openBookingDetail(b.id),
+        top: TL_BAR_TOP, height: TL_BAR_H, interactive: true, kind: 'str', zIndex: 1,
+        startMs: range.startMs, endMs: range.endMs,
+      })
+    })
+    if (filt.owner_occupied) (ownerOccupiedByProp.get(address) || []).forEach((block) => {
+      const range = ownerOccupiedBarRange(block)
+      if (!range || range.endMs < winStart.getTime() || range.startMs > winEnd.getTime()) return
+      const sourceNote = block.source === 'local' ? 'Local block' : 'Hospitable'
+      bars.push({
+        left: pct(range.startMs).toFixed(2) + '%', width: Math.max(1.6, pct(range.endMs) - pct(range.startMs)).toFixed(2) + '%',
+        bg: 'color-mix(in srgb, var(--amber) 24%, var(--elev))',
+        color: 'var(--amber-text)',
+        borderStyle: '1.5px dashed color-mix(in srgb, var(--amber) 45%, var(--border))',
+        label: 'Owner occupied',
+        title: [sourceNote, block.guestLabel, block.start + ' → ' + block.end, block.notes].filter(Boolean).join(' · '),
+        onClick: () => openOwnerOccupiedDetail(block.id),
+        top: TL_BAR_TOP, height: TL_BAR_H, interactive: true, kind: 'owner_occupied', zIndex: 1,
+        startMs: range.startMs, endMs: range.endMs,
+      })
+    })
+    if (tlShowTasks) (tasksByProp.get(address) || []).forEach((t) => {
+      const range = taskBarRange(t)
+      if (!range || range.endMs < winStart.getTime() || range.startMs > winEnd.getTime()) return
+      const dueLabel = t.dueDate || t.startAt.slice(0, 10)
+      bars.push({
+        left: pct(range.startMs).toFixed(2) + '%',
+        width: Math.max(1.2, pct(range.endMs) - pct(range.startMs)).toFixed(2) + '%',
+        bg: 'var(--purple)',
+        color: 'var(--purple-text)',
+        borderStyle: '1.5px dashed color-mix(in srgb, var(--purple-text) 35%, var(--purple))',
+        label: t.type || t.name,
+        title: [t.type, t.name, t.status, t.teammate, dueLabel, t.guestLabel !== '—' ? t.guestLabel : ''].filter(Boolean).join(' · '),
+        onClick: () => openTaskDetail(t.id),
+        top: TL_BAR_TOP, height: TL_TASK_BAR_H, interactive: true, kind: 'task', zIndex: 2,
         startMs: range.startMs, endMs: range.endMs,
       })
     })
     const rowHeight = assignBarLanes(bars)
     const displayAddress = labelAddress ?? p?.address ?? address
     return {
-      id: p?.id ?? `str:${displayAddress}`,
+      id: p?.id ?? `${externalBadge ?? 'ext'}:${displayAddress}`,
       address: displayAddress,
       short: short(displayAddress),
       sortKey: leaseEndMs ?? (p ? 9e15 : 9e14),
       bars,
       rowHeight,
       strOnly: !p,
+      rowBadge: p ? null : externalBadge,
       status: p?.status ?? '',
     }
   }
@@ -864,11 +1044,31 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       })
       .map((b) => b.property)
   )]
+  const rowAddressKeys = new Set(managedAddresses)
+  for (const address of strOnlyAddresses) rowAddressKeys.add(timelineAddressFor(address))
+  const taskOnlyAddresses = tlShowTasks
+    ? [...new Set(
+        scopedHospitableTasks
+          .filter((t) => {
+            if (!isOpenHospitableTask(t)) return false
+            const canonical = timelineAddressFor(t.property)
+            if (rowAddressKeys.has(canonical)) return false
+            const range = taskBarRange(t)
+            if (!range || range.endMs < winStart.getTime() || range.startMs > winEnd.getTime()) return false
+            if (!q) return true
+            const hay = [t.property, t.name, t.type, t.guestLabel, t.teammate].join(' ').toLowerCase()
+            return hay.includes(q)
+          })
+          .map((t) => t.property)
+      )]
+    : []
   const tlRows = [
     ...managedPropRows,
-    ...strOnlyAddresses.map((address) => buildTimelineRow(timelineAddressFor(address), undefined, address)),
+    ...strOnlyAddresses.map((address) => buildTimelineRow(timelineAddressFor(address), undefined, address, 'STR')),
+    ...taskOnlyAddresses.map((address) => buildTimelineRow(timelineAddressFor(address), undefined, address, 'TASK')),
   ].filter((r) => {
-    if (tlFilterActive) return r.bars.length > 0
+    if (tlVacancyOnly) return !r.strOnly
+    if (tlStatusFilter.length > 0) return r.bars.length > 0
     return !r.strOnly || r.bars.length > 0
   }).sort((a, b) => {
     // Default: STR rows (status, bookings in window, or STR-only addresses) first for check-in/out focus
@@ -928,6 +1128,40 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
   const pjCounts: Record<string, number> = {}
   scoped.projects.forEach((j) => { pjCounts[j.status] = (pjCounts[j.status] || 0) + 1 })
   const filteredProj = scoped.projects.filter((j) => (!projFilter || j.status === projFilter) && (!q || (j.name + ' ' + j.property).toLowerCase().includes(q)))
+
+  const taskStatuses = useMemo(() => {
+    const uniq = [...new Set(scopedHospitableTasks.map((t) => t.status).filter(Boolean))]
+    return ['', 'Open', ...uniq.filter((s) => s !== 'Open')]
+  }, [scopedHospitableTasks])
+  const taskCounts = useMemo(() => {
+    const counts: Record<string, number> = { Open: 0 }
+    for (const t of scopedHospitableTasks) {
+      counts[t.status] = (counts[t.status] || 0) + 1
+      if (isOpenHospitableTask(t)) counts.Open += 1
+    }
+    return counts
+  }, [scopedHospitableTasks])
+  const filteredTasks = useMemo(() => {
+    return scopedHospitableTasks.filter((t) => {
+      if (taskFilter === 'Open') {
+        if (!isOpenHospitableTask(t)) return false
+      } else if (taskFilter && t.status !== taskFilter) {
+        return false
+      }
+      if (!q) return true
+      const hay = [t.name, t.property, t.guestLabel, t.status, t.type, t.teammate, t.reservationCode].join(' ').toLowerCase()
+      return hay.includes(q)
+    })
+  }, [scopedHospitableTasks, taskFilter, q])
+
+  const taskStatusColor = (status: string) => {
+    const s = status.toLowerCase()
+    if (s.includes('complet')) return 'var(--green)'
+    if (s.includes('progress') || s.includes('arrived') || s.includes('way')) return 'var(--blue)'
+    if (s.includes('cancel') || s.includes('reject')) return 'var(--faint)'
+    if (s.includes('accept')) return 'var(--green)'
+    return 'var(--amber)'
+  }
 
   // ---------- multi-view (table / kanban / gantt) ----------
   const page = view
@@ -1364,7 +1598,9 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       { key: 'people', label: 'People', meta: 'Contacts & roles', privOnly: true },
       { key: 'payments', label: 'Payments', meta: 'Charges & credits', hideFor: ['Vendor'] },
       { key: 'projects', label: 'Projects', meta: 'Maintenance & work' },
+      { key: 'tasks', label: 'Tasks', meta: 'Hospitable housekeeping & ops', hideFor: ['Tenant', 'Vendor'] },
       { key: 'messages', label: 'Messages', meta: 'Inbox', privOnly: true },
+      { key: 'notifications', label: 'Notifications', meta: 'Alerts & updates' },
       { key: 'portfolios', label: 'Portfolios', meta: 'Owner groupings', privOnly: true },
     ]
     return pages
@@ -1429,8 +1665,20 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       })
       if (hits.length >= 24) break
     }
+    if (role !== 'Tenant' && role !== 'Vendor') {
+      for (const t of scopedHospitableTasks) {
+        if (!(t.name + ' ' + t.property + ' ' + t.guestLabel + ' ' + t.type).toLowerCase().includes(q)) continue
+        hits.push({
+          key: 'task-' + t.id,
+          label: t.type + (t.reservationCode ? ` · ${t.reservationCode}` : ''),
+          meta: ['Task', t.status, short(t.property)].filter(Boolean).join(' · '),
+          target: { kind: 'view' as const, view: 'tasks' },
+        })
+        if (hits.length >= 28) break
+      }
+    }
     return hits.slice(0, 10)
-  }, [q, props, scoped.leases, scoped.people, scoped.portfolios, scoped.projects, priv])
+  }, [q, props, scoped.leases, scoped.people, scoped.portfolios, scoped.projects, scopedHospitableTasks, priv, role])
 
   const goAskTarget = useCallback((target: AskNavTarget) => {
     if (target.kind === 'view') {
@@ -1449,7 +1697,6 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     }
     setSearchExpanded(false)
     setSearch('')
-    setMobileNavOpen(false)
   }, [view])
 
   const askLinkIndex = useMemo(() => {
@@ -1569,7 +1816,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
 
   // ============================================================ render
   return (
-    <div className="cnry cy-shell" data-theme={theme}>
+    <div className="cnry cy-shell" data-ui="macos27" data-theme={theme}>
 
       <div className="cy-main-wrap">
         {/* ============ TOP BAR ============ */}
@@ -1716,24 +1963,14 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
               )}
             </div>
           </div>
-          <button
-            type="button"
-            className="cy-topnav-menu-btn cy-btn"
-            onClick={() => setMobileNavOpen((v) => !v)}
-            aria-expanded={mobileNavOpen}
-            aria-controls="cy-topnav"
-            title="Menu"
-          >
-            ☰
-          </button>
-          <nav id="cy-topnav" className={`cy-topnav${mobileNavOpen ? ' cy-topnav--open' : ''}`} aria-label="Main">
+          <nav id="cy-topnav" className="cy-topnav" aria-label="Main">
             {navItems.map((n) => (
               <button
                 key={n.key}
                 type="button"
                 className={`cy-topnav-item${view === n.key ? ' cy-topnav-item--active' : ''}`}
                 title={n.label}
-                onClick={() => { setView(n.key); setDrawer(null); setMobileNavOpen(false) }}
+                onClick={() => { setView(n.key); setDrawer(null) }}
               >
                 {n.label}
               </button>
@@ -1744,7 +1981,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
               <button
                 type="button"
                 className={`cy-messages-toggle${view === 'messages' ? ' cy-messages-toggle--active' : ''}`}
-                onClick={() => { setView('messages'); setDrawer(null); setMobileNavOpen(false) }}
+                onClick={() => { setView('messages'); setDrawer(null) }}
                 aria-label="Messages"
                 title="Messages"
               >
@@ -1765,7 +2002,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                   align="end"
                   sideOffset={8}
                   data-theme={theme}
-                  className="cnry cy-profile-menu min-w-56"
+                  className="cnry cy-menu cy-profile-menu min-w-56"
                 >
                   {canSwitchRoles && (
                     <>
@@ -1791,6 +2028,12 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                     >
                       Public site
                       <span className="cy-profile-menu-hint" aria-hidden>↗</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => { setView('notifications'); setDrawer(null) }}
+                    >
+                      <Bell size={15} aria-hidden />
+                      Notifications
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => {
@@ -1834,7 +2077,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
 
         <main className="cy-main">
 
-          {/* ============ VIEW SWITCHER ============ */}
+          {/* ============ VIEW SWITCHER (+ properties / projects filters inline) ============ */}
           {pdef && (
             <div className="cy-toolbar">
               <button
@@ -1847,15 +2090,71 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                 {viewLabels[curView]}
                 <Repeat2 size={14} aria-hidden="true" />
               </button>
+              {view === 'properties' && (
+                <>
+                  {statuses.map((st) => (
+                    <button key={st || 'all'} className={`cy-pill${propFilter === st ? ' cy-pill--active' : ''}`} onClick={() => setPropFilter(st)}>
+                      {st || 'All'}
+                      {st === 'Archived' && archivedProps.length ? <span style={{ opacity: 0.6, fontFamily: MONO, fontSize: 11, marginLeft: 4 }}>{archivedProps.length}</span> : null}
+                    </button>
+                  ))}
+                  <span className="cy-toolbar-count">
+                    {filteredProps.length + ' of ' + props.length}
+                    {!viewingArchived && archivedProps.length ? ` · ${archivedProps.length} archived` : ''}
+                  </span>
+                </>
+              )}
+              {view === 'projects' && (
+                <>
+                  {projStatuses.map((st) => (
+                    <button key={st || 'all'} className={`cy-pill${projFilter === st ? ' cy-pill--active' : ''}`} onClick={() => setProjFilter(st)}>
+                      {st || 'All'} <span style={{ opacity: 0.6, fontFamily: MONO, fontSize: 11 }}>{st ? String(pjCounts[st] || 0) : String(scoped.projects.length)}</span>
+                    </button>
+                  ))}
+                  <span className="cy-toolbar-count">
+                    {filteredProj.length + ' of ' + scoped.projects.length}
+                  </span>
+                </>
+              )}
               {view === 'leases' && showDefault && (
                 <>
                   <DropdownMenu>
-                    <DropdownMenuTrigger className="cy-btn" style={{ minWidth: 140, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      <span className="cy-mono-label" style={{ color: 'var(--dim)' }}>Status</span>
-                      <span style={{ flex: 1, textAlign: 'left' }}>{tlStatusLabel}</span>
+                    <DropdownMenuTrigger
+                      className="cy-btn"
+                      style={{
+                        minWidth: 140,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        paddingRight: tlAnyFilterActive ? 4 : undefined,
+                      }}
+                    >
+                      <span style={{ flex: 1, textAlign: 'left' }}>{tlFilterLabel}</span>
+                      {tlAnyFilterActive && (
+                        <span
+                          role="button"
+                          tabIndex={-1}
+                          aria-label="Clear filters"
+                          className="cy-btn-icon"
+                          style={{ width: 22, height: 22, marginRight: -2 }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            e.preventDefault()
+                            clearTlFilters()
+                          }}
+                          onPointerDown={(e) => e.stopPropagation()}
+                        >
+                          <X size={14} style={{ color: 'var(--dim)' }} aria-hidden="true" />
+                        </span>
+                      )}
                       <ChevronDown size={14} style={{ color: 'var(--dim)', flex: 'none' }} />
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="min-w-52">
+                    <DropdownMenuContent
+                      align="start"
+                      sideOffset={8}
+                      data-theme={theme}
+                      className="cnry cy-menu min-w-52"
+                    >
                       <DropdownMenuGroup>
                         <DropdownMenuLabel>Lease status</DropdownMenuLabel>
                         {TL_STATUS_OPTIONS.map((f) => (
@@ -1864,15 +2163,15 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                             checked={tlStatusFilter.includes(f.key)}
                             onCheckedChange={() => toggleTlStatus(f.key)}
                           >
-                            <span style={{ width: 8, height: 8, borderRadius: 3, background: f.dot, flex: 'none' }} />
+                            <span className="cy-menu-status-dot" style={{ background: f.dot }} />
                             {f.label}
                           </DropdownMenuCheckboxItem>
                         ))}
                       </DropdownMenuGroup>
-                      {tlFilterActive && (
+                      {tlAnyFilterActive && (
                         <>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => setTlStatusFilter([])}>
+                          <DropdownMenuItem onClick={clearTlFilters}>
                             Clear · show all
                           </DropdownMenuItem>
                         </>
@@ -1880,6 +2179,33 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                     </DropdownMenuContent>
                   </DropdownMenu>
                   <button className="cy-btn" onClick={() => setTlAnchor(todayMid.getTime() - Math.round(spanDays / 4) * DAY)}>Today</button>
+                  {showTasksKpi && (
+                    <button
+                      type="button"
+                      className={`cy-btn${tlShowTasks ? ' cy-btn--active' : ''}`}
+                      aria-pressed={tlShowTasks}
+                      title={
+                        hospitableTasks.connected
+                          ? tlShowTasks
+                            ? 'Hide Hospitable tasks on property rows'
+                            : 'Show open Hospitable tasks on property rows'
+                          : hospitableTasks.statusMessage || 'Hospitable tasks unavailable'
+                      }
+                      onClick={() => setTlShowTasks((on) => !on)}
+                    >
+                      Tasks
+                    </button>
+                  )}
+                  {priv && (
+                    <button
+                      type="button"
+                      className="cy-btn"
+                      title="Block dates for an owner stay"
+                      onClick={() => openOwnerStayModal()}
+                    >
+                      Owner stay
+                    </button>
+                  )}
                   <div className="cy-zoom-toggle">
                     <button onClick={() => { setTlZoomIdx(Math.max(0, zoomIdx - 1)); setTlAnchor(winStart.getTime()) }}>−</button>
                     <span>{TL_ZOOM_PRESETS[zoomIdx].label}</span>
@@ -1919,7 +2245,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                   className: `cy-kpi${k.view ? ' cy-hov' : ''}`,
                   role: k.view ? 'button' : undefined,
                   tabIndex: k.view ? 0 : undefined,
-                  onActivate: k.view ? () => { setView(k.view!); setDrawer(null) } : undefined,
+                  onActivate: k.onActivate ?? (k.view ? () => { setView(k.view!); setDrawer(null) } : undefined),
                   children: (
                     <>
                       <div className="cy-mono-label" style={{ marginBottom: 4 }}>{k.label}</div>
@@ -2097,36 +2423,49 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
           {/* ============ LEASES TIMELINE ============ */}
           {view === 'leases' && showDefault && (
             <section>
+              {(role === 'Admin' || role === 'Manager') && !hospitableCalendar.connected && (
+                <div
+                  className="cy-card"
+                  style={{
+                    marginBottom: 12,
+                    padding: '12px 14px',
+                    borderColor: 'color-mix(in srgb, var(--amber) 45%, var(--border))',
+                    background: 'color-mix(in srgb, var(--amber) 10%, var(--panel))',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4,
+                  }}
+                >
+                  <div style={{ fontWeight: 700, fontSize: 13.5 }}>STR stays unavailable</div>
+                  <div style={{ color: 'var(--dim)', fontSize: 12.5, lineHeight: 1.45 }}>
+                    {hospitableCalendar.statusMessage ||
+                      'Hospitable is not connected. Add a valid HOSPITABLE_API_PAT on the server to show Airbnb / STR bookings on this timeline.'}
+                  </div>
+                </div>
+              )}
               <div className="cy-card" style={{ overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
-                  <div style={{ minWidth: 760 }}>
+                  <div style={{ minWidth: tlMinWidth }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'clamp(150px,20vw,250px) 1fr', borderBottom: '1px solid var(--border)' }}>
-                      <div style={{ padding: '10px 14px', fontFamily: MONO, fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--dim)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        Property
+                      <div style={{ padding: '10px 14px', fontFamily: MONO, fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--dim)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                         <button
                           type="button"
+                          className="cy-btn cy-btn-sm"
                           title="Sort by lease end date"
                           aria-label={`Sort by lease end date (${tlSortDir === 'desc' ? 'descending' : 'ascending'})`}
                           onClick={() => setTlSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-                          style={{
-                            border: '1px solid var(--border)',
-                            borderRadius: 6,
-                            padding: '2px 7px',
-                            fontSize: 10,
-                            fontFamily: MONO,
-                            letterSpacing: '.06em',
-                            textTransform: 'uppercase',
-                            background: 'var(--elev)',
-                            color: 'var(--text)',
-                            cursor: 'pointer',
-                          }}
                         >
                           {tlSortDir === 'desc' ? '↓' : '↑'} lease end
                         </button>
+                        {tlDaily && (
+                          <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--dim)', letterSpacing: '.06em', textTransform: 'none', flex: 'none' }}>
+                            {tlHeaderMonth}
+                          </span>
+                        )}
                       </div>
                       <div style={{ position: 'relative', height: 38 }}>
                         {tlTicks.map((t, i) => (
-                          <div key={i} style={{ position: 'absolute', top: 0, bottom: 0, left: t.left, borderLeft: '1px solid var(--border)', padding: '10px 0 0 8px', fontFamily: MONO, fontSize: 11, color: 'var(--dim)', letterSpacing: '.06em', fontWeight: t.weight }}>{t.label}</div>
+                          <div key={i} style={{ position: 'absolute', top: 0, bottom: 0, left: t.left, borderLeft: '1px solid var(--border)', padding: tlDaily ? '10px 0 0 4px' : '10px 0 0 8px', fontFamily: MONO, fontSize: tlDaily && spanDays > 14 ? 10 : 11, color: 'var(--dim)', letterSpacing: tlDaily ? '.02em' : '.06em', fontWeight: t.weight, whiteSpace: 'nowrap' }}>{t.label}</div>
                         ))}
                       </div>
                     </div>
@@ -2135,18 +2474,38 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                         <div key={r.id} style={{ display: 'grid', gridTemplateColumns: 'clamp(150px,20vw,250px) 1fr', borderBottom: '1px solid var(--border)', minHeight: r.rowHeight }}>
                           <div className="cy-hov" onClick={() => { if (!r.strOnly) setDrawer({ kind: 'property', id: r.id }) }} style={{ padding: '6px 14px', cursor: r.strOnly ? 'default' : 'pointer', borderRight: '1px solid var(--border)', minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ fontWeight: 650, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.short}{r.strOnly ? <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--blue)', letterSpacing: '.04em' }}>STR</span> : null}</div>
+                              <div style={{ fontWeight: 650, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {r.short}
+                                {r.rowBadge === 'STR' ? (
+                                  <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--blue)', letterSpacing: '.04em' }}>STR</span>
+                                ) : r.rowBadge === 'TASK' ? (
+                                  <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--purple)', letterSpacing: '.04em' }}>TASK</span>
+                                ) : null}
+                              </div>
                             </div>
                             {!r.strOnly && (
-                              <button
-                                type="button"
-                                aria-label={`Monthly calendar for ${r.short}`}
-                                title="Monthly calendar"
-                                onClick={(e) => { e.stopPropagation(); openPropertyCalendar(r.id, r.address) }}
-                                style={{ border: '1px solid var(--border)', background: 'var(--elev)', borderRadius: 7, width: 28, height: 28, display: 'grid', placeItems: 'center', cursor: 'pointer', color: 'var(--dim)', flex: 'none' }}
-                              >
-                                <CalendarIcon size={14} />
-                              </button>
+                              <>
+                                {priv && (
+                                  <button
+                                    type="button"
+                                    className="cy-btn cy-btn-icon"
+                                    aria-label={`Add owner stay at ${r.short}`}
+                                    title="Add owner stay"
+                                    onClick={(e) => { e.stopPropagation(); openOwnerStayModal(r.id) }}
+                                  >
+                                    <span style={{ fontSize: 15, fontWeight: 700, lineHeight: 1 }}>+</span>
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className="cy-btn cy-btn-icon"
+                                  aria-label={`Monthly calendar for ${r.short}`}
+                                  title="Monthly calendar"
+                                  onClick={(e) => { e.stopPropagation(); openPropertyCalendar(r.id, r.address) }}
+                                >
+                                  <CalendarIcon size={14} />
+                                </button>
+                              </>
                             )}
                           </div>
                           <div style={{ position: 'relative', overflow: 'hidden' }}>
@@ -2155,7 +2514,44 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                             ))}
                             <div style={{ position: 'absolute', top: 0, bottom: 0, left: tlTodayLeft, borderLeft: '2px solid var(--red)', opacity: 0.7 }} />
                             {r.bars.map((b, i) => (
-                              <div key={i} onClick={b.interactive ? (e) => handleTlBarClick(e, r.bars) : undefined} title={b.title} style={{ position: 'absolute', top: b.top, height: b.height, left: b.left, width: b.width, zIndex: b.zIndex, background: b.bg, color: b.color, border: b.borderStyle, borderRadius: 8, display: 'flex', alignItems: 'center', padding: '0 10px', fontWeight: 650, fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', cursor: b.interactive ? 'pointer' : 'default', boxShadow: '0 1px 3px rgba(0,0,0,.25)', opacity: b.opacity }}>{b.label}</div>
+                              <div
+                                key={i}
+                                role={b.interactive ? 'button' : undefined}
+                                tabIndex={b.interactive ? 0 : undefined}
+                                onClick={b.interactive ? (e) => handleTlBarClick(e, r.bars) : undefined}
+                                onKeyDown={b.interactive ? (e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault()
+                                    b.onClick?.()
+                                  }
+                                } : undefined}
+                                title={b.title}
+                                aria-label={b.interactive ? `${b.label}. ${b.title}` : undefined}
+                                style={{
+                                  position: 'absolute',
+                                  top: b.top,
+                                  height: b.height,
+                                  left: b.left,
+                                  width: b.width,
+                                  zIndex: b.zIndex,
+                                  background: b.bg,
+                                  color: b.color,
+                                  border: b.borderStyle,
+                                  borderRadius: b.kind === 'task' ? 99 : 8,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  padding: b.kind === 'task' ? '0 8px' : '0 10px',
+                                  fontWeight: b.kind === 'task' ? 700 : 650,
+                                  fontSize: b.kind === 'task' ? '11px' : '12.5px',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  cursor: b.interactive ? 'pointer' : 'default',
+                                  boxShadow: b.kind === 'task' ? '0 1px 2px rgba(0,0,0,.18)' : '0 1px 3px rgba(0,0,0,.25)',
+                                  opacity: b.opacity,
+                                }}
+                              >
+                                {b.label}
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -2176,40 +2572,28 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
           {/* ============ PROPERTIES ============ */}
           {view === 'properties' && (
             <section>
-              <div className="cy-toolbar">
-                {statuses.map((st) => (
-                  <button key={st || 'all'} className={`cy-pill${propFilter === st ? ' cy-pill--active' : ''}`} onClick={() => setPropFilter(st)}>
-                    {st || 'All'}
-                    {st === 'Archived' && archivedProps.length ? <span style={{ opacity: 0.6, fontFamily: MONO, fontSize: 11, marginLeft: 4 }}>{archivedProps.length}</span> : null}
-                  </button>
-                ))}
-                <span style={{ color: 'var(--dim)', fontSize: 13, marginLeft: 'auto' }}>
-                  {filteredProps.length + ' of ' + props.length}
-                  {!viewingArchived && archivedProps.length ? ` · ${archivedProps.length} archived` : ''}
-                </span>
-              </div>
               {priv && selectedPropIds.length > 0 && (
                 <div className="cy-bulk-bar">
                   <span style={{ fontWeight: 700, fontSize: 13 }}>{selectedPropIds.length} selected</span>
                   {viewingArchived ? (
-                    <button className="cy-accent-btn" disabled={bulkBusy} onClick={runBulkUnarchive} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '8px 14px', fontWeight: 700, cursor: bulkBusy ? 'wait' : 'pointer' }}>
+                    <button type="button" className="cy-btn-primary cy-accent-btn" disabled={bulkBusy} onClick={runBulkUnarchive} style={{ cursor: bulkBusy ? 'wait' : 'pointer' }}>
                       {bulkBusy ? 'Restoring…' : `Restore ${selectedPropIds.length} propert${selectedPropIds.length === 1 ? 'y' : 'ies'}`}
                     </button>
                   ) : (
-                    <button disabled={bulkBusy} onClick={runBulkArchive} style={{ border: '1px solid var(--red)', background: 'color-mix(in srgb, var(--red) 12%, var(--panel))', color: 'var(--red)', borderRadius: 9, padding: '8px 14px', fontWeight: 700, cursor: bulkBusy ? 'wait' : 'pointer' }}>
+                    <button type="button" className="cy-btn" disabled={bulkBusy} onClick={runBulkArchive} style={{ borderColor: 'var(--red)', background: 'color-mix(in srgb, var(--red) 12%, var(--panel))', color: 'var(--red)', cursor: bulkBusy ? 'wait' : 'pointer' }}>
                       {bulkBusy ? 'Archiving…' : `Archive ${selectedPropIds.length} propert${selectedPropIds.length === 1 ? 'y' : 'ies'}`}
                     </button>
                   )}
                   {selectedPropIds.length >= 2 && (
-                    <button disabled={bulkBusy} onClick={openMergeModal} style={{ border: '1px solid var(--border2)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 9, padding: '8px 14px', fontWeight: 700, cursor: bulkBusy ? 'wait' : 'pointer' }}>
+                    <button type="button" className="cy-btn" disabled={bulkBusy} onClick={openMergeModal} style={{ cursor: bulkBusy ? 'wait' : 'pointer' }}>
                       Merge {selectedPropIds.length} properties
                     </button>
                   )}
-                  <button disabled={bulkBusy} onClick={runBulkDelete} style={{ border: '1px solid var(--red)', background: 'color-mix(in srgb, var(--red) 18%, var(--panel))', color: 'var(--red)', borderRadius: 9, padding: '8px 14px', fontWeight: 700, cursor: bulkBusy ? 'wait' : 'pointer' }}>
+                  <button type="button" className="cy-btn" disabled={bulkBusy} onClick={runBulkDelete} style={{ borderColor: 'var(--red)', background: 'color-mix(in srgb, var(--red) 18%, var(--panel))', color: 'var(--red)', cursor: bulkBusy ? 'wait' : 'pointer' }}>
                     {bulkBusy ? 'Deleting…' : `Delete ${selectedPropIds.length} propert${selectedPropIds.length === 1 ? 'y' : 'ies'}`}
                   </button>
                   {!allFilteredPropsSelected && (
-                    <button onClick={selectAllFilteredProps} style={{ border: '1px solid var(--border)', background: 'var(--panel)', borderRadius: 9, padding: '8px 12px', fontWeight: 600, cursor: 'pointer', color: 'var(--dim)', fontSize: 13 }}>
+                    <button type="button" className="cy-btn" onClick={selectAllFilteredProps} style={{ color: 'var(--dim)', fontSize: 13 }}>
                       Select all {filteredProps.length} filtered
                     </button>
                   )}
@@ -2324,11 +2708,11 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
           {view === 'payments' && (
             <section>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-                <select value={payCat} onChange={(e) => setPayCat(e.target.value)} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 9, padding: '8px 10px' }}>
+                <select className="cy-select" value={payCat} onChange={(e) => setPayCat(e.target.value)}>
                   <option value="">All categories</option>
                   {PAY_CATEGORIES.map((c) => (<option key={c} value={c}>{c}</option>))}
                 </select>
-                <select value={payType} onChange={(e) => setPayType(e.target.value)} style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 9, padding: '8px 10px' }}>
+                <select className="cy-select" value={payType} onChange={(e) => setPayType(e.target.value)}>
                   <option value="">Credit + Debit</option>
                   <option value="Credit">Credit</option>
                   <option value="Debit">Debit</option>
@@ -2344,13 +2728,6 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
           {/* ============ PROJECTS ============ */}
           {view === 'projects' && (
             <section>
-              <div className="cy-toolbar">
-                {projStatuses.map((st) => (
-                  <button key={st || 'all'} className={`cy-pill${projFilter === st ? ' cy-pill--active' : ''}`} onClick={() => setProjFilter(st)}>
-                    {st || 'All'} <span style={{ opacity: 0.6, fontFamily: MONO, fontSize: 11 }}>{st ? String(pjCounts[st] || 0) : String(scoped.projects.length)}</span>
-                  </button>
-                ))}
-              </div>
               {showDefault && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 12 }}>
                   {(genRows as CanaryProject[]).map((pj) => (
@@ -2368,12 +2745,209 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
             </section>
           )}
 
+          {/* ============ TASKS (Hospitable) ============ */}
+          {view === 'tasks' && showTasksKpi && (
+            <section>
+              <div className="cy-toolbar">
+                {taskStatuses.map((st) => (
+                  <button key={st || 'all'} className={`cy-pill${taskFilter === st ? ' cy-pill--active' : ''}`} onClick={() => setTaskFilter(st)}>
+                    {st || 'All'}{' '}
+                    <span style={{ opacity: 0.6, fontFamily: MONO, fontSize: 11 }}>
+                      {st ? String(taskCounts[st] || 0) : String(scopedHospitableTasks.length)}
+                    </span>
+                  </button>
+                ))}
+                <span style={{ color: 'var(--dim)', fontSize: 13, marginLeft: 'auto' }}>
+                  {hospitableTasks.statusMessage}
+                </span>
+              </div>
+
+              {!hospitableTasks.connected && (
+                <div
+                  style={{
+                    background: 'var(--panel)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 14,
+                    padding: '40px 28px',
+                    textAlign: 'center',
+                    maxWidth: 520,
+                    margin: '12px auto 0',
+                  }}
+                >
+                  <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700 }}>Hospitable not connected</h2>
+                  <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--dim)' }}>
+                    {hospitableTasks.statusMessage || 'Add HOSPITABLE_API_PAT to load housekeeping and ops tasks.'}
+                  </p>
+                </div>
+              )}
+
+              {hospitableTasks.connected && filteredTasks.length === 0 && (
+                <div
+                  style={{
+                    background: 'var(--panel)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 14,
+                    padding: '40px 28px',
+                    textAlign: 'center',
+                    maxWidth: 520,
+                    margin: '12px auto 0',
+                  }}
+                >
+                  <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700 }}>No tasks</h2>
+                  <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--dim)' }}>
+                    {taskFilter || q
+                      ? 'Nothing matches this filter. Try All or clear search.'
+                      : hospitableTasks.statusMessage || 'No Hospitable tasks in the current window.'}
+                  </p>
+                </div>
+              )}
+
+              {hospitableTasks.connected && filteredTasks.length > 0 && (
+                <div className="cy-table-panel" style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, marginTop: 4 }}>
+                  <div className="cy-table-scroll">
+                    <div style={{ minWidth: 820 }}>
+                      <div
+                        className="cy-table-head"
+                        style={{ display: 'flex', gap: 12, padding: '4px 16px', borderBottom: '1px solid var(--border)', alignItems: 'center' }}
+                      >
+                        {[
+                          { key: 'type', label: 'Type', flex: '0 0 110px' },
+                          { key: 'property', label: 'Property', flex: '1.4 1 0' },
+                          { key: 'guest', label: 'Guest / res', flex: '1 1 0' },
+                          { key: 'due', label: 'Due', flex: '0 0 100px' },
+                          { key: 'status', label: 'Status', flex: '0 0 120px' },
+                          { key: 'teammate', label: 'Assignee', flex: '0.9 1 0' },
+                        ].map((c) => (
+                          <div
+                            key={c.key}
+                            style={{
+                              flex: c.flex,
+                              minWidth: 0,
+                              padding: '7px 0',
+                              fontFamily: MONO,
+                              fontSize: '10.5px',
+                              letterSpacing: '.09em',
+                              textTransform: 'uppercase',
+                              color: 'var(--dim)',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {c.label}
+                          </div>
+                        ))}
+                      </div>
+                      {filteredTasks.map((t) => {
+                        const due = parseDate(t.dueDate)
+                        return (
+                          <div
+                            key={t.id}
+                            role="button"
+                            tabIndex={0}
+                            className="cy-hov"
+                            onClick={() => openTaskDetail(t.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                openTaskDetail(t.id)
+                              }
+                            }}
+                            style={{
+                              display: 'flex',
+                              gap: 12,
+                              padding: '11px 16px',
+                              borderBottom: '1px solid var(--border)',
+                              alignItems: 'center',
+                              fontSize: '13.5px',
+                              minWidth: 0,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <span style={{ flex: '0 0 110px', fontWeight: 650, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {t.type}
+                            </span>
+                            <span style={{ flex: '1.4 1 0', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={t.property}>
+                              {short(t.property)}
+                            </span>
+                            <span style={{ flex: '1 1 0', minWidth: 0, color: 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {t.guestLabel}
+                              {t.reservationCode && t.guestLabel !== `Res ${t.reservationCode}` ? ` · ${t.reservationCode}` : ''}
+                            </span>
+                            <span style={{ flex: '0 0 100px', fontFamily: MONO, fontSize: 12, fontWeight: 600 }}>
+                              {due ? fmtD(due) : '—'}
+                            </span>
+                            <span style={{ flex: '0 0 120px', minWidth: 0 }}>
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  padding: '3px 9px',
+                                  borderRadius: 6,
+                                  background: 'var(--elev)',
+                                  border: '1px solid var(--border)',
+                                  color: taskStatusColor(t.status),
+                                }}
+                              >
+                                {t.status}
+                              </span>
+                            </span>
+                            <span style={{ flex: '0.9 1 0', minWidth: 0, color: 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {t.teammate || '—'}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
 
           {/* ============ MESSAGES ============ */}
           {view === 'messages' && priv && (
             <MessagesView
               initialThreadId={messagesThreadId}
             />
+          )}
+
+          {/* ============ NOTIFICATIONS (stub) ============ */}
+          {view === 'notifications' && (
+            <section
+              className="cy-notifications-stub"
+              style={{
+                background: 'var(--panel)',
+                border: '1px solid var(--border)',
+                borderRadius: 14,
+                padding: '48px 28px',
+                textAlign: 'center',
+                maxWidth: 520,
+                margin: '0 auto',
+              }}
+            >
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 14,
+                  margin: '0 auto 16px',
+                  display: 'grid',
+                  placeItems: 'center',
+                  background: 'color-mix(in srgb, var(--accent) 12%, var(--elev))',
+                  color: 'var(--accent)',
+                }}
+                aria-hidden
+              >
+                <Bell size={22} />
+              </div>
+              <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>
+                Notifications
+              </h2>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--dim)' }}>
+                Notifications coming soon. In-app alerts for approvals, payments, and maintenance will land here.
+              </p>
+            </section>
           )}
 
           {/* ============ GENERIC TABLE VIEW ============ */}
@@ -2518,6 +3092,54 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
         }}
       />
 
+      <TaskDetailDrawer
+        task={taskDetail}
+        onClose={() => setTaskDetailId(null)}
+        short={short}
+        onOpenProperty={(address) => {
+          const prop = db.properties.find((p) => p.address === address)
+          if (prop) {
+            setTaskDetailId(null)
+            setDrawer({ kind: 'property', id: prop.id })
+          }
+        }}
+      />
+
+      <BookingDetailDrawer
+        booking={bookingDetail}
+        onClose={() => setBookingDetailId(null)}
+        short={short}
+        onOpenProperty={(address) => {
+          const prop = db.properties.find((p) => p.address === address)
+          if (prop) {
+            setBookingDetailId(null)
+            setDrawer({ kind: 'property', id: prop.id })
+          }
+        }}
+      />
+
+      <OwnerOccupiedDetailDrawer
+        block={ownerOccupiedDetail}
+        onClose={() => setOwnerOccupiedDetailId(null)}
+        short={short}
+        onDeleteLocal={handleDeleteLocalOwnerBlock}
+        onOpenProperty={(propertyId) => {
+          setOwnerOccupiedDetailId(null)
+          setDrawer({ kind: 'property', id: propertyId })
+        }}
+      />
+
+      {ownerStayModalOpen && (
+        <AddOwnerOccupiedModal
+          onClose={() => { setOwnerStayModalOpen(false); setOwnerStayPrefillPropId(undefined) }}
+          onSaved={handleOwnerBlockSaved}
+          properties={props}
+          defaultPropertyId={ownerStayPrefillPropId}
+          userKey={userPersonId}
+          short={short}
+        />
+      )}
+
       {/* ============ PROPERTY OCCUPANCY CALENDAR ============ */}
       {calView && calViewData && (() => {
         const calProp = db.properties.find((p) => p.id === calView.propId)
@@ -2550,7 +3172,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       {/* ============ MERGE PROPERTIES MODAL ============ */}
       {mergeOpen && (
         <>
-          <div onClick={() => setMergeOpen(false)} className="cy-modal-backdrop" style={{ zIndex: 70 }} />
+          <div onClick={() => setMergeOpen(false)} className="cy-modal-backdrop cy-glass-modal-backdrop" style={{ zIndex: 70 }} />
           <div className="cy-glass-modal" style={{ width: 'min(560px,94vw)', maxHeight: '92vh', padding: 18, zIndex: 71 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
               <div>
@@ -2585,7 +3207,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       {/* ============ DRAFT LEASE COMPOSER ============ */}
       {draftOpen && (
         <>
-          <div onClick={() => { setDraftOpen(false); setDraft(null) }} className="cy-modal-backdrop" style={{ zIndex: 70 }} />
+          <div onClick={() => { setDraftOpen(false); setDraft(null) }} className="cy-modal-backdrop cy-glass-modal-backdrop" style={{ zIndex: 70 }} />
           <div className="cy-glass-modal" style={{ width: 'min(680px,94vw)', maxHeight: '92vh', padding: 18, zIndex: 71 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
               <div>
@@ -2596,17 +3218,21 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
               <label style={{ gridColumn: '1/-1', display: 'block' }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Property</span>
-                <select value={curDraft.propId} onChange={(e) => {
+                <select
+                  className="cy-select cy-select--field"
+                  value={curDraft.propId}
+                  onChange={(e) => {
                   const p = db.properties.find((x) => x.id === e.target.value)
                   if (p) startDraftFor(p, { start: curDraft.start, end: curDraft.end })
                   else setDraft({ ...curDraft, propId: '' })
-                }} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', marginTop: 4 }}>
+                }}
+                >
                   <option value="">— choose a property —</option>
                   {propOptions.map((o) => (<option key={o.id} value={o.id}>{o.short}</option>))}
                 </select>
                 <span style={{ fontSize: 12, color: 'var(--faint)' }}>Static details (beds, baths, parking) auto-fill from the property record.</span></label>
               <label style={{ gridColumn: '1/-1' }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Tenant <span style={{ color: 'var(--faint)', fontWeight: 500 }}>(optional — link later if unknown)</span></span>
-                <select value={curDraft.tenantId} onChange={setDraftField('tenantId')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', marginTop: 4 }}>
+                <select className="cy-select cy-select--field" value={curDraft.tenantId} onChange={setDraftField('tenantId')}>
                   <option value="">— no tenant yet —</option>
                   {tenantOptions.map((t) => (<option key={t.id} value={t.id}>{t.label}</option>))}
                 </select></label>
@@ -2642,9 +3268,9 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
               </label>
               <label><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Term type</span>
                 <select
+                  className="cy-select cy-select--field"
                   value={curDraft.termType}
                   onChange={(e) => setDraft({ ...curDraft, termType: e.target.value as LeaseTermType })}
-                  style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', marginTop: 4 }}
                 >
                   <option value="fixed_term">Fixed term</option>
                   <option value="month_to_month">Month-to-month</option>
@@ -2667,11 +3293,11 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                 <label style={{ flex: 1 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Parking</span><input value={curDraft.parking} onChange={setDraftField('parking')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', marginTop: 4 }} /></label>
               </div>
               <label><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Pets (owner preference)</span>
-                <select value={curDraft.pets} onChange={setDraftField('pets')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', marginTop: 4 }}>
+                <select className="cy-select cy-select--field" value={curDraft.pets} onChange={setDraftField('pets')}>
                   <option>No pets</option><option>Pet friendly</option><option>Dog friendly</option><option>Cat friendly</option><option>By approval</option>
                 </select></label>
               <label><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Utilities</span>
-                <select value={curDraft.utilities} onChange={setDraftField('utilities')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', marginTop: 4 }}>
+                <select className="cy-select cy-select--field" value={curDraft.utilities} onChange={setDraftField('utilities')}>
                   <option>Not included</option><option>Included</option><option>Included with cap</option></select></label>
               <label style={{ gridColumn: '1/-1' }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Public description <span style={{ color: 'var(--faint)', fontWeight: 500 }}>(shown to tenants — never include codes, keys, or owner info)</span></span>
                 <textarea value={curDraft.description} onChange={setDraftField('description')} rows={3} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', marginTop: 4, resize: 'vertical' }} /></label>
@@ -2681,9 +3307,10 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Timeline status</span>
                 <select
+                  className="cy-select cy-select--field"
                   value={curDraft.status}
                   onChange={(e) => setDraft({ ...curDraft, status: e.target.value as DraftListingStatus })}
-                  style={{ background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', fontWeight: 600, minWidth: 200 }}
+                  style={{ minWidth: 200 }}
                 >
                   <option value="draft">Draft lease</option>
                   <option value="renewal_sent">Renewal sent</option>
@@ -2699,14 +3326,16 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
               </span>
               {!!curDraft.id && <button onClick={removeDraft} disabled={draftSaving} style={{ border: '1px solid var(--border)', background: 'none', color: 'var(--red)', borderRadius: 9, padding: '9px 14px', fontWeight: 600, cursor: 'pointer' }}>Delete</button>}
               <button
+                type="button"
+                className="cy-btn-primary cy-accent-btn"
                 onClick={activateDraft}
                 disabled={draftSaving || !canActivateDraft}
                 title={canActivateDraft ? 'Create an active lease from this draft' : curDraft.termType === 'month_to_month' ? 'Set property, rent, and start date to activate' : 'Set property, rent, start date, and end date to activate'}
-                style={{ border: 'none', background: 'var(--green)', color: 'var(--green-text)', borderRadius: 9, padding: '10px 18px', fontWeight: 700, cursor: draftSaving || !canActivateDraft ? 'not-allowed' : 'pointer', opacity: draftSaving || !canActivateDraft ? 0.55 : 1 }}
+                style={{ cursor: draftSaving || !canActivateDraft ? 'not-allowed' : 'pointer', opacity: draftSaving || !canActivateDraft ? 0.55 : 1 }}
               >
                 {draftSaving ? 'Working…' : 'Activate lease'}
               </button>
-              <button className="cy-accent-btn" onClick={submitDraft} disabled={draftSaving} style={{ border: 'none', background: 'var(--accent)', color: 'var(--accent-text)', borderRadius: 9, padding: '10px 18px', fontWeight: 700, cursor: 'pointer', opacity: draftSaving ? 0.6 : 1 }}>{draftSaving ? 'Saving…' : 'Save draft'}</button>
+              <button type="button" className="cy-btn-primary cy-accent-btn" onClick={submitDraft} disabled={draftSaving} style={{ opacity: draftSaving ? 0.6 : 1 }}>{draftSaving ? 'Saving…' : 'Save draft'}</button>
             </div>
           </div>
         </>
@@ -2743,7 +3372,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       {/* ============ IMPORT DATA MODAL ============ */}
       {importModalOpen && (
         <>
-          <div onClick={() => setImportModalOpen(false)} className="cy-modal-backdrop" style={{ zIndex: 70 }} />
+          <div onClick={() => setImportModalOpen(false)} className="cy-modal-backdrop cy-glass-modal-backdrop" style={{ zIndex: 70 }} />
           <div className="cy-glass-modal" style={{ width: 'min(820px,94vw)', maxHeight: '92vh', padding: 18, zIndex: 71 }} role="dialog" aria-modal="true" aria-label="Import data">
             <CanaryImport
               initialDataset={importDatasetForView(view) ?? 'people'}
@@ -2758,7 +3387,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       {/* ============ EXPENSE / PAYMENT MODAL ============ */}
       {payFormOpen && (
         <>
-          <div onClick={() => { setPayFormOpen(false); setPayForm(null) }} className="cy-modal-backdrop" style={{ zIndex: 70 }} />
+          <div onClick={() => { setPayFormOpen(false); setPayForm(null) }} className="cy-modal-backdrop cy-glass-modal-backdrop" style={{ zIndex: 70 }} />
           <div className="cy-glass-modal" style={{ width: 'min(720px,94vw)', maxHeight: '92vh', padding: 18, zIndex: 71 }} role="dialog" aria-modal="true" aria-label="Record expense">
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
               <div>
@@ -2774,18 +3403,18 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
                 </div>
               </label>
               <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Property</span>
-                <select value={curPayForm.property} onChange={setPayField('property')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }}>
+                <select className="cy-select cy-select--field" value={curPayForm.property} onChange={setPayField('property')}>
                   <option value="">— select —</option>
                   {propOptions.map((o) => (<option key={o.id} value={o.id}>{o.short}</option>))}
                 </select></label>
               <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Category</span>
-                <select value={curPayForm.category} onChange={setPayField('category')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }}>
+                <select className="cy-select cy-select--field" value={curPayForm.category} onChange={setPayField('category')}>
                   {PAY_CATEGORIES.map((c) => (<option key={c} value={c}>{c}</option>))}
                 </select></label>
               <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Description</span><input value={curPayForm.description} onChange={setPayField('description')} placeholder="e.g. June rent" style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }} /></label>
               <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Amount $</span><input type="number" value={curPayForm.amount} onChange={setPayField('amount')} placeholder="0.00" style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }} /></label>
               <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Type</span>
-                <select value={curPayForm.type} onChange={setPayField('type')} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }}>
+                <select className="cy-select cy-select--field" value={curPayForm.type} onChange={setPayField('type')}>
                   <option value="Credit">Credit</option><option value="Debit">Debit</option>
                 </select></label>
             </div>

@@ -7,6 +7,7 @@ import {
   resolveTimestampFromFields,
 } from '@/lib/canary/timeline-times'
 import type { HospitableProperty, HospitableReservation } from './client'
+import { isOwnerOccupiedReservation } from './map-owner-occupied'
 import { resolveHospitablePropertyAddresses } from './match-property'
 import { hospitablePropertyLabel } from './property-label'
 
@@ -106,6 +107,7 @@ export function mapReservationsToTimeline(
   const bookings: CanaryStrBooking[] = []
 
   for (const reservation of reservations) {
+    if (isOwnerOccupiedReservation(reservation)) continue
     const status = reservationStatus(reservation)
     if (status === 'cancelled' || status === 'not_accepted') continue
 

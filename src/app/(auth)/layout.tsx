@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { IBM_Plex_Mono, Instrument_Sans } from 'next/font/google'
+import '@/design-system/macos27/index.css'
 import '@/components/canary/canary.css'
 import './auth.css'
 

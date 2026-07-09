@@ -57,16 +57,6 @@ const PROJECT_PRIORITIES = ['1 - Urgent', '2 - High', '3 - Medium', '4 - Low']
 
 const LEASE_TENANT_ADD = '__add_new_tenant__'
 
-const selectStyle: React.CSSProperties = {
-  background: 'var(--input)',
-  border: '1px solid var(--border)',
-  borderRadius: 999,
-  padding: '5px 10px',
-  fontWeight: 600,
-  fontSize: 12.5,
-  width: '100%',
-  maxWidth: '100%',
-}
 
 const miniInputStyle: React.CSSProperties = {
   width: '100%',
@@ -153,10 +143,10 @@ function LeaseTenantSection({
       value: (
         <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <select
+            className="cy-select cy-select--field"
             value={lease.tenantIds || ''}
             disabled={saving}
             onChange={(e) => handleSelect(e.target.value)}
-            style={selectStyle}
             aria-label="Select tenant"
           >
             <option value="">— No tenant linked —</option>
@@ -307,6 +297,7 @@ function StatusSelect({
   return (
     <span>
       <select
+        className="cy-select cy-select--compact"
         value={value || options[0]}
         disabled={saving}
         onChange={async (e) => {
@@ -316,7 +307,6 @@ function StatusSelect({
           if (!res.success) setErr(res.error ?? 'Failed')
           setSaving(false)
         }}
-        style={{ background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 8px', fontWeight: 600, fontSize: 13 }}
       >
         {options.map((o) => (
           <option key={o} value={o}>{label(o)}</option>
@@ -491,7 +481,7 @@ function formLabel(text: string): React.ReactNode {
 
 const formFieldStyle: React.CSSProperties = {
   width: '100%', background: 'var(--input)', border: '1px solid var(--border)',
-  borderRadius: 999, padding: '7px 11px', fontWeight: 600, fontSize: 12.5, color: 'var(--text)',
+  borderRadius: 8, padding: '7px 11px', fontWeight: 600, fontSize: 12.5, color: 'var(--text)',
 }
 
 function PropertyEditForm({
@@ -569,7 +559,7 @@ function PropertyEditForm({
 
   return (
     <>
-      <div onClick={onClose} className="cy-modal-backdrop" style={{ zIndex: 70 }} />
+      <div onClick={onClose} className="cy-modal-backdrop cy-glass-modal-backdrop" style={{ zIndex: 70 }} />
       <div className="cy-glass-modal" style={{ width: 'min(520px,94vw)', maxHeight: '90vh', padding: 18, zIndex: 71 }} role="dialog" aria-modal="true" aria-label="Edit property">
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 14 }}>
           <div>
@@ -581,12 +571,12 @@ function PropertyEditForm({
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <label>{formLabel('Status')}
-            <select value={status} onChange={(e) => setStatus(e.target.value)} style={formFieldStyle}>
+            <select className="cy-select cy-select--field" value={status} onChange={(e) => setStatus(e.target.value)}>
               {PROPERTY_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </label>
           <label>{formLabel('Type')}
-            <select value={propertyType} onChange={(e) => setPropertyType(e.target.value)} style={formFieldStyle}>
+            <select className="cy-select cy-select--field" value={propertyType} onChange={(e) => setPropertyType(e.target.value)}>
               {PROPERTY_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
             </select>
           </label>
@@ -606,7 +596,7 @@ function PropertyEditForm({
             <input type="number" min={0} value={rent} onChange={(e) => setRent(e.target.value)} style={formFieldStyle} />
           </label>
           <label>{formLabel('Pets')}
-            <select value={pets} onChange={(e) => setPets(e.target.value)} style={formFieldStyle}>
+            <select className="cy-select cy-select--field" value={pets} onChange={(e) => setPets(e.target.value)}>
               {PET_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </label>
@@ -617,19 +607,19 @@ function PropertyEditForm({
             <div style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 8, borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>🔒 Private — staff only</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <label>{formLabel('Portfolio')}
-                <select value={portfolioId} onChange={(e) => setPortfolioId(e.target.value)} style={formFieldStyle}>
+                <select className="cy-select cy-select--field" value={portfolioId} onChange={(e) => setPortfolioId(e.target.value)}>
                   <option value="">— None —</option>
                   {portfolios.map((pf) => <option key={pf.id} value={pf.id}>{pf.name}</option>)}
                 </select>
               </label>
               <label>{formLabel('Owner')}
-                <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} style={formFieldStyle}>
+                <select className="cy-select cy-select--field" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
                   <option value="">— None —</option>
                   {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
                 </select>
               </label>
               <label>{formLabel('Fee type')}
-                <select value={feeType} onChange={(e) => setFeeType(e.target.value)} style={formFieldStyle}>
+                <select className="cy-select cy-select--field" value={feeType} onChange={(e) => setFeeType(e.target.value)}>
                   <option value="percent">Percent (%)</option>
                   <option value="flat">Flat ($)</option>
                 </select>
@@ -1153,7 +1143,7 @@ export default function EntityDetailDrawer({
 
   return (
     <>
-      <div onClick={onClose} className="cy-modal-backdrop" aria-hidden="true" />
+      <div onClick={onClose} className="cy-modal-backdrop cy-drawer-backdrop" aria-hidden="true" />
       <aside className="cy-drawer">
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
           <div>

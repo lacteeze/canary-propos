@@ -1262,7 +1262,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       const p = db.properties.find((x) => x.id === drawer.id)
       if (p?.archivedAt) {
         actions.push({
-          label: 'Restore property',
+          label: 'Restore',
           onClick: () => {
             if (!window.confirm(`Restore ${short(p.address)}? It will reappear in active property views.`)) return
             startTransition(async () => {
@@ -1277,6 +1277,21 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
           },
         })
       } else if (p) {
+        actions.push({
+          label: 'Archive',
+          onClick: () => {
+            if (!window.confirm(`Archive ${short(p.address)}? It will be hidden from all active views but can be restored later.`)) return
+            startTransition(async () => {
+              const res = await archiveProperties([p.id])
+              if (!res.success) {
+                window.alert(res.error)
+                return
+              }
+              setDrawer(null)
+              router.refresh()
+            })
+          },
+        })
         actions.push({ label: 'Calendar view', onClick: () => openPropertyCalendar(p.id, p.address) })
         actions.push({ label: '+ Draft lease from this property', onClick: () => startDraftFor(p) })
       }

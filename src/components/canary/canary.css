@@ -34,7 +34,7 @@
   --purple-text: #f5f0fc;
   --gray: #9aa89e;
   --input: #ffffff;
-  --glass: rgba(255, 255, 255, 0.72);
+  --glass: rgba(255, 255, 255, 0.96);
   --glass-border: rgba(255, 255, 255, 0.55);
   --shadow-sm: 0 1px 2px rgba(26, 36, 32, 0.04), 0 1px 3px rgba(26, 36, 32, 0.06);
   --shadow: 0 4px 16px rgba(26, 36, 32, 0.06), 0 1px 4px rgba(26, 36, 32, 0.04);
@@ -68,7 +68,7 @@
   --purple-text: #f0e8fc;
   --gray: #5d6b62;
   --input: #181e1b;
-  --glass: rgba(28, 33, 30, 0.82);
+  --glass: rgba(28, 33, 30, 0.96);
   --glass-border: rgba(255, 255, 255, 0.08);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.2);
@@ -1099,7 +1099,7 @@
   transform: translate(-50%, -50%);
   z-index: 61;
   overflow-y: auto;
-  background: var(--glass);
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
@@ -1117,7 +1117,7 @@
   max-height: min(90vh, 920px);
   display: flex;
   flex-direction: column;
-  background: var(--glass);
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
@@ -1133,7 +1133,7 @@
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  background: color-mix(in srgb, var(--panel) 60%, transparent);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
 }
 
 .cnry .cy-property-modal-back-btn {

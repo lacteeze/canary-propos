@@ -2498,16 +2498,33 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       />
 
       {/* ============ PROPERTY OCCUPANCY CALENDAR ============ */}
-      {calView && calViewData && (
-        <PropertyOccupancyCalendar
-          address={calView.address}
-          shortLabel={short(calView.address)}
-          leases={calViewData.leases}
-          drafts={calViewData.drafts}
-          strBookings={calViewData.strBookings}
-          onClose={() => setCalView(null)}
-        />
-      )}
+      {calView && calViewData && (() => {
+        const calProp = db.properties.find((p) => p.id === calView.propId)
+        if (!calProp) return null
+        return (
+          <PropertyOccupancyCalendar
+            property={calProp}
+            address={calView.address}
+            shortLabel={short(calView.address)}
+            leases={calViewData.leases}
+            drafts={calViewData.drafts}
+            strBookings={calViewData.strBookings}
+            projects={scoped.projects.filter(
+              (j) => j.property === calView.address || j.propertyDbId === calProp.propertyDbId,
+            )}
+            portfolios={db.portfolios.map((pf) => ({ id: pf.id, name: pf.name }))}
+            owners={db.people.filter((p) => p.role === 'Client').map((p) => ({ id: p.id, name: p.name }))}
+            canEdit={priv}
+            priv={priv}
+            money={money}
+            onClose={() => setCalView(null)}
+            onOpenProject={(id) => {
+              setCalView(null)
+              setDrawer({ kind: 'project', id })
+            }}
+          />
+        )
+      })()}
 
       {/* ============ MERGE PROPERTIES MODAL ============ */}
       {mergeOpen && (

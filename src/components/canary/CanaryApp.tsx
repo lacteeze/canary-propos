@@ -417,7 +417,7 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
     { label: 'STR · next 90d', value: hospitableCalendar.connected ? String(strInWindow) : '—', color: 'var(--blue)', view: 'properties' },
     { label: 'Expiring · no renewal', value: String(expNoRenew.length), color: 'var(--red)', view: 'leases' },
     ...(showPortfoliosKpi
-      ? [{ label: 'Active portfolios', value: String(activePortfolios.length), color: 'var(--text)', view: 'portfolios' }]
+      ? [{ label: 'Portfolios', value: String(activePortfolios.length), color: 'var(--text)', view: 'portfolios' }]
       : []),
     { label: 'Monthly rent roll', value: money(rentRoll), color: 'var(--text)', view: 'payments' },
   ]

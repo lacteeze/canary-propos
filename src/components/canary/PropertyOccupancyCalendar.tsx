@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { updatePropertyDetails, type PropertyDetailsInput } from '@/app/actions/entity-updates'
-import { parseIsoDate } from './DatePickerField'
 import type {
   CanaryDraft,
   CanaryLease,
@@ -12,6 +11,13 @@ import type {
   CanaryStrBooking,
 } from '@/lib/canary/types'
 import { isPastLeaseStatus } from '@/lib/canary/types'
+import {
+  draftBarRange,
+  leaseBarRange,
+  occupancyOnDay,
+  strBarRange,
+  tlRangesOverlap,
+} from '@/lib/canary/timeline-times'
 
 const MONO = "'IBM Plex Mono', monospace"
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -32,9 +38,13 @@ interface StayEvent {
   id: string
   kind: StayKind
   label: string
+  /** Inclusive stay start (time-aware for STR). */
   start: Date
+  /** Exclusive-ish stay end (time-aware for STR check-out). */
   end: Date
   color: string
+  /** Tooltip text; falls back to label + kind. */
+  title?: string
 }
 
 interface MonthModel {
@@ -59,16 +69,6 @@ function sameDay(a: Date, b: Date): boolean {
 
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
-}
-
-function parseDateFallback(s: string | null | undefined): Date | null {
-  if (!s) return null
-  const d = new Date(s)
-  return Number.isNaN(d.getTime()) ? null : d
-}
-
-function parseDay(s: string | null | undefined): Date | null {
-  return parseIsoDate(s) ?? parseDateFallback(s)
 }
 
 function leaseCategory(l: CanaryLease): 'active' | 'upcoming' | 'past' | 'other' {
@@ -356,6 +356,14 @@ function PropertyQuickEdit({
   )
 }
 
+function formatClock(d: Date): string {
+  return d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' })
+}
+
+function formatDay(d: Date): string {
+  return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 function WeekBars({
   week,
   events,
@@ -368,31 +376,95 @@ function WeekBars({
   if (!weekStart || !weekEnd) return null
 
   const ws = startOfDay(weekStart).getTime()
-  const we = startOfDay(weekEnd).getTime()
+  const we = startOfDay(weekEnd).getTime() + DAY_MS
 
-  type LaneSeg = { event: StayEvent; colStart: number; colEnd: number; showLabel: boolean }
-  const segs: LaneSeg[] = []
+  type DayPiece = {
+    event: StayEvent
+    col: number
+    startFrac: number
+    endFrac: number
+    showLabel: boolean
+  }
+
+  const pieces: DayPiece[] = []
 
   events.forEach((ev) => {
-    const es = startOfDay(ev.start).getTime()
-    const ee = startOfDay(ev.end).getTime()
-    if (ee < ws || es > we) return
-    let colStart = -1
-    let colEnd = -1
+    const es = ev.start.getTime()
+    const ee = ev.end.getTime()
+    if (ee <= ws || es >= we) return
+
     week.forEach((cell, i) => {
       if (!cell.date) return
-      const t = startOfDay(cell.date).getTime()
-      if (t >= es && t <= ee) {
-        if (colStart < 0) colStart = i
-        colEnd = i
-      }
+      const occ = occupancyOnDay(es, ee, cell.date)
+      if (!occ) return
+      const day0 = startOfDay(cell.date).getTime()
+      // Label on the first day of the stay that intersects this week.
+      const showLabel = es >= day0 && es < day0 + DAY_MS
+      pieces.push({
+        event: ev,
+        col: i,
+        startFrac: occ.startFrac,
+        endFrac: occ.endFrac,
+        showLabel,
+      })
     })
-    if (colStart < 0) return
-    const showLabel = es >= ws && es <= we
-    segs.push({ event: ev, colStart, colEnd, showLabel })
   })
 
-  if (!segs.length) return null
+  if (!pieces.length) return null
+
+  // Group into continuous same-event runs within a lane so multi-day stays
+  // still read as one bar, while same-day turnover (checkout + checkin) can
+  // share a cell with staggered left/right fractions.
+  type LaneSeg = {
+    event: StayEvent
+    pieces: DayPiece[]
+    colStart: number
+    colEnd: number
+    showLabel: boolean
+  }
+
+  const segs: LaneSeg[] = []
+  const byEvent = new Map<string, DayPiece[]>()
+  pieces.forEach((p) => {
+    const list = byEvent.get(p.event.id) ?? []
+    list.push(p)
+    byEvent.set(p.event.id, list)
+  })
+
+  byEvent.forEach((list) => {
+    list.sort((a, b) => a.col - b.col)
+    let run: DayPiece[] = []
+    const flush = () => {
+      if (!run.length) return
+      segs.push({
+        event: run[0].event,
+        pieces: run,
+        colStart: run[0].col,
+        colEnd: run[run.length - 1].col,
+        showLabel: run.some((p) => p.showLabel),
+      })
+      run = []
+    }
+    list.forEach((p) => {
+      if (!run.length) {
+        run = [p]
+        return
+      }
+      const prev = run[run.length - 1]
+      // Split when non-adjacent, or when either end of the join is a partial day
+      // (check-in / check-out) so turnover cells stay independent.
+      const adjacent = p.col === prev.col + 1
+      const prevFull = prev.startFrac <= 0.001 && prev.endFrac >= 0.999
+      const nextFull = p.startFrac <= 0.001 && p.endFrac >= 0.999
+      if (adjacent && prevFull && nextFull) {
+        run.push(p)
+      } else {
+        flush()
+        run = [p]
+      }
+    })
+    flush()
+  })
 
   const lanes: LaneSeg[][] = []
   segs
@@ -400,7 +472,18 @@ function WeekBars({
     .forEach((seg) => {
       let placed = false
       for (const lane of lanes) {
-        if (lane.every((s) => seg.colEnd < s.colStart || seg.colStart > s.colEnd)) {
+        // Time-aware overlap: same column only conflicts if day fractions overlap.
+        const conflicts = lane.some((s) => {
+          if (seg.colEnd < s.colStart || seg.colStart > s.colEnd) return false
+          for (const ap of seg.pieces) {
+            for (const bp of s.pieces) {
+              if (ap.col !== bp.col) continue
+              if (tlRangesOverlap(ap.startFrac, ap.endFrac, bp.startFrac, bp.endFrac)) return true
+            }
+          }
+          return false
+        })
+        if (!conflicts) {
           lane.push(seg)
           placed = true
           break
@@ -415,22 +498,61 @@ function WeekBars({
     <div className="cy-cal-week-bars" aria-hidden={false}>
       {lanes.slice(0, maxLanes).map((lane, li) =>
         lane.map((seg) => {
-          const span = seg.colEnd - seg.colStart + 1
-          const label = seg.showLabel ? seg.event.label : ''
-          return (
-            <div
-              key={`${seg.event.id}-${seg.colStart}-${li}`}
-              className="cy-cal-bar"
-              title={`${seg.event.label} · ${KIND_META[seg.event.kind].label}`}
-              style={{
-                gridColumn: `${seg.colStart + 1} / span ${span}`,
-                gridRow: li + 1,
-                background: seg.event.color,
-              }}
-            >
-              {label && <span className="cy-cal-bar-label">{label}</span>}
-            </div>
+          const title =
+            seg.event.title ??
+            `${seg.event.label} · ${KIND_META[seg.event.kind].label}`
+
+          // Continuous full-day run → one spanning bar (matches prior look).
+          const allFull = seg.pieces.every(
+            (p) => p.startFrac <= 0.001 && p.endFrac >= 0.999,
           )
+          if (allFull && seg.pieces.length > 0) {
+            const span = seg.colEnd - seg.colStart + 1
+            const label = seg.showLabel ? seg.event.label : ''
+            return (
+              <div
+                key={`${seg.event.id}-${seg.colStart}-${li}`}
+                className="cy-cal-bar"
+                title={title}
+                style={{
+                  gridColumn: `${seg.colStart + 1} / span ${span}`,
+                  gridRow: li + 1,
+                  background: seg.event.color,
+                  marginLeft: 1,
+                  marginRight: 1,
+                  width: 'auto',
+                }}
+              >
+                {label && <span className="cy-cal-bar-label">{label}</span>}
+              </div>
+            )
+          }
+
+          // Partial day(s): position within the cell by time fraction so
+          // checkout (~0–11am) and checkin (~4pm–1) can stagger on turnover days.
+          return seg.pieces.map((piece) => {
+            const widthFrac = Math.max(0.04, piece.endFrac - piece.startFrac)
+            const leftPct = piece.startFrac * 100
+            const widthPct = widthFrac * 100
+            const label = piece.showLabel ? seg.event.label : ''
+            return (
+              <div
+                key={`${seg.event.id}-${piece.col}-${li}`}
+                className="cy-cal-bar"
+                title={title}
+                style={{
+                  gridColumn: piece.col + 1,
+                  gridRow: li + 1,
+                  background: seg.event.color,
+                  marginLeft: `calc(${leftPct}% + 1px)`,
+                  width: `calc(${widthPct}% - 2px)`,
+                  marginRight: 0,
+                }}
+              >
+                {label && <span className="cy-cal-bar-label">{label}</span>}
+              </div>
+            )
+          })
         }),
       )}
       {lanes.length > maxLanes && (
@@ -480,49 +602,57 @@ export default function PropertyOccupancyCalendar({
     const list: StayEvent[] = []
 
     leases.forEach((l) => {
-      const s = parseDay(l.start)
-      const e = parseDay(l.end)
-      if (!s || !e) return
+      const range = leaseBarRange(l.start, l.end)
+      if (!range) return
       const cat = leaseCategory(l)
       if (cat !== 'active' && cat !== 'upcoming') return
       const kind: StayKind = cat === 'active' ? 'active' : 'upcoming'
+      const start = new Date(range.startMs)
+      const end = new Date(range.endMs)
       list.push({
         id: `lease-${l.id}`,
         kind,
         label: tenantLabel(l.tenantInfo),
-        start: s,
-        end: e,
+        start,
+        end,
         color: KIND_META[kind].color,
+        title: `${tenantLabel(l.tenantInfo)} · ${KIND_META[kind].label} · ${formatDay(start)} → ${formatDay(end)}`,
       })
     })
 
     drafts.forEach((d) => {
-      const s = parseDay(d.start)
-      const e = parseDay(d.end) ?? (s ? new Date(s.getTime() + 365 * DAY_MS) : null)
-      if (!s || !e) return
+      const range = draftBarRange(d.start, d.end, 365 * DAY_MS)
+      if (!range) return
       const kind: StayKind = d.status === 'renewal_sent' ? 'renewal' : 'draft'
+      const start = new Date(range.startMs)
+      const end = new Date(range.endMs)
       list.push({
         id: `draft-${d.id}`,
         kind,
         label: d.status === 'renewal_sent' ? 'Renewal sent' : 'Draft listing',
-        start: s,
-        end: e,
+        start,
+        end,
         color: KIND_META[kind].color,
+        title: `${KIND_META[kind].label} · ${formatDay(start)} → ${formatDay(end)}`,
       })
     })
 
     strBookings.forEach((b) => {
-      const s = parseDay(b.start)
-      const e = parseDay(b.end)
-      if (!s || !e) return
-      // Checkout day is still shown so the stay bar reaches the departure date.
+      const range = strBarRange(b)
+      if (!range) return
+      const start = new Date(range.startMs)
+      const end = new Date(range.endMs)
+      const guest = b.guestLabel || b.platform || 'Guest'
+      const nights = b.nights != null ? ` · ${b.nights}n` : ''
+      const code = b.code ? ` · ${b.code}` : ''
       list.push({
         id: `str-${b.id}`,
         kind: 'str',
-        label: b.guestLabel || b.platform || 'Guest',
-        start: s,
-        end: e,
+        label: guest,
+        start,
+        end,
         color: KIND_META.str.color,
+        title: `${b.platform || 'STR'} · ${guest} · in ${formatClock(start)} ${formatDay(start)} → out ${formatClock(end)} ${formatDay(end)}${nights}${code}`,
       })
     })
 

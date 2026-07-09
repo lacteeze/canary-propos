@@ -1555,15 +1555,148 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
       <div className="cy-main-wrap">
         {/* ============ TOP BAR ============ */}
         <header className="cy-header">
-          <button className="cy-header-brand cy-hov" onClick={() => { setView('dashboard'); setDrawer(null) }} title="Dashboard">
-            <span className="cy-header-brand-logo">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/landing/logo-white.png" alt="" style={{ position: 'absolute', inset: 0, width: 28, height: 28, objectFit: 'contain', display: theme === 'dark' ? 'block' : 'none' }} />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/landing/logo-black.png" alt="" style={{ position: 'absolute', inset: 0, width: 28, height: 28, objectFit: 'contain', display: theme === 'dark' ? 'none' : 'block' }} />
-            </span>
-            <span className="cy-header-brand-title">Canary <span className="cy-header-brand-sub">PM</span></span>
-          </button>
+          <div className="cy-header-left">
+            <button className="cy-header-brand cy-hov" onClick={() => { setView('dashboard'); setDrawer(null) }} title="Dashboard">
+              <span className="cy-header-brand-logo">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/landing/logo-white.png" alt="" style={{ position: 'absolute', inset: 0, width: 28, height: 28, objectFit: 'contain', display: theme === 'dark' ? 'block' : 'none' }} />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/landing/logo-black.png" alt="" style={{ position: 'absolute', inset: 0, width: 28, height: 28, objectFit: 'contain', display: theme === 'dark' ? 'none' : 'block' }} />
+              </span>
+              <span className="cy-header-brand-title">Canary <span className="cy-header-brand-sub">PM</span></span>
+            </button>
+            <div className={`cy-search${searchPanelOpen ? ' cy-search--open' : ''}${showAskAnswer && searchPanelOpen ? ' cy-search--ask' : ''}`} ref={searchWrapRef}>
+              {searchExpanded ? (
+                <div className="cy-search-expanded">
+                  <Search size={14} strokeWidth={2} className="cy-search-field-icon" aria-hidden />
+                  <input
+                    ref={searchInputRef}
+                    className="cy-input cy-search-input--expanded"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={onSearchKeyDown}
+                    placeholder="Search or ask…"
+                    aria-label="Search or ask Canary"
+                    aria-expanded={searchPanelOpen}
+                    aria-controls="cy-search-panel"
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    className="cy-search-close"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={closeSearch}
+                    aria-label="Close search"
+                    title="Close search (Esc)"
+                  >
+                    <X size={14} strokeWidth={2} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="cy-search-toggle"
+                  onClick={openSearch}
+                  aria-label="Search or ask"
+                  title="Search or ask (press /)"
+                >
+                  <Search size={16} strokeWidth={2} />
+                </button>
+              )}
+              {searchPanelOpen && (
+                <div id="cy-search-panel" className="cy-search-panel" role="dialog" aria-label="Search and Ask Canary">
+                  {showQuickHits && (
+                    <div className="cy-search-panel-section">
+                      <div className="cy-search-panel-label">Jump to</div>
+                      {!q && (
+                        <div className="cy-search-hit-list">
+                          {askPageHits.map((hit) => (
+                            <button key={hit.key} type="button" className="cy-search-hit" onClick={() => goAskTarget(hit.target)}>
+                              <span className="cy-search-hit-label">{hit.label}</span>
+                              <span className="cy-search-hit-meta">{hit.meta}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {!!q && (
+                        <div className="cy-search-hit-list">
+                          {askPageHits.map((hit) => (
+                            <button key={hit.key} type="button" className="cy-search-hit" onClick={() => goAskTarget(hit.target)}>
+                              <span className="cy-search-hit-label">{hit.label}</span>
+                              <span className="cy-search-hit-meta">{hit.meta}</span>
+                            </button>
+                          ))}
+                          {askEntityHits.map((hit) => (
+                            <button key={hit.key} type="button" className="cy-search-hit" onClick={() => goAskTarget(hit.target)}>
+                              <span className="cy-search-hit-label">{hit.label}</span>
+                              <span className="cy-search-hit-meta">{hit.meta}</span>
+                            </button>
+                          ))}
+                          {!askPageHits.length && !askEntityHits.length && (
+                            <div className="cy-search-empty">No matching pages or records. Press Enter to ask Canary.</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="cy-search-panel-section cy-search-panel-ask">
+                    <div className="cy-search-panel-ask-head">
+                      <span className={`cy-search-ask-dot${chatBusy ? ' cy-search-ask-dot--busy' : ''}`} />
+                      <span className="cy-search-panel-label" style={{ margin: 0 }}>Ask Canary</span>
+                      <span className="cy-search-ask-status">{chatBusy ? 'thinking…' : 'live data'}</span>
+                      {!!chat.length && (
+                        <button type="button" className="cy-btn cy-search-ask-clear" onClick={() => setChat([])}>Clear</button>
+                      )}
+                    </div>
+
+                    {!chat.length && !chatBusy && (
+                      <div className="cy-search-ask-idle">
+                        <div className="cy-search-ask-hint">
+                          {looksLikeQuestion(search)
+                            ? 'Press Enter to ask this question.'
+                            : 'Type a keyword to filter, or ask a question and press Enter.'}
+                        </div>
+                        <div className="cy-search-sug-list">
+                          {chatSuggestions.map((s) => (
+                            <button key={s} type="button" className="cy-sug cy-btn" onClick={() => void sendChat(s)}>{s}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {(chat.length > 0 || chatBusy) && (
+                      <div className="cy-search-ask-thread" ref={chatScrollRef}>
+                        {chat.map((cm, i) => (
+                          <div key={i} className={`cy-ask-bubble-row${cm.role === 'user' ? ' cy-ask-bubble-row--user' : ''}`}>
+                            <div className={`cy-ask-bubble${cm.role === 'user' ? ' cy-ask-bubble--user' : ' cy-ask-bubble--assistant'}`}>
+                              {cm.role === 'assistant' ? renderAskText(cm.text) : cm.text}
+                            </div>
+                          </div>
+                        ))}
+                        {chatBusy && (
+                          <div className="cy-ask-bubble-row">
+                            <div className="cy-ask-bubble cy-ask-bubble--assistant cy-ask-bubble--pending">Looking at your data…</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {!!search.trim() && (
+                      <button
+                        type="button"
+                        className="cy-btn-primary cy-accent-btn cy-search-ask-submit"
+                        onClick={submitAskFromSearch}
+                        disabled={chatBusy}
+                      >
+                        {chatBusy ? '…' : 'Ask Canary'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
           <button
             type="button"
             className="cy-topnav-menu-btn cy-btn"
@@ -1588,211 +1721,80 @@ export default function CanaryApp({ db, hospitableCalendar, userRole, userPerson
             ))}
           </nav>
           <div className="cy-header-tools">
-          {priv && (
-            <button
-              type="button"
-              className={`cy-messages-toggle${view === 'messages' ? ' cy-messages-toggle--active' : ''}`}
-              onClick={() => { setView('messages'); setDrawer(null); setMobileNavOpen(false) }}
-              aria-label="Messages"
-              title="Messages"
-            >
-              <MessageSquare size={16} strokeWidth={2} aria-hidden />
-            </button>
-          )}
-          <div className={`cy-search${searchPanelOpen ? ' cy-search--open' : ''}${showAskAnswer && searchPanelOpen ? ' cy-search--ask' : ''}`} ref={searchWrapRef}>
-            {searchExpanded ? (
-              <div className="cy-search-expanded">
-                <Search size={14} strokeWidth={2} className="cy-search-field-icon" aria-hidden />
-                <input
-                  ref={searchInputRef}
-                  className="cy-input cy-search-input--expanded"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  onKeyDown={onSearchKeyDown}
-                  placeholder="Search or ask…"
-                  aria-label="Search or ask Canary"
-                  aria-expanded={searchPanelOpen}
-                  aria-controls="cy-search-panel"
-                  autoComplete="off"
-                />
-                <button
-                  type="button"
-                  className="cy-search-close"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={closeSearch}
-                  aria-label="Close search"
-                  title="Close search (Esc)"
-                >
-                  <X size={14} strokeWidth={2} />
-                </button>
-              </div>
-            ) : (
+            {priv && (
               <button
                 type="button"
-                className="cy-search-toggle"
-                onClick={openSearch}
-                aria-label="Search or ask"
-                title="Search or ask (press /)"
+                className={`cy-messages-toggle${view === 'messages' ? ' cy-messages-toggle--active' : ''}`}
+                onClick={() => { setView('messages'); setDrawer(null); setMobileNavOpen(false) }}
+                aria-label="Messages"
+                title="Messages"
               >
-                <Search size={16} strokeWidth={2} />
+                <MessageSquare size={16} strokeWidth={2} aria-hidden />
               </button>
             )}
-            {searchPanelOpen && (
-              <div id="cy-search-panel" className="cy-search-panel" role="dialog" aria-label="Search and Ask Canary">
-                {showQuickHits && (
-                  <div className="cy-search-panel-section">
-                    <div className="cy-search-panel-label">Jump to</div>
-                    {!q && (
-                      <div className="cy-search-hit-list">
-                        {askPageHits.map((hit) => (
-                          <button key={hit.key} type="button" className="cy-search-hit" onClick={() => goAskTarget(hit.target)}>
-                            <span className="cy-search-hit-label">{hit.label}</span>
-                            <span className="cy-search-hit-meta">{hit.meta}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {!!q && (
-                      <div className="cy-search-hit-list">
-                        {askPageHits.map((hit) => (
-                          <button key={hit.key} type="button" className="cy-search-hit" onClick={() => goAskTarget(hit.target)}>
-                            <span className="cy-search-hit-label">{hit.label}</span>
-                            <span className="cy-search-hit-meta">{hit.meta}</span>
-                          </button>
-                        ))}
-                        {askEntityHits.map((hit) => (
-                          <button key={hit.key} type="button" className="cy-search-hit" onClick={() => goAskTarget(hit.target)}>
-                            <span className="cy-search-hit-label">{hit.label}</span>
-                            <span className="cy-search-hit-meta">{hit.meta}</span>
-                          </button>
-                        ))}
-                        {!askPageHits.length && !askEntityHits.length && (
-                          <div className="cy-search-empty">No matching pages or records. Press Enter to ask Canary.</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="cy-search-panel-section cy-search-panel-ask">
-                  <div className="cy-search-panel-ask-head">
-                    <span className={`cy-search-ask-dot${chatBusy ? ' cy-search-ask-dot--busy' : ''}`} />
-                    <span className="cy-search-panel-label" style={{ margin: 0 }}>Ask Canary</span>
-                    <span className="cy-search-ask-status">{chatBusy ? 'thinking…' : 'live data'}</span>
-                    {!!chat.length && (
-                      <button type="button" className="cy-btn cy-search-ask-clear" onClick={() => setChat([])}>Clear</button>
-                    )}
-                  </div>
-
-                  {!chat.length && !chatBusy && (
-                    <div className="cy-search-ask-idle">
-                      <div className="cy-search-ask-hint">
-                        {looksLikeQuestion(search)
-                          ? 'Press Enter to ask this question.'
-                          : 'Type a keyword to filter, or ask a question and press Enter.'}
-                      </div>
-                      <div className="cy-search-sug-list">
-                        {chatSuggestions.map((s) => (
-                          <button key={s} type="button" className="cy-sug cy-btn" onClick={() => void sendChat(s)}>{s}</button>
-                        ))}
-                      </div>
-                    </div>
+            <div className="cy-header-actions">
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  className="cy-profile-trigger"
+                  aria-label="Account menu"
+                >
+                  <span className="cy-profile-avatar" aria-hidden>
+                    {userInitials(userName || role)}
+                  </span>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  sideOffset={8}
+                  data-theme={theme}
+                  className="cnry cy-profile-menu min-w-56"
+                >
+                  {canSwitchRoles && (
+                    <>
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel>Portal view</DropdownMenuLabel>
+                        <DropdownMenuRadioGroup
+                          value={role}
+                          onValueChange={(v) => onRoleChange(v as CanaryRole)}
+                        >
+                          {ROLE_OPTIONS.map((opt) => (
+                            <DropdownMenuRadioItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </DropdownMenuRadioItem>
+                          ))}
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuGroup>
+                      <DropdownMenuSeparator />
+                    </>
                   )}
-
-                  {(chat.length > 0 || chatBusy) && (
-                    <div className="cy-search-ask-thread" ref={chatScrollRef}>
-                      {chat.map((cm, i) => (
-                        <div key={i} className={`cy-ask-bubble-row${cm.role === 'user' ? ' cy-ask-bubble-row--user' : ''}`}>
-                          <div className={`cy-ask-bubble${cm.role === 'user' ? ' cy-ask-bubble--user' : ' cy-ask-bubble--assistant'}`}>
-                            {cm.role === 'assistant' ? renderAskText(cm.text) : cm.text}
-                          </div>
-                        </div>
-                      ))}
-                      {chatBusy && (
-                        <div className="cy-ask-bubble-row">
-                          <div className="cy-ask-bubble cy-ask-bubble--assistant cy-ask-bubble--pending">Looking at your data…</div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {!!search.trim() && (
-                    <button
-                      type="button"
-                      className="cy-btn-primary cy-accent-btn cy-search-ask-submit"
-                      onClick={submitAskFromSearch}
-                      disabled={chatBusy}
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem
+                      onClick={() => window.open('https://canary-propos.vercel.app', '_blank', 'noopener,noreferrer')}
                     >
-                      {chatBusy ? '…' : 'Ask Canary'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="cy-header-actions">
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className="cy-profile-trigger"
-                aria-label="Account menu"
-              >
-                <span className="cy-profile-avatar" aria-hidden>
-                  {userInitials(userName || role)}
-                </span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                sideOffset={8}
-                data-theme={theme}
-                className="cnry cy-profile-menu min-w-56"
-              >
-                {canSwitchRoles && (
-                  <>
-                    <DropdownMenuGroup>
-                      <DropdownMenuLabel>Portal view</DropdownMenuLabel>
-                      <DropdownMenuRadioGroup
-                        value={role}
-                        onValueChange={(v) => onRoleChange(v as CanaryRole)}
-                      >
-                        {ROLE_OPTIONS.map((opt) => (
-                          <DropdownMenuRadioItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuGroup>
-                    <DropdownMenuSeparator />
-                  </>
-                )}
-                <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    onClick={() => window.open('https://canary-propos.vercel.app', '_blank', 'noopener,noreferrer')}
-                  >
-                    Public site
-                    <span className="cy-profile-menu-hint" aria-hidden>↗</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      const t = theme === 'dark' ? 'light' : 'dark'
-                      setTheme(t)
-                      try { localStorage.setItem('canary_theme', t) } catch { /* ignore */ }
-                    }}
-                  >
-                    {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-                    <span className="cy-profile-menu-hint" aria-hidden>
-                      {theme === 'dark' ? '☀' : '☾'}
-                    </span>
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuItem variant="destructive" onClick={signOut}>
-                    Sign out
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+                      Public site
+                      <span className="cy-profile-menu-hint" aria-hidden>↗</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        const t = theme === 'dark' ? 'light' : 'dark'
+                        setTheme(t)
+                        try { localStorage.setItem('canary_theme', t) } catch { /* ignore */ }
+                      }}
+                    >
+                      {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+                      <span className="cy-profile-menu-hint" aria-hidden>
+                        {theme === 'dark' ? '☀' : '☾'}
+                      </span>
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem variant="destructive" onClick={signOut}>
+                      Sign out
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </header>
 

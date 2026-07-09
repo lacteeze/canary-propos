@@ -111,6 +111,16 @@
   z-index: 40;
 }
 
+.cnry .cy-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-width: 0;
+  justify-self: start;
+  grid-column: 1;
+}
+
 .cnry .cy-header-brand {
   display: flex;
   align-items: center;
@@ -121,8 +131,6 @@
   padding: 4px 6px 4px 0;
   flex: none;
   text-align: left;
-  justify-self: start;
-  grid-column: 1;
 }
 
 .cnry .cy-header-brand-logo {
@@ -281,7 +289,8 @@
 .cnry .cy-search-panel {
   position: absolute;
   top: calc(100% + 8px);
-  right: 0;
+  left: 0;
+  right: auto;
   width: min(420px, calc(100vw - 24px));
   max-height: min(70vh, 560px);
   display: flex;
@@ -1360,7 +1369,7 @@
     gap: 8px;
   }
 
-  .cnry .cy-header-brand {
+  .cnry .cy-header-left {
     grid-column: auto;
     justify-self: auto;
   }
@@ -1813,7 +1822,8 @@
   display: flex;
   align-items: center;
   padding: 0 5px;
-  margin: 0 1px;
+  justify-self: start;
+  box-sizing: border-box;
   opacity: 0.92;
   box-shadow: 0 0 0 1px color-mix(in srgb, #000 12%, transparent);
 }

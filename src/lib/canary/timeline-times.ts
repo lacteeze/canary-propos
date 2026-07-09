@@ -197,3 +197,31 @@ export function strBarRange(booking: CanaryStrBooking): TimelineRange | null {
   if (!s || !e) return null
   return { startMs: s.getTime(), endMs: e.getTime() }
 }
+
+const DAY_MS = 86_400_000
+
+/** Local midnight for a calendar day. */
+export function startOfLocalDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+}
+
+/**
+ * Fraction of a calendar day occupied by [startMs, endMs).
+ * Used by the property occupancy calendar so STR check-in (e.g. 4pm) and
+ * check-out (e.g. 11am) only paint the afternoon / morning portion of the day.
+ * Returns null when the range does not intersect the day.
+ */
+export function occupancyOnDay(
+  startMs: number,
+  endMs: number,
+  day: Date
+): { startFrac: number; endFrac: number } | null {
+  if (!(endMs > startMs)) return null
+  const day0 = startOfLocalDay(day).getTime()
+  const day1 = day0 + DAY_MS
+  if (endMs <= day0 || startMs >= day1) return null
+  const startFrac = Math.max(0, (startMs - day0) / DAY_MS)
+  const endFrac = Math.min(1, (endMs - day0) / DAY_MS)
+  if (endFrac <= startFrac) return null
+  return { startFrac, endFrac }
+}

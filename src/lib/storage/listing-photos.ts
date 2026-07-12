@@ -12,36 +12,42 @@ export function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value)
 }
 
-/** Batch-sign storage paths for public pages. Falls back to empty string on failure. */
+/**
+ * Batch-sign storage paths for public pages.
+ * Preserves input length and order — empty/missing paths stay '' at the same index
+ * so callers can map `signed[i]` back to listing `i` safely.
+ */
 export async function signListingPhotoPaths(
   paths: Array<string | null | undefined>
 ): Promise<string[]> {
-  const cleaned = paths.map((p) => (p ?? '').trim()).filter(Boolean)
-  if (!cleaned.length) return []
+  const normalized = paths.map((p) => (p ?? '').trim())
+  if (!normalized.some(Boolean)) return normalized.map(() => '')
 
-  const absolute = cleaned.filter(isHttpUrl)
-  const storagePaths = cleaned.filter((p) => !isHttpUrl(p))
-  if (!storagePaths.length) return absolute
+  const storagePaths = [
+    ...new Set(normalized.filter((p) => p.length > 0 && !isHttpUrl(p))),
+  ]
 
-  const supabase = createPublicClient()
-  const { data, error } = await supabase.storage
-    .from('org-assets')
-    .createSignedUrls(storagePaths, SIGNED_TTL_SECONDS)
+  const byPath = new Map<string, string>()
+  if (storagePaths.length) {
+    const supabase = createPublicClient()
+    const { data, error } = await supabase.storage
+      .from('org-assets')
+      .createSignedUrls(storagePaths, SIGNED_TTL_SECONDS)
 
-  if (error || !data) {
-    console.error('[signListingPhotoPaths]', error?.message)
-    return absolute
+    if (error || !data) {
+      console.error('[signListingPhotoPaths]', error?.message)
+    } else {
+      for (const row of data) {
+        if (row.path && row.signedUrl) byPath.set(row.path, row.signedUrl)
+      }
+    }
   }
 
-  const byPath = new Map(
-    data
-      .filter((row) => row.path && row.signedUrl)
-      .map((row) => [row.path as string, row.signedUrl as string])
-  )
-
-  return cleaned
-    .map((path) => (isHttpUrl(path) ? path : byPath.get(path) ?? ''))
-    .filter(Boolean)
+  return normalized.map((path) => {
+    if (!path) return ''
+    if (isHttpUrl(path)) return path
+    return byPath.get(path) ?? ''
+  })
 }
 
 export async function resolveListingCoverPhoto(
@@ -57,13 +63,15 @@ export async function resolveListingCoverPhoto(
 export async function resolveListingGalleryPhotos(
   paths: string[],
   fallbackIndex = 0
-): Promise<{ hero: string; gallery: string[] }> {
+): Promise<{ hero: string; gallery: string[]; all: string[] }> {
   if (!paths.length) {
-    return { hero: CARD_PHOTOS[fallbackIndex % CARD_PHOTOS.length], gallery: [] }
+    const hero = CARD_PHOTOS[fallbackIndex % CARD_PHOTOS.length]
+    return { hero, gallery: [], all: [hero] }
   }
-  const signed = await signListingPhotoPaths(paths)
+  const signed = (await signListingPhotoPaths(paths)).filter(Boolean)
   if (!signed.length) {
-    return { hero: CARD_PHOTOS[fallbackIndex % CARD_PHOTOS.length], gallery: [] }
+    const hero = CARD_PHOTOS[fallbackIndex % CARD_PHOTOS.length]
+    return { hero, gallery: [], all: [hero] }
   }
-  return { hero: signed[0], gallery: signed.slice(1, 5) }
+  return { hero: signed[0], gallery: signed.slice(1), all: signed }
 }

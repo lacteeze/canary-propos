@@ -2,6 +2,7 @@
 // Shared layout for public listing detail pages — landing-page fonts and theme.
 import type { ReactNode } from 'react'
 import { Instrument_Sans, IBM_Plex_Mono } from 'next/font/google'
+import { PublicThemeProvider } from '@/components/public/PublicThemeProvider'
 import '@/components/landing/landing-styles.css'
 import '@/components/public/public-styles.css'
 
@@ -18,8 +19,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 export default function PublicLayout({ children }: { children: ReactNode }) {
   return (
-    <div
-      className={`cland2 ${instrumentSans.variable} ${ibmPlexMono.variable}`}
+    <PublicThemeProvider
+      className={`${instrumentSans.variable} ${ibmPlexMono.variable}`}
       style={{
         minHeight: '100vh',
         background: 'var(--bg)',
@@ -30,6 +31,6 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-    </div>
+    </PublicThemeProvider>
   )
 }

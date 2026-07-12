@@ -255,7 +255,25 @@
   color: #c9dcc5;
 }
 
-/* divider */
+/* Light-mode alert contrast (dark-mode defaults above stay for data-theme=dark) */
+.cnry[data-theme='light'] .auth-alert-error {
+  border-color: rgba(196, 90, 72, 0.4);
+  background: rgba(196, 90, 72, 0.1);
+  color: #8b3a2a;
+}
+.cnry[data-theme='light'] .auth-alert-error strong,
+.cnry[data-theme='light'] .auth-alert-heading {
+  color: #7a2f22;
+}
+.cnry[data-theme='light'] .auth-alert-success {
+  border-color: rgba(74, 139, 106, 0.4);
+  background: rgba(74, 139, 106, 0.1);
+  color: #2f5c40;
+}
+.cnry[data-theme='light'] .auth-alert-success strong,
+.cnry[data-theme='light'] .auth-alert-success .auth-alert-heading {
+  color: #244a34;
+}
 .auth-divider {
   display: flex;
   align-items: center;

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { InquiryForm } from '@/components/listings/InquiryForm'
 import { ApplicationForm } from '@/components/listings/ApplicationForm'
+import { ListingPhotoGallery } from '@/components/listings/ListingPhotoGallery'
 import { SimilarListingsSection } from '@/components/landing/SimilarListingsCarousel'
 import { PublicHeader } from '@/components/public/PublicHeader'
 import { getLandingCopy } from '@/lib/landing/content'
@@ -74,14 +75,29 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const property = unit?.properties as any
   const rent = listing.display_rent ?? unit?.asking_rent
-  const fullAddress = property
-    ? `${property.street_address}, ${property.city}, ${property.province}`
-    : listing.listing_title
+  // street_address often already includes city/province/postal — build a clean display line
+  const street = (property?.street_address as string | undefined)?.trim() || ''
+  const city = (property?.city as string | undefined)?.trim() || ''
+  const provinceRaw = (property?.province as string | undefined)?.trim() || ''
+  const streetLine = street.split(',')[0]?.trim() || street
+  const cityLine =
+    city ||
+    street
+      .split(',')
+      .map((p: string) => p.trim())
+      .find((p: string, i: number) => i > 0 && !/^(NL|NS|NB|PE|QC|ON|MB|SK|AB|BC|YT|NT|NU)\b/i.test(p) && !/^canada$/i.test(p) && !/^[A-Z]\d[A-Z]/i.test(p)) ||
+    ''
+  const provinceLine = (provinceRaw || street.match(/\b(NL|NS|NB|PE|QC|ON|MB|SK|AB|BC|YT|NT|NU)\b/i)?.[1] || '')
+    .replace(/\s+[A-Z]\d[A-Z].*$/i, '')
+    .trim()
+    .toUpperCase()
+  const heroAddress = [streetLine, cityLine, provinceLine].filter(Boolean).join(', ')
+  const fullAddress = heroAddress || listing.listing_title
 
   const fromMedia = property?.id ? await getListingPhotoPathsForProperty(property.id) : []
   const photoPaths: string[] =
     fromMedia.length > 0 ? fromMedia : (property?.photo_paths ?? [])
-  const { hero: heroPhoto, gallery: galleryPhotos } = await resolveListingGalleryPhotos(
+  const { all: listingPhotos } = await resolveListingGalleryPhotos(
     photoPaths,
     id.charCodeAt(0)
   )
@@ -93,6 +109,21 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
   const availableLabel = listing.available_from
     ? new Date(listing.available_from).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
     : null
+
+  const parkingFromText = (() => {
+    const amenities = (unit?.amenities as string[] | null) ?? []
+    const amenityHit = amenities.find((a) => /\d+\s*parking|parking\s*[:\-]?\s*\d+/i.test(a))
+    if (amenityHit) {
+      const m = amenityHit.match(/(\d+)/)
+      if (m) return m[1]
+    }
+    const text = [listing.listing_description, ...(listing.highlights ?? []), ...amenities].filter(Boolean).join(' ')
+    const match = text.match(/(\d+)\s*parking|parking\s*[:\-]?\s*(\d+)/i)
+    if (match) return match[1] || match[2]
+    if (/parking/i.test(text)) return '1'
+    return null
+  })()
+  const parkingLabel = parkingFromText
 
   const listingCity = property?.city ?? "St. John's"
   const allPublished = await getPublishedListings(orgSlug)
@@ -110,57 +141,16 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
     <>
       <PublicHeader overlay />
 
-      {/* Full-width hero */}
-      <section
-        style={{
-          position: 'relative',
-          width: '100%',
-          minHeight: 'min(72vh, 680px)',
-          marginTop: 0,
-          overflow: 'hidden',
-          background: 'var(--ink)',
-        }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={heroPhoto}
-          alt={listing.listing_title}
-          style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            objectPosition: 'center',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'linear-gradient(to top, rgba(16,13,10,.88) 0%, rgba(16,13,10,.35) 45%, rgba(16,13,10,.15) 100%)',
-          }}
-        />
-        <div
-          style={{
-            position: 'relative',
-            zIndex: 1,
-            maxWidth: 1180,
-            margin: '0 auto',
-            padding: '120px clamp(20px, 4vw, 32px) 48px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-end',
-            minHeight: 'min(72vh, 680px)',
-          }}
-        >
+      <ListingPhotoGallery
+        photos={listingPhotos}
+        title={listing.listing_title}
+        topBar={
           <Link
             href={homesHref}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,
-              marginBottom: 20,
               textDecoration: 'none',
               color: 'rgba(244,239,230,.85)',
               fontSize: 13,
@@ -169,98 +159,88 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
           >
             ← All available homes
           </Link>
+        }
+      >
+        <p
+          className="cpub-stat-pill"
+          style={{ margin: '0 0 10px', color: 'var(--yellow)' }}
+        >
+          Available for rent
+        </p>
+        <h1
+          style={{
+            margin: 0,
+            fontSize: 'clamp(28px, 4.5vw, 44px)',
+            fontWeight: 700,
+            letterSpacing: '-.02em',
+            color: '#f4efe6',
+            lineHeight: 1.08,
+            maxWidth: 720,
+          }}
+        >
+          {heroAddress}
+        </h1>
 
-          <p
-            className="cpub-stat-pill"
-            style={{ margin: '0 0 10px', color: 'var(--yellow)' }}
-          >
-            Available for rent
-          </p>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 'clamp(32px, 5vw, 52px)',
-              fontWeight: 700,
-              letterSpacing: '-.02em',
-              color: '#f4efe6',
-              lineHeight: 1.08,
-              maxWidth: 720,
-            }}
-          >
-            {listing.listing_title}
-          </h1>
-          {fullAddress && (
-            <p style={{ margin: '12px 0 0', fontSize: '16px', color: 'rgba(244,239,230,.78)' }}>{fullAddress}</p>
-          )}
-
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '20px 28px',
-              marginTop: 28,
-              paddingTop: 24,
-              borderTop: '1px solid rgba(244,239,230,.18)',
-            }}
-          >
-            {unit?.bedrooms != null && (
-              <div>
-                <div style={{ fontFamily: 'var(--font-ibm-plex-mono), monospace', fontSize: 22, fontWeight: 600, color: '#f4efe6' }}>{unit.bedrooms}</div>
-                <div className="cpub-stat-pill">Bedrooms</div>
-              </div>
-            )}
-            {unit?.bathrooms != null && (
-              <div>
-                <div style={{ fontFamily: 'var(--font-ibm-plex-mono), monospace', fontSize: 22, fontWeight: 600, color: '#f4efe6' }}>{String(unit.bathrooms).replace(/\.0$/, '')}</div>
-                <div className="cpub-stat-pill">Bathrooms</div>
-              </div>
-            )}
-            {unit?.sq_footage && (
-              <div>
-                <div style={{ fontFamily: 'var(--font-ibm-plex-mono), monospace', fontSize: 22, fontWeight: 600, color: '#f4efe6' }}>{unit.sq_footage}</div>
-                <div className="cpub-stat-pill">Sq ft</div>
-              </div>
-            )}
-            {availableLabel && (
-              <div>
-                <div style={{ fontFamily: 'var(--font-ibm-plex-mono), monospace', fontSize: 22, fontWeight: 600, color: '#f4efe6' }}>{availableLabel}</div>
-                <div className="cpub-stat-pill">Available</div>
-              </div>
-            )}
-            {rent != null && (
-              <div style={{ marginLeft: 'auto' }}>
-                <div style={{ fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 700, color: 'var(--yellow)', letterSpacing: '-.02em' }}>
-                  {formatCAD(Number(rent))}
-                  <span style={{ fontSize: 16, fontWeight: 600, color: 'rgba(244,239,230,.7)' }}>/mo</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {galleryPhotos.length > 0 && (
         <div
           style={{
             display: 'flex',
-            gap: 8,
-            overflowX: 'auto',
-            padding: '12px clamp(20px, 4vw, 32px)',
-            background: 'var(--panel)',
-            borderBottom: '1px solid var(--border)',
+            flexWrap: 'wrap',
+            alignItems: 'baseline',
+            gap: '18px 28px',
+            marginTop: 14,
+            paddingTop: 0,
+            borderTop: '1px solid rgba(244,239,230,.18)',
           }}
         >
-          {galleryPhotos.map((src, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={i}
-              src={src}
-              alt={`Photo ${i + 2}`}
-              style={{ height: 88, width: 128, flex: 'none', borderRadius: 12, objectFit: 'cover' }}
-            />
-          ))}
+          {unit?.bedrooms != null && (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 22, fontWeight: 600, color: '#f4efe6' }}>
+              {unit.bedrooms}
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'rgba(244,239,230,.78)' }}>Beds</span>
+            </div>
+          )}
+          {unit?.bathrooms != null && (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 22, fontWeight: 600, color: '#f4efe6' }}>
+              {String(unit.bathrooms).replace(/\.0$/, '')}
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'rgba(244,239,230,.78)' }}>Baths</span>
+            </div>
+          )}
+          {parkingLabel != null && (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 22, fontWeight: 600, color: '#f4efe6' }}>
+              {parkingLabel}
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'rgba(244,239,230,.78)' }}>Parking</span>
+            </div>
+          )}
+          {unit?.sq_footage && (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 22, fontWeight: 600, color: '#f4efe6' }}>
+              {unit.sq_footage}
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'rgba(244,239,230,.78)' }}>Sq ft</span>
+            </div>
+          )}
+          {availableLabel && (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 22, fontWeight: 600, color: '#f4efe6' }}>
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'rgba(244,239,230,.78)' }}>Available</span>
+              {availableLabel}
+            </div>
+          )}
+          {rent != null && (
+            <div
+              style={{
+                marginLeft: 'auto',
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: 4,
+                fontSize: 22,
+                fontWeight: 700,
+                color: 'var(--accent)',
+                letterSpacing: '-.02em',
+              }}
+            >
+              {formatCAD(Number(rent))}
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'rgba(244,239,230,.7)' }}>/mo</span>
+            </div>
+          )}
         </div>
-      )}
+      </ListingPhotoGallery>
 
       <main style={{ maxWidth: 1180, margin: '0 auto', padding: '40px clamp(20px, 4vw, 32px) 64px' }}>
         <div style={{ display: 'grid', gap: 40, gridTemplateColumns: 'minmax(0, 1fr)' }}>

@@ -9,7 +9,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { normalizeLeaseTermType, validateLeaseDates } from '@/lib/canary/lease-term'
 import { createClient } from '@/lib/supabase/server'
-import { parseCsvForDataset, normalizePropertyImportRow, normalizeLeaseImportRow, parseImportPropertyAddress, parseManagementFeeValue, isPropertyStatusArchived, type ImportDataset } from '@/lib/canary/import-specs'
+import { parseCsvForDataset, normalizePropertyImportRow, normalizeLeaseImportRow, normalizeProjectStatus, normalizeProjectPriority, parseImportPropertyAddress, parseManagementFeeValue, isPropertyStatusArchived, type ImportDataset } from '@/lib/canary/import-specs'
 import { propertyAddressKey } from '@/lib/canary/property-ops'
 import { canonicalStreetKey } from '@/lib/hospitable/property-label'
 import { ensurePlanCapacityForImport } from '@/lib/orgs/plan-limits'
@@ -931,50 +931,126 @@ async function importPayments(ctx: Ctx, records: Record<string, string>[]): Prom
 }
 
 const WO_PRIORITIES = ['low', 'medium', 'high', 'urgent']
-const WO_STATUSES = ['draft', 'submitted', 'assigned', 'in_progress', 'pending_approval', 'approved', 'completed', 'closed']
+const WO_STATUSES = [
+  'draft', 'submitted', 'assigned', 'in_progress', 'pending_approval', 'approved',
+  'completed', 'closed', 'postponed', 'cancelled',
+]
+
+const optionalMoney = z.string().optional().default('')
+const optionalText = z.string().optional().default('')
 
 const projectSchema = z.object({
   property_address: z.string().min(1, 'is required'),
-  unit_number: z.string().optional().default(''),
+  unit_number: optionalText,
   title: z.string().min(1, 'is required'),
-  description: z.string().min(1, 'is required'),
-  priority: z.string().optional().default(''),
-  status: z.string().optional().default(''),
-  vendor_email: z.string().optional().default(''),
-  estimated_cost: z.string().optional().default(''),
+  description: optionalText,
+  status: optionalText,
+  priority: optionalText,
+  priority_number: optionalText,
+  fire_risk: optionalText,
+  water_damage_risk: optionalText,
+  loss_of_rent_risk: optionalText,
+  liability_risk: optionalText,
+  start_date: optionalText,
+  end_date: optionalText,
+  completed_date: optionalText,
+  deposit: optionalMoney,
+  estimated_cost: optionalMoney,
+  notes: optionalText,
+  services: optionalText,
+  portfolio_appsheet_id: optionalText,
+  appsheet_created_at: optionalText,
+  appsheet_modified_at: optionalText,
+  budget: optionalMoney,
+  appsheet_unique_id: optionalText,
+  sub_project_id: optionalText,
 })
 
+function parseOptionalMoney(raw: string, allowNegative = false): number | null {
+  const s = raw.trim().replace(/[$,\s]/g, '')
+  if (!s) return null
+  const n = Number(s)
+  if (Number.isNaN(n)) return null
+  if (!allowNegative && n < 0) return null
+  return n
+}
+
+function parseImportDate(raw: string): string | null {
+  const s = raw.trim()
+  if (!s) return null
+  const iso = parseAppsheetTimestamp(s)
+  if (iso) return iso.slice(0, 10)
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/)
+  if (m) return m[1]
+  const d = new Date(s)
+  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10)
+  return null
+}
+
+function parseRiskScore(raw: string): number | null {
+  const s = raw.trim()
+  if (!s) return null
+  const n = Number(s)
+  if (!Number.isInteger(n) || n < 0 || n > 5) return null
+  return n
+}
+
+function parseOptionalInt(raw: string): number | null {
+  const s = raw.trim()
+  if (!s) return null
+  const n = Number(s)
+  if (!Number.isInteger(n)) return null
+  return n
+}
+
 async function importProjects(ctx: Ctx, records: Record<string, string>[]): Promise<ImportResult> {
-  const [people, unitsByAddress] = await Promise.all([loadPeopleByEmail(ctx), loadUnitsByAddress(ctx)])
+  const unitsByAddress = await loadUnitsByAddress(ctx)
+
+  const { data: existingRows } = await ctx.supabase
+    .from('work_orders')
+    .select('appsheet_unique_id')
+    .eq('org_id', ctx.person.org_id)
+    .not('appsheet_unique_id', 'is', null)
+
+  const existingAppsheetIds = new Set(
+    ((existingRows ?? []) as { appsheet_unique_id?: string | null }[])
+      .map((r) => r.appsheet_unique_id?.trim())
+      .filter(Boolean) as string[]
+  )
 
   const errors: ImportRowError[] = []
   const toInsert: { line: number; record: Record<string, unknown> }[] = []
+  let skipped = 0
 
   records.forEach((rec, i) => {
     const line = i + 2
     const parsed = projectSchema.safeParse(rec)
     if (!parsed.success) return void errors.push({ line, message: firstIssue(parsed.error) })
     const d = parsed.data
-    if (d.priority && !WO_PRIORITIES.includes(d.priority.toLowerCase())) {
-      return void errors.push({ line, message: `priority "${d.priority}" is invalid — use ${WO_PRIORITIES.join(', ')}` })
+
+    const appsheetUniqueId = d.appsheet_unique_id.trim()
+    if (appsheetUniqueId && existingAppsheetIds.has(appsheetUniqueId)) return void skipped++
+
+    const statusNorm = normalizeProjectStatus(d.status)
+    if (statusNorm && !WO_STATUSES.includes(statusNorm)) {
+      return void errors.push({ line, message: `status "${d.status}" is invalid` })
     }
-    if (d.status && !WO_STATUSES.includes(d.status.toLowerCase())) {
-      return void errors.push({ line, message: `status "${d.status}" is invalid — use ${WO_STATUSES.join(', ')}` })
+    const priorityNorm = normalizeProjectPriority(d.priority)
+    if (priorityNorm && !WO_PRIORITIES.includes(priorityNorm)) {
+      return void errors.push({ line, message: `priority "${d.priority}" is invalid` })
     }
-    const cost = d.estimated_cost ? Number(d.estimated_cost.replace(/[$,\s]/g, '')) : null
-    if (cost !== null && Number.isNaN(cost)) {
+
+    const estimatedCost = parseOptionalMoney(d.estimated_cost)
+    if (d.estimated_cost.trim() && estimatedCost === null) {
       return void errors.push({ line, message: `estimated_cost "${d.estimated_cost}" is not a number` })
     }
-    let vendorId: string | null = null
-    if (d.vendor_email) {
-      const vendor = people.get(normKey(d.vendor_email))
-      if (!vendor) {
-        return void errors.push({ line, message: `vendor_email "${d.vendor_email}" does not match anyone — import People first` })
-      }
-      vendorId = vendor.id
-    }
+
     const { unit, error } = resolveUnit(unitsByAddress, d.property_address, d.unit_number)
     if (!unit) return void errors.push({ line, message: error! })
+
+    const description = d.description.trim() || d.notes.trim() || d.title.trim() || '—'
+    if (appsheetUniqueId) existingAppsheetIds.add(appsheetUniqueId)
+
     toInsert.push({
       line,
       record: {
@@ -982,18 +1058,34 @@ async function importProjects(ctx: Ctx, records: Record<string, string>[]): Prom
         property_id: unit.propertyId,
         unit_id: d.unit_number ? unit.unitId : null,
         title: d.title.trim(),
-        description: d.description.trim(),
-        priority: (d.priority || 'medium').toLowerCase(),
-        status: (d.status || 'submitted').toLowerCase(),
-        assigned_vendor_id: vendorId,
-        estimated_cost: cost,
+        description,
+        priority: (priorityNorm || 'medium') as 'low' | 'medium' | 'high' | 'urgent',
+        status: (statusNorm || 'submitted') as typeof WO_STATUSES[number],
+        estimated_cost: estimatedCost,
+        start_date: parseImportDate(d.start_date),
+        end_date: parseImportDate(d.end_date),
+        completed_date: parseAppsheetTimestamp(d.completed_date),
+        notes: d.notes.trim() || null,
+        deposit: parseOptionalMoney(d.deposit),
+        budget: parseOptionalMoney(d.budget),
+        priority_number: parseOptionalInt(d.priority_number),
+        fire_risk: parseRiskScore(d.fire_risk),
+        water_damage_risk: parseRiskScore(d.water_damage_risk),
+        loss_of_rent_risk: parseRiskScore(d.loss_of_rent_risk),
+        liability_risk: parseRiskScore(d.liability_risk),
+        services: d.services.trim() || null,
+        portfolio_appsheet_id: d.portfolio_appsheet_id.trim() || null,
+        appsheet_unique_id: appsheetUniqueId || null,
+        sub_project_id: d.sub_project_id.trim() || null,
+        appsheet_created_at: parseAppsheetTimestamp(d.appsheet_created_at),
+        appsheet_modified_at: parseAppsheetTimestamp(d.appsheet_modified_at),
         created_by: ctx.person.id,
       },
     })
   })
 
   const inserted = await chunkedInsert(ctx, 'work_orders', toInsert, errors)
-  return { success: true, inserted, skipped: 0, errors }
+  return { success: true, inserted, skipped, errors }
 }
 
 // ---------- entry point ----------

@@ -241,6 +241,49 @@ export async function reorderPropertyMedia(input: {
   return { success: true }
 }
 
+/** Make a listing photo the public hero (sort_order 0). */
+export async function setListingHeroPhoto(input: {
+  propertyId: string
+  mediaId: string
+}): Promise<ActionResult> {
+  const ctx = await getCallerContext()
+  if (!ctx) return { success: false, error: 'You must be signed in.' }
+  if (!isManager(ctx.person.role as unknown as string[])) {
+    return { success: false, error: 'Only managers can set the hero photo.' }
+  }
+
+  const propertyId = z.string().uuid().safeParse(input.propertyId)
+  const mediaId = z.string().uuid().safeParse(input.mediaId)
+  if (!propertyId.success || !mediaId.success) {
+    return { success: false, error: 'Invalid photo selection.' }
+  }
+
+  const { data: rows, error: fetchError } = await ctx.supabase
+    .from('property_media')
+    .select('id')
+    .eq('property_id', propertyId.data)
+    .eq('org_id', ctx.person.org_id)
+    .eq('visibility', 'listing')
+    .order('sort_order', { ascending: true })
+
+  if (fetchError) {
+    console.error('[setListingHeroPhoto:fetch]', fetchError)
+    return { success: false, error: 'Failed to load photos.' }
+  }
+
+  const ids = (rows ?? []).map((r) => r.id)
+  if (!ids.includes(mediaId.data)) {
+    return { success: false, error: 'That photo is not a listing photo for this property.' }
+  }
+
+  const orderedIds = [mediaId.data, ...ids.filter((id) => id !== mediaId.data)]
+  return reorderPropertyMedia({
+    propertyId: propertyId.data,
+    visibility: 'listing',
+    orderedIds,
+  })
+}
+
 export async function deletePropertyMedia(
   mediaId: string
 ): Promise<ActionResult> {

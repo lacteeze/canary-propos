@@ -192,20 +192,60 @@ export const IMPORT_SPECS: Record<ImportDataset, ImportSpec> = {
     key: 'projects',
     label: 'Projects',
     description:
-      'Maintenance projects / work orders. The property must already exist. Vendors are matched by email.',
+      'Maintenance projects / work orders. Import Properties first. AppSheet export headers (Project, Property, Status, Priority Number, …) are recognized automatically. Duplicate rows (same appsheet_unique_id / Project ID) are skipped.',
     columns: [
-      { key: 'property_address', required: true, note: 'Street address of an imported property', example: '12 Duckworth St' },
+      { key: 'property_address', required: true, note: 'Full or street address of an imported property', example: "10 Golf Ave, St. John's, NL", aliases: ['property'] },
       { key: 'unit_number', note: 'Optional unit on the property', example: '2B' },
-      { key: 'title', required: true, note: '', example: 'Replace bathroom fan' },
-      { key: 'description', required: true, note: '', example: 'Fan is noisy and no longer venting.' },
-      { key: 'priority', note: 'low, medium, high or urgent — defaults to medium', example: 'medium' },
-      { key: 'status', note: 'draft, submitted, assigned, in_progress, pending_approval, approved, completed or closed — defaults to submitted', example: 'submitted' },
-      { key: 'vendor_email', note: 'Must match an imported person with the vendor role', example: 'bob@buildco.ca' },
-      { key: 'estimated_cost', note: 'Numbers only', example: '350' },
+      { key: 'title', required: true, note: 'Project name', example: 'Replace bathroom fan', aliases: ['project'] },
+      { key: 'description', note: 'Work description — defaults to title if blank', example: 'Fan is noisy and no longer venting.' },
+      { key: 'status', note: 'AppSheet: Requires Estimate, In Progress, Completed, Postponed, … — or DB slug (submitted, in_progress, completed)', example: 'In Progress' },
+      { key: 'priority', note: 'AppSheet: 2 - High, 3 - Normal, 4 - Low — or low, medium, high, urgent', example: '2 - High' },
+      { key: 'priority_number', note: 'AppSheet sort rank (0–99)', example: '11', aliases: ['priority_number'] },
+      { key: 'fire_risk', note: 'Risk score 0–5', example: '2', aliases: ['fire_risk'] },
+      { key: 'water_damage_risk', note: 'Risk score 0–5', example: '0' },
+      { key: 'loss_of_rent_risk', note: 'Risk score 0–5', example: '3' },
+      { key: 'liability_risk', note: 'Risk score 0–5', example: '1', aliases: ['liabilty_risk'] },
+      { key: 'start_date', note: 'YYYY-MM-DD or AppSheet datetime', example: '2025-08-14', aliases: ['start_date'] },
+      { key: 'end_date', note: 'Planned end date', example: '2025-09-28' },
+      { key: 'completed_date', note: 'Actual completion datetime', example: '2025-09-28', aliases: ['completed'] },
+      { key: 'deposit', note: 'Deposit amount', example: '0' },
+      { key: 'estimated_cost', note: 'Estimate / quoted amount', example: '350', aliases: ['estimate'] },
+      { key: 'notes', note: 'Staff notes (separate from description)', example: '24 hours notice required' },
+      { key: 'services', note: 'Service tags from AppSheet', example: 'Cleaning' },
+      { key: 'portfolio_appsheet_id', note: 'AppSheet Portfolio ID slug', example: 'Owner - abc123', aliases: ['portfolio_id'] },
+      { key: 'appsheet_created_at', note: 'AppSheet Timestamp', example: '2025-08-14 10:57:08', aliases: ['timestamp'] },
+      { key: 'appsheet_modified_at', note: 'AppSheet Last Modified', example: '2025-12-10 17:30:55', aliases: ['last_modified'] },
+      { key: 'budget', note: 'Budget amount', example: '500' },
+      { key: 'appsheet_unique_id', note: 'AppSheet Project ID — used to skip duplicates on re-import', example: '961de1ed', aliases: ['project_id'] },
+      { key: 'sub_project_id', note: 'AppSheet Sub Project ID', example: '' },
     ],
     samples: [
-      ['12 Duckworth St', '1', 'Replace bathroom fan', 'Fan is noisy and no longer venting.', 'medium', 'submitted', 'bob@buildco.ca', '350'],
-      ['45 Gower St', '', 'Paint front door', 'Peeling paint, needs scrape + 2 coats.', 'low', 'draft', '', '150'],
+      [
+        "10 Golf Ave, St. John's, NL",
+        '',
+        'Replace dryer duct',
+        'Replace with rigid vent instead of cleaning.',
+        'In Progress',
+        '2 - High',
+        '11',
+        '4',
+        '0',
+        '3',
+        '1',
+        '2026-02-07',
+        '',
+        '',
+        '0',
+        '350',
+        '24 hours notice required',
+        '',
+        'Owner - slug',
+        '2026-02-07 00:06:27',
+        '2026-02-13 09:47:20',
+        '500',
+        'dk1jnv2ch8',
+        '',
+      ],
     ],
   },
 }
@@ -330,6 +370,92 @@ export const LEASE_STATUS_ALIASES: Record<string, 'active' | 'expired' | 'termin
   evicted: 'terminated',
   cancelled: 'terminated',
   canceled: 'terminated',
+}
+
+// ---------- AppSheet / Canary value aliases (projects import) ----------
+
+export type WorkOrderDbStatus =
+  | 'draft'
+  | 'submitted'
+  | 'assigned'
+  | 'in_progress'
+  | 'pending_approval'
+  | 'approved'
+  | 'completed'
+  | 'closed'
+  | 'postponed'
+  | 'cancelled'
+
+/** AppSheet / Canary UI project status labels → work_orders.status */
+export const PROJECT_STATUS_ALIASES: Record<string, WorkOrderDbStatus> = {
+  estimate: 'draft',
+  'requires_estimate': 'submitted',
+  'requires estimate': 'submitted',
+  'reviewing_estimates': 'pending_approval',
+  'reviewing estimates': 'pending_approval',
+  'approved_to_schedule': 'approved',
+  'approved to schedule': 'approved',
+  assigned: 'assigned',
+  'in_progress': 'in_progress',
+  'in progress': 'in_progress',
+  completed: 'completed',
+  closed: 'closed',
+  postponed: 'postponed',
+  cancelled: 'cancelled',
+  canceled: 'cancelled',
+  draft: 'draft',
+  submitted: 'submitted',
+  pending_approval: 'pending_approval',
+  approved: 'approved',
+}
+
+export type WorkOrderDbPriority = 'low' | 'medium' | 'high' | 'urgent'
+
+/** AppSheet priority labels → work_orders.priority */
+export const PROJECT_PRIORITY_ALIASES: Record<string, WorkOrderDbPriority> = {
+  '1_urgent': 'urgent',
+  '1 urgent': 'urgent',
+  urgent: 'urgent',
+  '2_high': 'high',
+  '2 high': 'high',
+  high: 'high',
+  '3_normal': 'medium',
+  '3 normal': 'medium',
+  '3_medium': 'medium',
+  '3 medium': 'medium',
+  medium: 'medium',
+  normal: 'medium',
+  '4_low': 'low',
+  '4 low': 'low',
+  low: 'low',
+  '5_complete': 'low',
+  '5 complete': 'low',
+}
+
+/** Map AppSheet/Canary project status label to DB work_orders.status. Empty → ''. */
+export function normalizeProjectStatus(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  for (const key of aliasLookupKeys(raw)) {
+    const mapped = PROJECT_STATUS_ALIASES[key]
+    if (mapped) return mapped
+  }
+  const slug = trimmed.toLowerCase().replace(/\s+/g, '_')
+  if (PROJECT_STATUS_ALIASES[slug]) return PROJECT_STATUS_ALIASES[slug]
+  return slug
+}
+
+/** Map AppSheet/Canary project priority label to DB work_orders.priority. Empty → ''. */
+export function normalizeProjectPriority(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  for (const key of aliasLookupKeys(raw)) {
+    const mapped = PROJECT_PRIORITY_ALIASES[key]
+    if (mapped) return mapped
+  }
+  const slug = trimmed.toLowerCase().replace(/\s+/g, '_')
+  if (PROJECT_PRIORITY_ALIASES[slug]) return PROJECT_PRIORITY_ALIASES[slug]
+  return slug
 }
 
 /** Map AppSheet/Canary lease status label to DB leases.status. Empty → ''. */

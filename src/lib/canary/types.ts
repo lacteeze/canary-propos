@@ -123,9 +123,21 @@ export interface CanaryProject {
   property: string
   status: string
   priority: string
+  priorityNumber: string
   description: string
   contractors: string
   estimate: string
+  startDate: string
+  endDate: string
+  completedDate: string
+  notes: string
+  budget: string
+  deposit: string
+  services: string
+  fireRisk: string
+  waterDamageRisk: string
+  lossOfRentRisk: string
+  liabilityRisk: string
 }
 
 export interface CanaryPerson {

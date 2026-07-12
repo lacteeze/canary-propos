@@ -329,6 +329,8 @@ const WO_STATUS_REVERSE: Record<string, string> = {
   'Reviewing Estimates': 'pending_approval',
   Completed: 'completed',
   Closed: 'closed',
+  Postponed: 'postponed',
+  Cancelled: 'cancelled',
 }
 
 const WO_STATUS_LABEL: Record<string, string> = Object.fromEntries(

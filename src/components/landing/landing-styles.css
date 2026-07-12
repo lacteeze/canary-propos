@@ -99,22 +99,27 @@ html:has(.cland2) body {
 }
 
 .cland2.cl2-dark {
-  --bg: #171310;
-  --panel: #1e1a15;
-  --elev: #262019;
-  --hover: #2e2720;
-  --border: #332c23;
-  --border2: #463c2e;
-  --text: #f0e9dd;
-  --dim: #a39683;
-  --faint: #786c5c;
+  --bg: #141414;
+  --panel: #1a1a1a;
+  --elev: #222222;
+  --hover: #2a2a2a;
+  --border: #333333;
+  --border2: #444444;
+  --text: #f2f2f2;
+  --dim: #a3a3a3;
+  --faint: #737373;
   --accent: #8aab7e;
   --accent-hi: #9dbc90;
   --accent-text: #1a2217;
-  --ink: #100d0a;
-  --ink2: #1a1611;
-  --ink-border: #332c22;
-  --shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --ink: #0c0c0c;
+  --ink2: #161616;
+  --ink-border: #2e2e2e;
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+html:has(.cland2.cl2-dark),
+html:has(.cland2.cl2-dark) body {
+  background: #141414;
 }
 
 .cland2 .cl2-swipe {

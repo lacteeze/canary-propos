@@ -52,7 +52,7 @@ function propertyStatusOption(status: string | null | undefined): string {
 const LEASE_RENEWAL = ['—', 'pending', 'sent', 'accepted', 'declined']
 const LEASE_DB_STATUS = ['active', 'expired', 'terminated']
 const LEASE_TERM_TYPE = ['fixed_term', 'month_to_month']
-const PROJECT_STATUSES = ['Estimate', 'Requires Estimate', 'Reviewing Estimates', 'Approved to Schedule', 'In Progress', 'Completed', 'Closed']
+const PROJECT_STATUSES = ['Estimate', 'Requires Estimate', 'Reviewing Estimates', 'Approved to Schedule', 'In Progress', 'Postponed', 'Completed', 'Cancelled', 'Closed']
 const PROJECT_PRIORITIES = ['1 - Urgent', '2 - High', '3 - Medium', '4 - Low']
 
 const LEASE_TENANT_ADD = '__add_new_tenant__'
@@ -1041,9 +1041,15 @@ export default function EntityDetailDrawer({
             },
             { label: 'Property', value: j.property || '—' },
             { label: 'Title', value: <InlineField value={j.name} label="title" confirm onSave={wrapSave((v) => updateProjectField(j.id, 'title', v))} disabled={!canEdit} /> },
+            { label: 'Start', value: j.startDate || '—' },
+            { label: 'End', value: j.endDate || '—' },
+            { label: 'Completed', value: j.completedDate || '—' },
             { label: 'Estimate', value: <InlineField value={(j.estimate || '').replace(/[$,]/g, '')} label="estimate" type="number" confirm onSave={wrapSave((v) => updateProjectField(j.id, 'estimated_cost', v))} disabled={!canEdit} /> },
-            { label: 'Contractors', value: j.contractors || '—' },
+            { label: 'Budget', value: j.budget || '—' },
+            { label: 'Contractor', value: j.contractors || '—' },
+            { label: 'Risk (fire / water / rent / liability)', value: [j.fireRisk, j.waterDamageRisk, j.lossOfRentRisk, j.liabilityRisk].filter(Boolean).join(' / ') || '—' },
             { label: 'Description', value: <InlineField value={j.description} label="description" type="textarea" onSave={wrapSave((v) => updateProjectField(j.id, 'description', v))} disabled={!canEdit} /> },
+            { label: 'Notes', value: j.notes || '—' },
           ]}
         />,
       ]

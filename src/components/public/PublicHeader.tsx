@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { SIGN_IN_LINKS } from '@/lib/landing/content'
+import { usePublicTheme } from '@/components/public/PublicThemeProvider'
 
 const NAV = [
   { href: '/#homes', label: 'Homes' },
@@ -21,6 +22,7 @@ export function PublicHeader({ overlay = false }: PublicHeaderProps) {
   const [solid, setSolid] = useState(!overlay)
   const [signInOpen, setSignInOpen] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { dark, toggleTheme } = usePublicTheme()
 
   useEffect(() => {
     if (!overlay) return
@@ -30,10 +32,18 @@ export function PublicHeader({ overlay = false }: PublicHeaderProps) {
     return () => window.removeEventListener('scroll', onScroll)
   }, [overlay])
 
-  const hdrBg = solid ? 'rgba(253,251,246,.92)' : 'rgba(24,19,12,.22)'
-  const hdrBorder = solid ? 'var(--border)' : 'rgba(244,239,230,.14)'
+  const hdrBg = solid
+    ? dark
+      ? 'rgba(20,20,20,.92)'
+      : 'rgba(253,251,246,.88)'
+    : 'rgba(12,12,12,.22)'
+  const hdrBorder = solid
+    ? 'var(--border)'
+    : 'rgba(244,239,230,.14)'
   const hdrText = solid ? 'var(--text)' : '#f4efe6'
   const hdrDim = solid ? 'var(--dim)' : 'rgba(244,239,230,.78)'
+  const toggleBorder = solid ? 'var(--border)' : 'rgba(244,239,230,.3)'
+  const toggleBg = solid ? 'var(--elev)' : 'rgba(244,239,230,.12)'
 
   return (
     <header
@@ -81,6 +91,29 @@ export function PublicHeader({ overlay = false }: PublicHeaderProps) {
         </nav>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flex: 'none' }}>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label="Toggle dark mode"
+            title="Toggle dark mode"
+            style={{
+              flex: 'none',
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              border: `1px solid ${toggleBorder}`,
+              background: toggleBg,
+              color: hdrText,
+              cursor: 'pointer',
+              fontSize: 15,
+              display: 'grid',
+              placeItems: 'center',
+              lineHeight: 1,
+            }}
+          >
+            {dark ? '☀' : '☾'}
+          </button>
+
           <div style={{ position: 'relative' }}>
             <button
               type="button"
@@ -134,8 +167,8 @@ export function PublicHeader({ overlay = false }: PublicHeaderProps) {
               width: 40,
               height: 40,
               borderRadius: 10,
-              border: `1px solid ${solid ? 'var(--border)' : 'rgba(244,239,230,.3)'}`,
-              background: solid ? 'var(--elev)' : 'rgba(244,239,230,.12)',
+              border: `1px solid ${toggleBorder}`,
+              background: toggleBg,
               color: hdrText,
               cursor: 'pointer',
               fontSize: 18,

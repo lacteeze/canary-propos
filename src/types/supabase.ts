@@ -1256,10 +1256,12 @@ export type Database = {
       }
       work_orders: {
         Row: {
+          appsheet_created_at: string | null
+          appsheet_modified_at: string | null
+          appsheet_unique_id: string | null
           assigned_vendor_id: string | null
           billed_amount: number | null
           budget: number | null
-          category: string | null
           completed_date: string | null
           created_at: string
           created_by: string
@@ -1267,28 +1269,37 @@ export type Database = {
           description: string
           end_date: string | null
           estimated_cost: number | null
-          external_ref: string | null
+          fire_risk: number | null
           id: string
+          liability_risk: number | null
+          loss_of_rent_risk: number | null
           notes: string | null
           org_id: string
           owner_approve_token: string | null
           owner_decline_note: string | null
           owner_decline_token: string | null
+          portfolio_appsheet_id: string | null
           priority: Database["public"]["Enums"]["work_order_priority"]
+          priority_number: number | null
           property_id: string
+          services: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["work_order_status"]
+          sub_project_id: string | null
           title: string
           unit_id: string | null
           updated_at: string
           vendor_cost: number | null
           vendor_token: string | null
+          water_damage_risk: number | null
         }
         Insert: {
+          appsheet_created_at?: string | null
+          appsheet_modified_at?: string | null
+          appsheet_unique_id?: string | null
           assigned_vendor_id?: string | null
           billed_amount?: number | null
           budget?: number | null
-          category?: string | null
           completed_date?: string | null
           created_at?: string
           created_by: string
@@ -1296,28 +1307,37 @@ export type Database = {
           description: string
           end_date?: string | null
           estimated_cost?: number | null
-          external_ref?: string | null
+          fire_risk?: number | null
           id?: string
+          liability_risk?: number | null
+          loss_of_rent_risk?: number | null
           notes?: string | null
           org_id: string
           owner_approve_token?: string | null
           owner_decline_note?: string | null
           owner_decline_token?: string | null
+          portfolio_appsheet_id?: string | null
           priority?: Database["public"]["Enums"]["work_order_priority"]
+          priority_number?: number | null
           property_id: string
+          services?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["work_order_status"]
+          sub_project_id?: string | null
           title: string
           unit_id?: string | null
           updated_at?: string
           vendor_cost?: number | null
           vendor_token?: string | null
+          water_damage_risk?: number | null
         }
         Update: {
+          appsheet_created_at?: string | null
+          appsheet_modified_at?: string | null
+          appsheet_unique_id?: string | null
           assigned_vendor_id?: string | null
           billed_amount?: number | null
           budget?: number | null
-          category?: string | null
           completed_date?: string | null
           created_at?: string
           created_by?: string
@@ -1325,22 +1345,29 @@ export type Database = {
           description?: string
           end_date?: string | null
           estimated_cost?: number | null
-          external_ref?: string | null
+          fire_risk?: number | null
           id?: string
+          liability_risk?: number | null
+          loss_of_rent_risk?: number | null
           notes?: string | null
           org_id?: string
           owner_approve_token?: string | null
           owner_decline_note?: string | null
           owner_decline_token?: string | null
+          portfolio_appsheet_id?: string | null
           priority?: Database["public"]["Enums"]["work_order_priority"]
+          priority_number?: number | null
           property_id?: string
+          services?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["work_order_status"]
+          sub_project_id?: string | null
           title?: string
           unit_id?: string | null
           updated_at?: string
           vendor_cost?: number | null
           vendor_token?: string | null
+          water_damage_risk?: number | null
         }
         Relationships: [
           {

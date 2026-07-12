@@ -81,6 +81,8 @@ const WORK_ORDER_STATUS_LABEL: Record<string, string> = {
   approved: 'Approved to Schedule',
   completed: 'Completed',
   closed: 'Closed',
+  postponed: 'Postponed',
+  cancelled: 'Cancelled',
 }
 
 const WORK_ORDER_PRIORITY_LABEL: Record<string, string> = {
@@ -178,8 +180,11 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
       supabase
         .from('work_orders')
         .select(
-          `id, title, description, priority, status, estimated_cost, property_id,
-           assigned_vendor_id, people!assigned_vendor_id(first_name, last_name),
+          `id, title, description, priority, priority_number, status, estimated_cost, budget,
+           deposit, start_date, end_date, completed_date,
+           notes, services,
+           fire_risk, water_damage_risk, loss_of_rent_risk, liability_risk,
+           property_id, assigned_vendor_id, people!assigned_vendor_id(first_name, last_name),
            properties!property_id(street_address, city)`
         )
         .eq('org_id', orgId),
@@ -413,6 +418,9 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
       const vendorName = vendor
         ? [vendor.first_name, vendor.last_name].filter(Boolean).join(' ')
         : ''
+      const contractor = vendorName
+      const fmtMoney = (n: number | null | undefined) =>
+        n != null ? `$${Number(n).toLocaleString('en-CA', { maximumFractionDigits: 0 })}` : ''
       return {
         id: j.id,
         propertyDbId: j.property_id ?? '',
@@ -420,10 +428,21 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         property: fullAddress(j.properties.street_address, j.properties.city),
         status: WORK_ORDER_STATUS_LABEL[j.status] ?? j.status,
         priority: WORK_ORDER_PRIORITY_LABEL[j.priority] ?? j.priority,
+        priorityNumber: j.priority_number != null ? String(j.priority_number) : '',
         description: j.description ?? '',
-        contractors: vendorName,
-        estimate:
-          j.estimated_cost != null ? `$${Number(j.estimated_cost).toLocaleString('en-CA')}` : '',
+        contractors: contractor,
+        estimate: fmtMoney(j.estimated_cost),
+        startDate: j.start_date ?? '',
+        endDate: j.end_date ?? '',
+        completedDate: j.completed_date ? String(j.completed_date).slice(0, 10) : '',
+        notes: j.notes?.trim() || '',
+        budget: fmtMoney(j.budget),
+        deposit: fmtMoney(j.deposit),
+        services: j.services?.trim() || '',
+        fireRisk: j.fire_risk != null ? String(j.fire_risk) : '',
+        waterDamageRisk: j.water_damage_risk != null ? String(j.water_damage_risk) : '',
+        lossOfRentRisk: j.loss_of_rent_risk != null ? String(j.loss_of_rent_risk) : '',
+        liabilityRisk: j.liability_risk != null ? String(j.liability_risk) : '',
       }
     })
 

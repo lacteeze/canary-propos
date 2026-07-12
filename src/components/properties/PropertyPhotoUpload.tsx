@@ -9,6 +9,7 @@ import {
   deletePropertyMedia,
   listPropertyMedia,
   reorderPropertyMedia,
+  setListingHeroPhoto,
   type PropertyMediaItem,
   type PropertyMediaVisibility,
 } from '@/app/actions/property-media'
@@ -220,6 +221,34 @@ export function PropertyPhotoUpload({
     onChanged?.()
   }
 
+  async function handleSetHero(mediaId: string) {
+    if (reordering || uploading) return
+    setError(null)
+    setReordering(true)
+    try {
+      const result = await setListingHeroPhoto({ propertyId, mediaId })
+      if (!result.success) {
+        setError(result.error)
+        return
+      }
+      setItems((prev) => {
+        const listing = prev.filter((i) => i.visibility === 'listing')
+        const others = prev.filter((i) => i.visibility !== 'listing')
+        const hero = listing.find((i) => i.id === mediaId)
+        if (!hero) return prev
+        const rest = listing.filter((i) => i.id !== mediaId)
+        const nextListing = [hero, ...rest].map((item, index) => ({
+          ...item,
+          sortOrder: index,
+        }))
+        return [...nextListing, ...others]
+      })
+      onChanged?.()
+    } finally {
+      setReordering(false)
+    }
+  }
+
   function clearReorderDrag() {
     reorderDragRef.current = null
     setDraggingId(null)
@@ -397,8 +426,10 @@ export function PropertyPhotoUpload({
               }}
               title={
                 sectionVisibility === 'listing' && index === 0
-                  ? 'Cover photo · drag to reorder'
-                  : 'Drag to reorder'
+                  ? 'Hero photo for the public listing page · drag to reorder'
+                  : sectionVisibility === 'listing'
+                    ? 'Drag to reorder · use Set hero to make this the listing hero'
+                    : 'Drag to reorder'
               }
               style={{
                 position: 'relative',
@@ -452,8 +483,37 @@ export function PropertyPhotoUpload({
                     pointerEvents: 'none',
                   }}
                 >
-                  Cover
+                  Hero
                 </span>
+              )}
+              {sectionVisibility === 'listing' && index > 0 && (
+                <button
+                  type="button"
+                  title="Use as hero photo on the public listing page"
+                  disabled={busy}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void handleSetHero(item.id)
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  style={{
+                    position: 'absolute',
+                    left: 4,
+                    bottom: 4,
+                    border: 'none',
+                    borderRadius: 4,
+                    padding: '3px 7px',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: '.03em',
+                    textTransform: 'uppercase',
+                    background: 'rgba(0,0,0,.7)',
+                    color: '#fff',
+                    cursor: busy ? 'wait' : 'pointer',
+                  }}
+                >
+                  Set hero
+                </button>
               )}
               <button
                 type="button"
@@ -595,7 +655,7 @@ export function PropertyPhotoUpload({
           <div style={labelStyle}>Listing photos</div>
           <div style={hintStyle}>
             Shown on the landing page and public listing when this property has a live listing.
-            First photo is the cover — drag thumbnails to reorder.
+            First photo is the hero on the listing page — click Set hero on any photo, or drag to reorder.
           </div>
           {renderGrid(listingItems, 'listing')}
           {!listingItems.length && (

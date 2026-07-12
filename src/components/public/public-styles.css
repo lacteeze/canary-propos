@@ -83,9 +83,9 @@
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
-  background: var(--yellow);
-  color: var(--yellow-text);
-  box-shadow: 0 8px 24px rgba(240, 196, 69, 0.28);
+  background: #1a2f5c;
+  color: #f4efe6;
+  box-shadow: 0 8px 24px rgba(26, 47, 92, 0.32);
   font-family: inherit;
 }
 
@@ -115,8 +115,12 @@
   background: var(--hover);
 }
 
+.cpub-photo-strip::-webkit-scrollbar {
+  display: none;
+}
+
 .cpub-stat-pill {
-  font-family: var(--font-ibm-plex-mono), monospace;
+  font-family: inherit;
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;

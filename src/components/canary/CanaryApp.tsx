@@ -487,6 +487,10 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
     () => activeProps.filter((p) => isVacantProperty(p, scoped.leases)).length,
     [activeProps, scoped.leases],
   )
+  const openProjCount = useMemo(
+    () => scoped.projects.filter((j) => j.status && !['Cancelled', 'Postponed', 'Completed', 'Closed'].includes(j.status)).length,
+    [scoped.projects],
+  )
   const hasSuccessor = useCallback((l: CanaryLease) => scoped.leases.some((o) => o !== l && o.property === l.property && (o.status === 'Upcoming' || (() => { const os = parseDate(o.start); const le = parseDate(l.end); return !!os && !!le && os > le })())), [scoped.leases])
   const expNoRenew = activeLeases.filter((l) => { const e = parseDate(l.end); return !!e && e >= now && e <= soon && !hasSuccessor(l) })
   const rentRoll = activeLeases.reduce((s, l) => s + rentNum(l.rent), 0)
@@ -501,6 +505,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
   const kpis: { label: string; value: string; color: string; view?: string; onActivate?: () => void }[] = [
     { label: 'Properties', value: String(props.length), color: 'var(--text)', view: 'properties' },
     { label: 'Vacancy', value: String(vacantCount), color: 'var(--amber)', view: 'leases', onActivate: openVacancyTimeline },
+    { label: 'Projects', value: String(openProjCount), color: 'var(--amber)', view: 'projects' },
     { label: 'Leases', value: String(activeLeases.length), color: 'var(--text)', view: 'leases' },
     { label: 'STR · next 90d', value: hospitableCalendar.connected ? String(strInWindow) : '—', color: 'var(--blue)', view: 'properties' },
     { label: 'Expiring', value: String(expNoRenew.length), color: 'var(--red)', view: 'leases' },
@@ -1294,9 +1299,13 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
       cols: [
         { key: 'name', label: 'Project', flex: '2', bold: true, get: (j: CanaryProject) => j.name || 'Untitled' },
         { key: 'property', label: 'Property', flex: '1.4', dim: true, get: (j: CanaryProject) => short(j.property) },
-        { key: 'status', label: 'Status', flex: '1.3', color: projStatusColor, get: (j: CanaryProject) => j.status || '—' },
-        { key: 'priority', label: 'Priority', flex: '0 0 104px', get: (j: CanaryProject) => j.priority || '—' },
+        { key: 'status', label: 'Status', flex: '1.2', color: projStatusColor, get: (j: CanaryProject) => j.status || '—' },
+        { key: 'priority', label: 'Priority', flex: '0 0 96px', get: (j: CanaryProject) => j.priority || '—' },
+        { key: 'startDate', label: 'Start', flex: '0 0 84px', dim: true, get: (j: CanaryProject) => j.startDate || '—' },
+        { key: 'endDate', label: 'End', flex: '0 0 84px', dim: true, get: (j: CanaryProject) => j.endDate || '—' },
+        { key: 'contractors', label: 'Contractor', flex: '1', dim: true, get: (j: CanaryProject) => j.contractors || '—' },
         { key: 'estimate', label: 'Estimate', flex: '0 0 84px', align: 'right', dim: true, get: (j: CanaryProject) => j.estimate || '—' },
+        { key: 'budget', label: 'Budget', flex: '0 0 84px', align: 'right', dim: true, get: (j: CanaryProject) => j.budget || '—' },
       ],
       getters: {},
     },

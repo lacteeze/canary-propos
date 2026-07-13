@@ -117,10 +117,12 @@ export async function updatePropertyField(
 
   if (field === 'property_type') {
     const PROPERTY_TYPES = ['house', 'duplex', 'apartment_building', 'condo', 'townhouse', 'other'] as const
-    const next = value.trim().replace(/ /g, '_')
-    if (!(PROPERTY_TYPES as readonly string[]).includes(next)) {
+    type PropertyType = (typeof PROPERTY_TYPES)[number]
+    const nextRaw = value.trim().replace(/ /g, '_')
+    if (!(PROPERTY_TYPES as readonly string[]).includes(nextRaw)) {
       return { success: false, error: 'Invalid property type.' }
     }
+    const next = nextRaw as PropertyType
     if (!unit.property_id) return { success: false, error: 'Property not found.' }
     const { data: prop } = await ctx.supabase
       .from('properties')

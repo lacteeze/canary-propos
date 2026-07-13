@@ -22,7 +22,8 @@ export const LEASE_END_MS = 999
 export type TimelineRange = { startMs: number; endMs: number }
 
 function parseDateOnlyLocal(s: string): { y: number; m: number; d: number } | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s.trim())
+  // Accept YYYY-MM-DD and ISO datetimes (YYYY-MM-DDTHH:mm:ss…) — bar math uses the calendar day.
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s.trim())
   if (!m) return null
   return { y: Number(m[1]), m: Number(m[2]) - 1, d: Number(m[3]) }
 }

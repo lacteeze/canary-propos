@@ -345,6 +345,7 @@ export function ListingPhotoGallery({ photos, title, children, topBar }: Listing
         />
         {topBar ? (
           <div
+            className="cpub-listing-hero-topbar"
             style={{
               position: 'absolute',
               top: 0,
@@ -353,7 +354,6 @@ export function ListingPhotoGallery({ photos, title, children, topBar }: Listing
               zIndex: 2,
               maxWidth: 1180,
               margin: '0 auto',
-              padding: '72px clamp(20px, 4vw, 32px) 0',
               pointerEvents: 'none',
             }}
             onClick={(e) => {
@@ -365,16 +365,15 @@ export function ListingPhotoGallery({ photos, title, children, topBar }: Listing
           </div>
         ) : null}
         <div
+          className="cpub-listing-hero-overlay"
           style={{
             position: 'relative',
             zIndex: 1,
             maxWidth: 1180,
             margin: '0 auto',
-            padding: '96px clamp(20px, 4vw, 32px) 36px',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'flex-end',
-            minHeight: 'min(56vh, 520px)',
           }}
           onClick={(e) => {
             const target = e.target as HTMLElement

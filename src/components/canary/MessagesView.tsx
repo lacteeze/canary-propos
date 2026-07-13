@@ -13,7 +13,7 @@ import {
   type ChatThread,
 } from '@/app/actions/chat'
 
-const MONO = "'IBM Plex Mono', monospace"
+const MONO = "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif"
 
 interface MessagesViewProps {
   initialThreadId?: string | null

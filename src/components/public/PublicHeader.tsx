@@ -93,6 +93,7 @@ export function PublicHeader({ overlay = false }: PublicHeaderProps) {
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flex: 'none' }}>
           <button
             type="button"
+            className="cpub-theme-desktop"
             onClick={toggleTheme}
             aria-label="Toggle dark mode"
             title="Toggle dark mode"
@@ -191,6 +192,30 @@ export function PublicHeader({ overlay = false }: PublicHeaderProps) {
               {item.label}
             </Link>
           ))}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label="Toggle dark mode"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+              marginTop: 8,
+              padding: '12px 4px',
+              border: 'none',
+              borderTop: '1px solid var(--border)',
+              background: 'transparent',
+              color: 'var(--text)',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: 15,
+              textAlign: 'left',
+            }}
+          >
+            <span>{dark ? 'Light mode' : 'Dark mode'}</span>
+            <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>{dark ? '☀' : '☾'}</span>
+          </button>
         </div>
       )}
     </header>

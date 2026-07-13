@@ -19,13 +19,13 @@ import {
   tlRangesOverlap,
 } from '@/lib/canary/timeline-times'
 
-const MONO = "'IBM Plex Mono', monospace"
+const MONO = "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif"
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const DAY_MS = 864e5
 const MONTHS_BEHIND = 3
 const MONTHS_AHEAD = 9
 
-const PROPERTY_STATUSES = ['Vacant', 'Leased', 'STR', 'Maintenance'] as const
+const PROPERTY_STATUSES = ['Vacant', 'Leased', 'STR', 'Maintenance', 'Office'] as const
 const PROPERTY_TYPES = ['house', 'duplex', 'apartment_building', 'condo', 'townhouse', 'other'] as const
 const PET_OPTIONS = ['No pets', 'Pet friendly', 'Cat friendly', 'Dog friendly', 'By approval'] as const
 

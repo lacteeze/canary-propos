@@ -309,6 +309,10 @@ html:has(.cland2.cl2-dark) body {
     display: none !important;
   }
 
+  .cland2 .cl2-hdr-actions {
+    margin-left: auto;
+  }
+
   .cland2 .cl2-burger {
     display: grid !important;
   }

@@ -83,6 +83,7 @@ const UNIT_STATUS_MAP: Record<string, string> = {
   Maintenance: 'maintenance',
   STR: 'str',
   Airbnb: 'str',
+  Office: 'office',
 }
 
 const UNIT_STATUS_REVERSE: Record<string, string> = {
@@ -90,13 +91,14 @@ const UNIT_STATUS_REVERSE: Record<string, string> = {
   occupied: 'Leased',
   maintenance: 'Maintenance',
   str: 'STR',
+  office: 'Office',
 }
 
-const UNIT_DB_STATUSES = ['vacant', 'occupied', 'maintenance', 'str'] as const
+const UNIT_DB_STATUSES = ['vacant', 'occupied', 'maintenance', 'str', 'office'] as const
 
 export async function updatePropertyField(
   unitId: string,
-  field: 'status' | 'asking_rent' | 'bedrooms' | 'bathrooms' | 'hospitable_property_id',
+  field: 'status' | 'asking_rent' | 'bedrooms' | 'bathrooms' | 'hospitable_property_id' | 'property_type',
   value: string
 ): Promise<ActionResult> {
   const ctx = await getStaffContext()
@@ -104,7 +106,7 @@ export async function updatePropertyField(
 
   const { data: unit } = await ctx.supabase
     .from('units')
-    .select('id, status, asking_rent, bedrooms, bathrooms, hospitable_property_id')
+    .select('id, property_id, status, asking_rent, bedrooms, bathrooms, hospitable_property_id')
     .eq('id', unitId)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -112,6 +114,38 @@ export async function updatePropertyField(
 
   const changes: { field: string; oldValue: string | null; newValue: string | null }[] = []
   const patch: UnitUpdate = { updated_at: new Date().toISOString() }
+
+  if (field === 'property_type') {
+    const PROPERTY_TYPES = ['house', 'duplex', 'apartment_building', 'condo', 'townhouse', 'other'] as const
+    const next = value.trim().replace(/ /g, '_')
+    if (!(PROPERTY_TYPES as readonly string[]).includes(next)) {
+      return { success: false, error: 'Invalid property type.' }
+    }
+    if (!unit.property_id) return { success: false, error: 'Property not found.' }
+    const { data: prop } = await ctx.supabase
+      .from('properties')
+      .select('id, property_type')
+      .eq('id', unit.property_id)
+      .eq('org_id', ctx.person.org_id)
+      .single()
+    if (!prop) return { success: false, error: 'Property not found.' }
+    if (prop.property_type === next) return { success: true }
+    const { error } = await ctx.supabase
+      .from('properties')
+      .update({ property_type: next, updated_at: new Date().toISOString() })
+      .eq('id', prop.id)
+      .eq('org_id', ctx.person.org_id)
+    if (error) {
+      console.error('[updatePropertyField]', error)
+      return { success: false, error: 'Failed to update property type.' }
+    }
+    // Record against the unit so it surfaces in the drawer audit log.
+    await writeAuditEntries(ctx.supabase, ctx.person.org_id, 'units', unitId, ctx.person.id, [
+      { field: 'type', oldValue: prop.property_type, newValue: next },
+    ])
+    revalidatePath('/app')
+    return { success: true }
+  }
 
   if (field === 'status') {
     const dbVal = UNIT_STATUS_MAP[value] ?? value.toLowerCase()
@@ -164,7 +198,7 @@ const PET_LABELS = ['No pets', 'Pet friendly', 'Cat friendly', 'Dog friendly', '
 const PET_AMENITY_RE = /pet|cat|dog|approval/i
 
 const propertyDetailsSchema = z.object({
-  status: z.enum(['Vacant', 'Leased', 'Maintenance', 'STR']),
+  status: z.enum(['Vacant', 'Leased', 'Maintenance', 'STR', 'Office']),
   bedrooms: z.number().int().min(0).max(50),
   bathrooms: z.number().min(0).max(50),
   askingRent: z.number().min(0).nullable(),
@@ -350,7 +384,16 @@ const WO_PRIORITY_LABEL: Record<string, string> = Object.fromEntries(
 
 export async function updateLeaseField(
   leaseId: string,
-  field: 'renewal_status' | 'monthly_rent' | 'deposit_amount' | 'start_date' | 'end_date' | 'status' | 'lease_term_type',
+  field:
+    | 'renewal_status'
+    | 'monthly_rent'
+    | 'deposit_amount'
+    | 'start_date'
+    | 'end_date'
+    | 'status'
+    | 'lease_term_type'
+    | 'rental_credit'
+    | 'rental_credit_expiry',
   value: string
 ): Promise<ActionResult> {
   const ctx = await getStaffContext()
@@ -358,7 +401,7 @@ export async function updateLeaseField(
 
   const { data: lease } = await ctx.supabase
     .from('leases')
-    .select('id, renewal_status, monthly_rent, deposit_amount, start_date, end_date, status, lease_term_type')
+    .select('id, renewal_status, monthly_rent, deposit_amount, start_date, end_date, status, lease_term_type, rental_credit, rental_credit_expiry')
     .eq('id', leaseId)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -384,6 +427,27 @@ export async function updateLeaseField(
     if (Number.isNaN(n) || n < 0) return { success: false, error: 'Invalid deposit amount.' }
     changes.push({ field: 'deposit_amount', oldValue: str(lease.deposit_amount), newValue: String(n) })
     patch.deposit_amount = n
+  } else if (field === 'rental_credit') {
+    const trimmed = value.trim()
+    if (!trimmed || trimmed === '—') {
+      changes.push({ field: 'rental_credit', oldValue: str(lease.rental_credit), newValue: null })
+      patch.rental_credit = null
+    } else {
+      const n = parseFloat(trimmed.replace(/[$,]/g, ''))
+      if (Number.isNaN(n) || n < 0) return { success: false, error: 'Invalid rental credit amount.' }
+      changes.push({ field: 'rental_credit', oldValue: str(lease.rental_credit), newValue: String(n) })
+      patch.rental_credit = n
+    }
+  } else if (field === 'rental_credit_expiry') {
+    const trimmed = value.trim()
+    if (!trimmed) {
+      changes.push({ field: 'rental_credit_expiry', oldValue: str(lease.rental_credit_expiry), newValue: null })
+      patch.rental_credit_expiry = null
+    } else {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return { success: false, error: 'Invalid date format.' }
+      changes.push({ field: 'rental_credit_expiry', oldValue: str(lease.rental_credit_expiry), newValue: trimmed })
+      patch.rental_credit_expiry = trimmed
+    }
   } else if (field === 'start_date' || field === 'end_date') {
     const nextStart = field === 'start_date' ? value : (lease.start_date ?? '')
     const nextEnd = field === 'end_date' ? (value.trim() || null) : (lease.end_date ?? null)

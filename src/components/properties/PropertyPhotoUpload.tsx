@@ -314,7 +314,7 @@ export function PropertyPhotoUpload({
 
   const labelStyle: React.CSSProperties = themed
     ? {
-        fontFamily: "'IBM Plex Mono', monospace",
+        fontFamily: "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif",
         fontSize: gallery ? 10.5 : 10,
         letterSpacing: '.1em',
         textTransform: 'uppercase',

@@ -12,7 +12,7 @@ export interface CanaryProperty {
   propertyDbId: string
   /** Full address line, e.g. "12 Duckworth St, St. John's" */
   address: string
-  status: string // Vacant | Leased | Maintenance | STR | —
+  status: string // Vacant | Leased | Maintenance | STR | Office | —
   beds: string
   baths: string
   parking: string

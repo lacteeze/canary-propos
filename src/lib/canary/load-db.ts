@@ -48,6 +48,7 @@ function unitStatusLabel(status: string | null): string {
   if (status === 'occupied') return 'Leased'
   if (status === 'maintenance') return 'Maintenance'
   if (status === 'str') return 'STR'
+  if (status === 'office') return 'Office'
   return 'Vacant'
 }
 
@@ -277,10 +278,7 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
     .filter((u) => u.properties)
     .map((u) => {
       const p = u.properties
-      const street =
-        u.unit_number && unitRows.filter((x) => x.properties?.id === p.id).length > 1
-          ? `${p.street_address} · Unit ${u.unit_number}`
-          : p.street_address
+      const street = unitDisplayStreet(p.street_address, u.unit_number, p.id, unitRows)
       const feeLabel =
         p.management_fee_value != null
           ? p.management_fee_type === 'percent'
@@ -324,14 +322,13 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
     .filter((l) => l.units?.properties)
     .filter((l) => {
       const prop = l.units.properties
-      const street =
-        l.units.unit_number ? `${prop.street_address} · Unit ${l.units.unit_number}` : prop.street_address
+      const street = unitDisplayStreet(prop.street_address, l.units.unit_number, prop.id, unitRows)
       return !archivedAddresses.has(fullAddress(street, prop.city))
     })
     .map((l) => {
       const prop = l.units.properties
-      const street =
-        l.units.unit_number ? `${prop.street_address} · Unit ${l.units.unit_number}` : prop.street_address
+      // Same address key as properties/drafts — unit suffix only for multi-unit buildings.
+      const street = unitDisplayStreet(prop.street_address, l.units.unit_number, prop.id, unitRows)
       const tenant = l.people
       const tenantName = tenant
         ? [tenant.first_name, tenant.last_name].filter(Boolean).join(' ') || tenant.email

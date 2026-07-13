@@ -161,82 +161,44 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
           </Link>
         }
       >
-        <p
-          className="cpub-stat-pill"
-          style={{ margin: '0 0 10px', color: 'var(--yellow)' }}
-        >
-          Available for rent
-        </p>
-        <h1
-          style={{
-            margin: 0,
-            fontSize: 'clamp(28px, 4.5vw, 44px)',
-            fontWeight: 700,
-            letterSpacing: '-.02em',
-            color: '#f4efe6',
-            lineHeight: 1.08,
-            maxWidth: 720,
-          }}
-        >
-          {heroAddress}
-        </h1>
+        <p className="cpub-stat-pill cpub-listing-hero-eyebrow">Available for rent</p>
+        <h1 className="cpub-listing-hero-title">{heroAddress}</h1>
 
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'baseline',
-            gap: '18px 28px',
-            marginTop: 14,
-            paddingTop: 0,
-            borderTop: '1px solid rgba(244,239,230,.18)',
-          }}
-        >
+        <div className="cpub-listing-hero-meta">
           {unit?.bedrooms != null && (
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 22, fontWeight: 600, color: '#f4efe6' }}>
+            <div className="cpub-listing-hero-stat">
               {unit.bedrooms}
-              <span style={{ fontSize: 15, fontWeight: 600, color: 'rgba(244,239,230,.78)' }}>Beds</span>
+              <span>Beds</span>
             </div>
           )}
           {unit?.bathrooms != null && (
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 22, fontWeight: 600, color: '#f4efe6' }}>
+            <div className="cpub-listing-hero-stat">
               {String(unit.bathrooms).replace(/\.0$/, '')}
-              <span style={{ fontSize: 15, fontWeight: 600, color: 'rgba(244,239,230,.78)' }}>Baths</span>
+              <span>Baths</span>
             </div>
           )}
           {parkingLabel != null && (
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 22, fontWeight: 600, color: '#f4efe6' }}>
+            <div className="cpub-listing-hero-stat">
               {parkingLabel}
-              <span style={{ fontSize: 15, fontWeight: 600, color: 'rgba(244,239,230,.78)' }}>Parking</span>
+              <span>Parking</span>
             </div>
           )}
           {unit?.sq_footage && (
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 22, fontWeight: 600, color: '#f4efe6' }}>
+            <div className="cpub-listing-hero-stat">
               {unit.sq_footage}
-              <span style={{ fontSize: 15, fontWeight: 600, color: 'rgba(244,239,230,.78)' }}>Sq ft</span>
+              <span>Sq ft</span>
             </div>
           )}
           {availableLabel && (
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 22, fontWeight: 600, color: '#f4efe6' }}>
-              <span style={{ fontSize: 15, fontWeight: 600, color: 'rgba(244,239,230,.78)' }}>Available</span>
+            <div className="cpub-listing-hero-stat">
+              <span>Available</span>
               {availableLabel}
             </div>
           )}
           {rent != null && (
-            <div
-              style={{
-                marginLeft: 'auto',
-                display: 'flex',
-                alignItems: 'baseline',
-                gap: 4,
-                fontSize: 22,
-                fontWeight: 700,
-                color: 'var(--accent)',
-                letterSpacing: '-.02em',
-              }}
-            >
+            <div className="cpub-listing-hero-price">
               {formatCAD(Number(rent))}
-              <span style={{ fontSize: 15, fontWeight: 600, color: 'rgba(244,239,230,.7)' }}>/mo</span>
+              <span>/mo</span>
             </div>
           )}
         </div>

@@ -14,7 +14,7 @@ import {
   type ImportDataset,
 } from '@/lib/canary/import-specs'
 
-const MONO = "'IBM Plex Mono', monospace"
+const MONO = "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif"
 
 const inputStyle: React.CSSProperties = {
   width: '100%',

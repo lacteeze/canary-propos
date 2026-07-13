@@ -22,7 +22,7 @@ import AuditLogPanel from './AuditLogPanel'
 import DatePickerField, { formatDisplayDate } from './DatePickerField'
 import { PropertyPhotoUpload } from '@/components/properties/PropertyPhotoUpload'
 
-const MONO = "'IBM Plex Mono', monospace"
+const MONO = "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif"
 
 export type DrawerKind = 'lease' | 'property' | 'person' | 'portfolio' | 'project'
 export type DrawerState = { kind: DrawerKind; id: string } | null
@@ -42,12 +42,22 @@ interface EntityDetailDrawerProps {
   onOpenMessages?: (threadId: string) => void
 }
 
-const PROPERTY_STATUSES = ['Vacant', 'Leased', 'STR', 'Maintenance']
+const PROPERTY_STATUSES = ['Vacant', 'Leased', 'STR', 'Maintenance', 'Office']
+const PROPERTY_TYPE_OPTIONS = ['house', 'duplex', 'apartment_building', 'condo', 'townhouse', 'other']
 
 function propertyStatusOption(status: string | null | undefined): string {
   if (!status) return 'Vacant'
   if (status === 'Airbnb') return 'STR'
   return PROPERTY_STATUSES.includes(status) ? status : 'Vacant'
+}
+
+function propertyTypeOption(type: string | null | undefined): string {
+  const normalized = (type || 'other').trim().replace(/ /g, '_')
+  return PROPERTY_TYPE_OPTIONS.includes(normalized) ? normalized : 'other'
+}
+
+function formatPropertyTypeLabel(type: string): string {
+  return type.replace(/_/g, ' ')
 }
 const LEASE_RENEWAL = ['—', 'pending', 'sent', 'accepted', 'declined']
 const LEASE_DB_STATUS = ['active', 'expired', 'terminated']
@@ -763,6 +773,14 @@ export default function EntityDetailDrawer({
               value: <InlineField value={l.deposit} label="deposit" confirm onSave={wrapSave((v) => updateLeaseField(l.id, 'deposit_amount', v))} disabled={!canEdit} />,
             },
             {
+              label: 'Rental credit',
+              value: <InlineField value={l.rentalCredit} label="rental credit" confirm onSave={wrapSave((v) => updateLeaseField(l.id, 'rental_credit', v))} disabled={!canEdit} />,
+            },
+            {
+              label: 'Credit expires',
+              value: <InlineField value={l.rentalCreditExpiry} label="rental credit expiry" type="date" confirm onSave={wrapSave((v) => updateLeaseField(l.id, 'rental_credit_expiry', v))} disabled={!canEdit} />,
+            },
+            {
               label: 'Term type',
               value: canEdit ? (
                 <StatusSelect
@@ -829,17 +847,29 @@ export default function EntityDetailDrawer({
                 <StatusSelect value={propertyStatusOption(p.status)} options={PROPERTY_STATUSES} onSave={wrapSave((v) => updatePropertyField(p.id, 'status', v))} />
               ) : (p.status || '—'),
             },
-            { label: 'Type', value: p.type || '—' },
+            {
+              label: 'Type',
+              value: canEdit ? (
+                <StatusSelect
+                  value={propertyTypeOption(p.type)}
+                  options={PROPERTY_TYPE_OPTIONS}
+                  formatOption={formatPropertyTypeLabel}
+                  onSave={wrapSave((v) => updatePropertyField(p.id, 'property_type', v))}
+                />
+              ) : (p.type || '—'),
+            },
             { label: 'Area', value: [p.city, p.area].filter(Boolean).join(' · ') || '—' },
             {
-              label: 'Beds / Baths',
+              label: 'Beds',
               value: canEdit ? (
-                <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <InlineField value={p.beds} label="bedrooms" type="number" onSave={wrapSave((v) => updatePropertyField(p.id, 'bedrooms', v))} />
-                  <span>/</span>
-                  <InlineField value={p.baths} label="bathrooms" type="number" onSave={wrapSave((v) => updatePropertyField(p.id, 'bathrooms', v))} />
-                </span>
-              ) : [p.beds, p.baths].map((x) => x || '—').join(' / '),
+                <InlineField value={p.beds} label="bedrooms" type="number" onSave={wrapSave((v) => updatePropertyField(p.id, 'bedrooms', v))} />
+              ) : (p.beds || '—'),
+            },
+            {
+              label: 'Baths',
+              value: canEdit ? (
+                <InlineField value={p.baths} label="bathrooms" type="number" onSave={wrapSave((v) => updatePropertyField(p.id, 'bathrooms', v))} />
+              ) : (p.baths || '—'),
             },
             {
               label: 'Asking rate',
@@ -847,18 +877,20 @@ export default function EntityDetailDrawer({
                 <InlineField value={p.rate != null ? String(p.rate) : ''} label="asking rate" type="number" confirm onSave={wrapSave((v) => updatePropertyField(p.id, 'asking_rent', v))} />
               ) : (p.rate ? money(p.rate) + '/mo' : '—'),
             },
-            {
-              label: 'Hospitable ID',
-              value: canEdit ? (
-                <InlineField
-                  value={p.hospitablePropertyId || ''}
-                  label="Hospitable property ID"
-                  type="text"
-                  confirm
-                  onSave={wrapSave((v) => updatePropertyField(p.id, 'hospitable_property_id', v))}
-                />
-              ) : (p.hospitablePropertyId || '—'),
-            },
+            ...(propertyStatusOption(p.status) === 'STR'
+              ? [{
+                  label: 'Hospitable ID',
+                  value: canEdit ? (
+                    <InlineField
+                      value={p.hospitablePropertyId || ''}
+                      label="Hospitable property ID"
+                      type="text"
+                      confirm
+                      onSave={wrapSave((v) => updatePropertyField(p.id, 'hospitable_property_id', v))}
+                    />
+                  ) : (p.hospitablePropertyId || '—'),
+                }]
+              : []),
             { label: 'Pets', value: p.petFriendly || '—' },
             ...(p.archivedAt ? [{ label: 'Archived', value: new Date(p.archivedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) }] : []),
           ]}

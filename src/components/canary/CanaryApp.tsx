@@ -4,7 +4,7 @@
 // Faithful React port of the CanaryApp.dc design prototype, wired to live
 // Supabase data (loaded server-side in src/app/(canary)/app/page.tsx).
 import React, { useCallback, useMemo, useRef, useState, useTransition } from 'react'
-import { Bell, CalendarIcon, ChevronDown, MessageSquare, Repeat2, Search, X } from 'lucide-react'
+import { Bell, CalendarIcon, ChevronDown, Menu, MessageSquare, Repeat2, Search, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { activateDraftListing, deleteDraftListing, saveDraftListing, savePaymentEntry } from '@/app/actions/canary'
@@ -39,7 +39,7 @@ import {
 } from './layout'
 import MessagesView from './MessagesView'
 import PropertyOccupancyCalendar from './PropertyOccupancyCalendar'
-import type { CanaryDb, CanaryDraft, CanaryHospitableTask, CanaryLease, CanaryOwnerOccupiedBlock, CanaryPayment, CanaryPerson, CanaryPortfolio, CanaryProject, CanaryProperty, CanaryRole, CanaryStrBooking, DraftListingStatus, HospitableCalendarData, HospitableTasksData } from '@/lib/canary/types'
+import type { CanaryDb, CanaryDraft, CanaryHospitableTask, CanaryInquiry, CanaryLease, CanaryOwnerOccupiedBlock, CanaryPayment, CanaryPerson, CanaryPortfolio, CanaryProject, CanaryProperty, CanaryRole, CanaryStrBooking, DraftListingStatus, HospitableCalendarData, HospitableTasksData } from '@/lib/canary/types'
 import { deleteLocalOwnerOccupiedBlock, loadLocalOwnerOccupiedBlocks } from '@/lib/canary/owner-occupied-storage'
 import { isOpenHospitableTask } from '@/lib/hospitable/map-tasks'
 import { draftStatusBadge, draftTimelineMeta, inquiryStatusBadge } from '@/lib/canary/types'
@@ -50,7 +50,7 @@ import { resolveToCanaryAddress } from '@/lib/hospitable/property-label'
 import '@/design-system/macos27/index.css'
 import './canary.css'
 
-const MONO = "'IBM Plex Mono', monospace"
+const MONO = "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif"
 const DAY = 864e5
 
 const TL_ZOOM_PRESETS = [
@@ -254,6 +254,9 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
   const [calView, setCalView] = useState<{ propId: string; address: string } | null>(null)
   const [propertyModalOpen, setPropertyModalOpen] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
+  const [leasingListOpen, setLeasingListOpen] = useState<
+    null | 'new_inquiry' | 'viewings' | 'applications' | 'signed' | 'expiring' | 'listings'
+  >(null)
 
   // restore persisted UI prefs
   React.useEffect(() => {
@@ -272,6 +275,10 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
   React.useEffect(() => {
     if (view === 'home') setView('dashboard')
   }, [view])
+
+  React.useEffect(() => {
+    if (propFilter === 'Airbnb') setPropFilter('STR')
+  }, [propFilter])
 
   React.useEffect(() => {
     if (searchExpanded) searchInputRef.current?.focus()
@@ -410,6 +417,14 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
   const activeProps = useMemo(() => scoped.properties.filter((p) => !p.archivedAt), [scoped.properties])
   const archivedProps = useMemo(() => scoped.properties.filter((p) => p.archivedAt), [scoped.properties])
   const props = viewingArchived ? archivedProps : activeProps
+  // Properties-page "Archived" pill must not leak into the leasing timeline (leases for archived
+  // units are omitted at load time, which produced empty bars + archived addresses in the list).
+  React.useEffect(() => {
+    if (view !== 'leases') return
+    if (propFilter === 'Archived') setPropFilter('')
+    // Re-open near today whenever entering Leasing — avoids a stale scrub position (e.g. Dec 2025).
+    setTlAnchor(null)
+  }, [view])
   React.useEffect(() => {
     setLocalOwnerBlocks(loadLocalOwnerOccupiedBlocks(userPersonId))
   }, [userPersonId])
@@ -722,10 +737,68 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
     setView('leases')
   }, [])
 
+  // ---------- leasing pipeline KPIs ----------
+  const leasingNewInquiries = useMemo(
+    () =>
+      scoped.inquiries
+        .filter((i) => i.type === 'inquiry' && i.status === 'new')
+        .sort((a, b) => (parseDate(b.submittedAt)?.getTime() ?? 0) - (parseDate(a.submittedAt)?.getTime() ?? 0)),
+    [scoped.inquiries],
+  )
+  const leasingViewings = useMemo(
+    () =>
+      scoped.inquiries
+        .filter((i) => i.type === 'inquiry' && i.status === 'contacted')
+        .sort((a, b) => (parseDate(b.submittedAt)?.getTime() ?? 0) - (parseDate(a.submittedAt)?.getTime() ?? 0)),
+    [scoped.inquiries],
+  )
+  const leasingApplications = useMemo(
+    () =>
+      scoped.inquiries
+        .filter((i) => i.type === 'application')
+        .sort((a, b) => (parseDate(b.submittedAt)?.getTime() ?? 0) - (parseDate(a.submittedAt)?.getTime() ?? 0)),
+    [scoped.inquiries],
+  )
+  const leasingSignedThisMonth = useMemo(() => {
+    const y = now.getFullYear()
+    const m = now.getMonth()
+    return scoped.leases
+      .filter((l) => {
+        if (!['Active', 'Upcoming', 'Expiring'].includes(l.status)) return false
+        const s = parseDate(l.start)
+        return !!s && s.getFullYear() === y && s.getMonth() === m
+      })
+      .sort((a, b) => (parseDate(b.start)?.getTime() ?? 0) - (parseDate(a.start)?.getTime() ?? 0))
+  }, [scoped.leases, now])
+  const leasingExpiring = useMemo(
+    () =>
+      [...expNoRenew].sort(
+        (a, b) => (parseDate(a.end)?.getTime() ?? 0) - (parseDate(b.end)?.getTime() ?? 0),
+      ),
+    [expNoRenew],
+  )
+  const leasingListingsLive = useMemo(
+    () =>
+      scoped.drafts
+        .filter((d) => d.status === 'published')
+        .sort((a, b) => (parseDate(b.sentAt)?.getTime() ?? 0) - (parseDate(a.sentAt)?.getTime() ?? 0)),
+    [scoped.drafts],
+  )
+  const leasingKpis: { id: NonNullable<typeof leasingListOpen>; label: string; value: string; color: string }[] = [
+    { id: 'new_inquiry', label: 'Inquiries', value: String(leasingNewInquiries.length), color: 'var(--green)' },
+    { id: 'viewings', label: 'Viewings', value: String(leasingViewings.length), color: 'var(--blue)' },
+    { id: 'applications', label: 'Apps. Sent', value: String(leasingApplications.length), color: 'var(--amber)' },
+    { id: 'signed', label: 'Signed', value: String(leasingSignedThisMonth.length), color: 'var(--text)' },
+    { id: 'expiring', label: 'Expiring', value: String(leasingExpiring.length), color: 'var(--red)' },
+    { id: 'listings', label: 'Listings', value: String(leasingListingsLive.length), color: 'var(--green)' },
+  ]
+
   // ---------- dashboard / card-grid layout (DnD + resize) ----------
   const layoutUserKey = userPersonId || 'anon'
   const kpiIds = useMemo(() => kpis.map((k) => k.label), [kpis])
   const kpiLayout = useViewLayout('dashboard_kpis', kpiIds, layoutUserKey)
+  const leasingKpiIds = useMemo(() => leasingKpis.map((k) => k.id), [leasingKpis])
+  const leasingKpiLayout = useViewLayout('leasing_kpis', leasingKpiIds, layoutUserKey)
   const dashSectionIds = useMemo(() => {
     const ids = ['expiring', 'vacant', 'projects', 'drafts', 'renewals']
     if (priv) ids.push('applications')
@@ -736,7 +809,9 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
   // ---------- timeline ----------
   const zoomIdx = Math.max(0, Math.min(TL_ZOOM_PRESETS.length - 1, tlZoomIdx))
   const spanDays = TL_ZOOM_PRESETS[zoomIdx].d
-  const anchor = tlAnchor != null ? new Date(tlAnchor) : new Date(todayMid.getTime() - Math.round(spanDays / 4) * DAY)
+  // Default: open ~1/4 of the window before today so "today" sits in the first third of the grid.
+  const defaultTlAnchorMs = todayMid.getTime() - Math.round(spanDays / 4) * DAY
+  const anchor = tlAnchor != null ? new Date(tlAnchor) : new Date(defaultTlAnchorMs)
   const winStart = anchor
   const winEnd = new Date(winStart.getTime() + spanDays * DAY)
   const span = winEnd.getTime() - winStart.getTime()
@@ -793,13 +868,14 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
   }, [])
 
   const timelineProps = useMemo(() => {
-    const base = props.filter(matchProp)
+    // Always active (non-archived) units — independent of properties-page propFilter.
+    const base = activeProps.filter(matchProp)
     if (!tlVacancyOnly) return base
     return base.filter((p) => isVacantProperty(p, scoped.leases))
-  }, [props, q, tlVacancyOnly, scoped.leases])
+  }, [activeProps, q, tlVacancyOnly, scoped.leases])
   const timelineAddressFor = useCallback(
-    (address: string) => resolveToCanaryAddress(address, props) ?? address,
-    [props]
+    (address: string) => resolveToCanaryAddress(address, activeProps) ?? address,
+    [activeProps]
   )
   const leasesByProp = useMemo(() => {
     const m = new Map<string, CanaryLease[]>()
@@ -811,7 +887,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
     return m
   }, [scoped.leases, timelineAddressFor])
   const draftsByProp = useMemo(() => {
-    const propById = new Map(props.map((p) => [p.id, p]))
+    const propById = new Map(activeProps.map((p) => [p.id, p]))
     const m = new Map<string, CanaryDraft[]>()
     scoped.drafts.forEach((d) => {
       const k = propById.get(d.propId)?.address ?? timelineAddressFor(d.address) ?? d.address
@@ -819,7 +895,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
       m.get(k)!.push(d)
     })
     return m
-  }, [scoped.drafts, timelineAddressFor, props])
+  }, [scoped.drafts, timelineAddressFor, activeProps])
   const strByProp = useMemo(() => {
     const m = new Map<string, CanaryStrBooking[]>()
     scopedStrBookings.forEach((b) => {
@@ -1045,6 +1121,8 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
       .filter((b) => {
         const canonical = timelineAddressFor(b.property)
         if (managedAddresses.has(canonical)) return false
+        // Bookings that only resolve to an archived Canary unit stay off this timeline.
+        if (resolveToCanaryAddress(b.property, archivedProps)) return false
         return !q || b.property.toLowerCase().includes(q) || b.guestLabel.toLowerCase().includes(q)
       })
       .map((b) => b.property)
@@ -1058,6 +1136,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
             if (!isOpenHospitableTask(t)) return false
             const canonical = timelineAddressFor(t.property)
             if (rowAddressKeys.has(canonical)) return false
+            if (resolveToCanaryAddress(t.property, archivedProps)) return false
             const range = taskBarRange(t)
             if (!range || range.endMs < winStart.getTime() || range.startMs > winEnd.getTime()) return false
             if (!q) return true
@@ -1096,7 +1175,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
   })
 
   // ---------- filters / lists per page ----------
-  const statuses = ['', 'Vacant', 'Leased', 'STR', 'Airbnb', 'Maintenance', 'Office', 'Archived']
+  const statuses = ['', 'Vacant', 'Leased', 'STR', 'Maintenance', 'Office', 'Archived']
   const chipFor = (st: string): [string, string] =>
     st === 'Leased' ? ['var(--green)', 'var(--green-text)']
     : st === 'Vacant' ? ['var(--amber)', 'var(--amber-text)']
@@ -1105,10 +1184,18 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
   const filteredProps = props.filter(matchProp).filter((p) => {
     if (!propFilter) return true
     if (propFilter === 'Archived') return true
-    if (propFilter === 'STR') return p.status === 'STR' || p.status === 'Airbnb'
-    if (propFilter === 'Airbnb') return p.status === 'Airbnb' || p.status === 'STR'
+    if (propFilter === 'STR' || propFilter === 'Airbnb') return p.status === 'STR' || p.status === 'Airbnb'
     return p.status === propFilter
   })
+  const propStatusCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const p of activeProps) {
+      const key = p.status === 'Airbnb' ? 'STR' : p.status
+      if (!key) continue
+      counts[key] = (counts[key] || 0) + 1
+    }
+    return counts
+  }, [activeProps])
   const propCardIds = useMemo(() => filteredProps.map((p) => p.id), [filteredProps])
   const propCardLayout = useViewLayout('properties_cards', propCardIds, layoutUserKey)
 
@@ -1222,7 +1309,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
       }),
       open: (p: CanaryProperty) => () => setDrawer({ kind: 'property', id: p.id }),
       group: (p: CanaryProperty) => p.status || '—',
-      groupOrder: ['Vacant', 'Leased', 'STR', 'Airbnb', 'Maintenance', 'Office'],
+      groupOrder: ['Vacant', 'Leased', 'STR', 'Maintenance', 'Office'],
       card: (p: CanaryProperty) => ({ title: short(p.address), sub: [[p.beds, 'bd'].join(' '), [p.baths, 'ba'].join(' '), [p.city, p.area].filter(Boolean).join(' ')].join(' · '), right: p.rate ? money(p.rate) : '', rightColor: 'var(--text)' }),
       cols: [
         { key: 'address', label: 'Address', flex: '2', bold: true, get: (p: CanaryProperty) => short(p.address) },
@@ -1554,8 +1641,8 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
             })
           },
         })
-        actions.push({ label: 'Calendar view', onClick: () => openPropertyCalendar(p.id, p.address) })
-        actions.push({ label: '+ Draft lease from this property', onClick: () => startDraftFor(p) })
+        actions.push({ label: 'Calendar', onClick: () => openPropertyCalendar(p.id, p.address) })
+        actions.push({ label: '+ Draft lease', onClick: () => startDraftFor(p) })
       }
     }
     return actions
@@ -1984,6 +2071,31 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                 {n.label}
               </button>
             ))}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="cy-topnav-burger"
+                aria-label="Open navigation menu"
+              >
+                <Menu size={16} strokeWidth={2} aria-hidden />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="center"
+                sideOffset={8}
+                data-theme={theme}
+                className="cnry cy-menu cy-topnav-menu min-w-48"
+              >
+                <DropdownMenuRadioGroup
+                  value={view}
+                  onValueChange={(v) => { setView(v); setDrawer(null) }}
+                >
+                  {navItems.map((n) => (
+                    <DropdownMenuRadioItem key={n.key} value={n.key}>
+                      {n.label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </nav>
           <div className="cy-header-tools">
             {priv && (
@@ -2086,6 +2198,33 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
 
         <main className="cy-main">
 
+          {/* ============ LEASING PIPELINE KPIs ============ */}
+          {view === 'leases' && (
+            <LayoutGrid
+              preset={KPI_LAYOUT_PRESET}
+              orderedIds={leasingKpiLayout.orderedIds}
+              sizes={leasingKpiLayout.sizes}
+              onReorder={leasingKpiLayout.reorder}
+              onSizeChange={leasingKpiLayout.setSize}
+              columns={12}
+              gapPx={10}
+              style={{ marginBottom: 12 }}
+              items={leasingKpis.map((k) => ({
+                id: k.id,
+                className: 'cy-kpi cy-hov',
+                role: 'button',
+                tabIndex: 0,
+                onActivate: () => setLeasingListOpen(k.id),
+                children: (
+                  <>
+                    <div className="cy-mono-label" style={{ marginBottom: 4 }}>{k.label}</div>
+                    <div className="cy-kpi-value" style={{ color: k.color }}>{k.value}</div>
+                  </>
+                ),
+              }))}
+            />
+          )}
+
           {/* ============ VIEW SWITCHER (+ properties / projects filters inline) ============ */}
           {pdef && (
             <div className="cy-toolbar">
@@ -2103,8 +2242,14 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                 <>
                   {statuses.map((st) => (
                     <button key={st || 'all'} className={`cy-pill${propFilter === st ? ' cy-pill--active' : ''}`} onClick={() => setPropFilter(st)}>
-                      {st || 'All'}
-                      {st === 'Archived' && archivedProps.length ? <span style={{ opacity: 0.6, fontFamily: MONO, fontSize: 11, marginLeft: 4 }}>{archivedProps.length}</span> : null}
+                      {st || 'All'}{' '}
+                      <span style={{ opacity: 0.6, fontFamily: MONO, fontSize: 11 }}>
+                        {st === 'Archived'
+                          ? String(archivedProps.length)
+                          : st
+                            ? String(propStatusCounts[st] || 0)
+                            : String(activeProps.length)}
+                      </span>
                     </button>
                   ))}
                   <span className="cy-toolbar-count">
@@ -2187,7 +2332,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
-                  <button className="cy-btn" onClick={() => setTlAnchor(todayMid.getTime() - Math.round(spanDays / 4) * DAY)}>Today</button>
+                  <button className="cy-btn" onClick={() => setTlAnchor(defaultTlAnchorMs)}>Today</button>
                   {showTasksKpi && (
                     <button
                       type="button"
@@ -3175,6 +3320,125 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
               setDrawer({ kind: 'project', id })
             }}
           />
+        )
+      })()}
+
+      {/* ============ LEASING KPI LIST POPOUT ============ */}
+      {leasingListOpen && (() => {
+        const meta: Record<NonNullable<typeof leasingListOpen>, { title: string; sub: string }> = {
+          new_inquiry: { title: 'New inquiries', sub: 'Tenants who submitted a showing request and are awaiting contact.' },
+          viewings: { title: 'Viewings scheduled', sub: 'Inquiries marked contacted — treated as the viewing pipeline until a dedicated schedule exists.' },
+          applications: { title: 'Applications sent', sub: 'Rental applications submitted through public listings.' },
+          signed: { title: 'Leases signed this month', sub: 'Active, upcoming, or expiring leases with a start date in the current month.' },
+          expiring: { title: 'Leases expiring', sub: 'Ending within 90 days with no upcoming renewal on the same property.' },
+          listings: { title: 'Listings live', sub: 'Published drafts currently visible on the public site.' },
+        }
+        const m = meta[leasingListOpen]
+        const close = () => setLeasingListOpen(null)
+        const inquiryRows: CanaryInquiry[] =
+          leasingListOpen === 'new_inquiry' ? leasingNewInquiries
+          : leasingListOpen === 'viewings' ? leasingViewings
+          : leasingListOpen === 'applications' ? leasingApplications
+          : []
+        const leaseRows: CanaryLease[] =
+          leasingListOpen === 'signed' ? leasingSignedThisMonth
+          : leasingListOpen === 'expiring' ? leasingExpiring
+          : []
+        const listingRows: CanaryDraft[] = leasingListOpen === 'listings' ? leasingListingsLive : []
+        const empty =
+          leasingListOpen === 'new_inquiry' || leasingListOpen === 'viewings' || leasingListOpen === 'applications'
+            ? !inquiryRows.length
+            : leasingListOpen === 'listings'
+              ? !listingRows.length
+              : !leaseRows.length
+
+        return (
+          <>
+            <div onClick={close} className="cy-modal-backdrop cy-glass-modal-backdrop" style={{ zIndex: 70 }} />
+            <div className="cy-glass-modal" style={{ width: 'min(560px,94vw)', maxHeight: '92vh', padding: 18, zIndex: 71, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14, gap: 12 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="cy-eyebrow" style={{ marginBottom: 4 }}>Leasing pipeline</div>
+                  <div style={{ fontWeight: 700, fontSize: 19 }}>{m.title}</div>
+                  <div style={{ color: 'var(--dim)', fontSize: 13, marginTop: 6 }}>{m.sub}</div>
+                </div>
+                <button type="button" className="cy-btn" onClick={close} aria-label="Close">✕</button>
+              </div>
+              <div style={{ overflow: 'auto', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {inquiryRows.map((i) => {
+                  const badge = inquiryStatusBadge(i.status)
+                  return (
+                    <button
+                      key={i.id}
+                      type="button"
+                      className="cy-hov"
+                      onClick={() => { close(); router.push('/inquiries') }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 10px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--elev)', cursor: 'pointer', textAlign: 'left', color: 'inherit', width: '100%' }}
+                    >
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontWeight: 650, fontSize: 14 }}>{i.name || '—'}</div>
+                        <div style={{ color: 'var(--dim)', fontSize: 12.5, marginTop: 2 }}>
+                          {[short(i.property), i.moveIn ? `Move-in ${fmtD(parseDate(i.moveIn))}` : null, fmtD(parseDate(i.submittedAt))].filter(Boolean).join(' · ')}
+                        </div>
+                      </div>
+                      <span style={{ flex: 'none', fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6, color: badge.color, border: '1px solid var(--border)', background: 'var(--panel)' }}>{badge.label}</span>
+                    </button>
+                  )
+                })}
+                {leaseRows.map((l) => {
+                  const e = parseDate(l.end)
+                  const days = e ? Math.round((e.getTime() - now.getTime()) / DAY) : null
+                  return (
+                    <button
+                      key={l.id}
+                      type="button"
+                      className="cy-hov"
+                      onClick={() => { close(); setDrawer({ kind: 'lease', id: l.id }) }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 10px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--elev)', cursor: 'pointer', textAlign: 'left', color: 'inherit', width: '100%' }}
+                    >
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontWeight: 650, fontSize: 14 }}>{short(l.property)}</div>
+                        <div style={{ color: 'var(--dim)', fontSize: 12.5, marginTop: 2 }}>
+                          {[tenantNames(l.tenantInfo) || '—', l.start ? `Start ${fmtD(parseDate(l.start))}` : null, e ? `End ${fmtD(e)}` : null].filter(Boolean).join(' · ')}
+                        </div>
+                      </div>
+                      <span style={{ flex: 'none', fontSize: 12, fontWeight: 600, color: leasingListOpen === 'expiring' ? 'var(--red)' : 'var(--dim)' }}>
+                        {leasingListOpen === 'expiring' && days != null ? `${days}d` : l.status}
+                      </span>
+                    </button>
+                  )
+                })}
+                {listingRows.map((d) => {
+                  const badge = draftStatusBadge(d.status)
+                  return (
+                    <button
+                      key={d.id}
+                      type="button"
+                      className="cy-hov"
+                      onClick={() => { close(); openDraft(d) }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 10px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--elev)', cursor: 'pointer', textAlign: 'left', color: 'inherit', width: '100%' }}
+                    >
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontWeight: 650, fontSize: 14 }}>{short(d.address)}</div>
+                        <div style={{ color: 'var(--dim)', fontSize: 12.5, marginTop: 2 }}>
+                          {[d.rent ? `${money(parseFloat(d.rent) || 0)}/mo` : null, d.start ? `Available ${fmtD(parseDate(d.start))}` : null].filter(Boolean).join(' · ')}
+                        </div>
+                      </div>
+                      <span style={{ flex: 'none', fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6, color: badge.color, border: '1px solid var(--border)', background: 'var(--panel)' }}>{badge.label}</span>
+                    </button>
+                  )
+                })}
+                {empty && (
+                  <div style={{ color: 'var(--dim)', padding: '18px 8px', textAlign: 'center', fontSize: 13.5 }}>Nothing in this pipeline yet.</div>
+                )}
+              </div>
+              {(leasingListOpen === 'new_inquiry' || leasingListOpen === 'viewings' || leasingListOpen === 'applications') && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+                  <button type="button" className="cy-btn" onClick={() => { close(); router.push('/inquiries') }}>Open inquiries →</button>
+                </div>
+              )}
+            </div>
+          </>
         )
       })()}
 

@@ -59,7 +59,7 @@
   --accent-text: #141816;
   --accent-muted: color-mix(in srgb, var(--accent) 14%, var(--panel));
   --accent-border: color-mix(in srgb, var(--accent) 35%, var(--border));
-  --success: #4caf6a;
+  --success: #4a8f62;
   --success-text: #0a1610;
   --green: var(--success);
   --green-text: var(--success-text);
@@ -207,6 +207,40 @@
 }
 
 .cnry .cy-topnav-item--active {
+  border-color: var(--border2);
+  background: var(--elev);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.cnry .cy-topnav-burger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--dim);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.cnry .cy-topnav-burger:hover {
+  background: var(--hover);
+  color: var(--text);
+  border-color: var(--border2);
+}
+
+.cnry .cy-topnav-burger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.cnry .cy-topnav-burger[aria-expanded='true'],
+.cnry .cy-topnav-burger[data-popup-open] {
   border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
   background: color-mix(in srgb, var(--accent) 8%, var(--panel));
   color: var(--accent);
@@ -306,16 +340,16 @@
   overflow: hidden;
   border-radius: 14px;
   border: 1px solid var(--glass-border);
-  /* Near-solid like property modal — less see-through than --glass */
-  background: color-mix(in srgb, var(--panel) 98%, transparent);
+  /* Fully opaque — dashboard must not show through */
+  background: var(--panel);
   box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   z-index: 70;
 }
 
 .cnry[data-theme='dark'] .cy-search-panel {
-  background: color-mix(in srgb, var(--panel) 98%, transparent);
+  background: var(--panel);
 }
 
 .cnry .cy-search-panel-section {
@@ -766,17 +800,19 @@
 
 /* ---------- Typography helpers ---------- */
 .cnry .cy-mono-label {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.1em;
+  font-family: var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--dim);
 }
 
 .cnry .cy-eyebrow {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.12em;
+  font-family: var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--accent);
 }
@@ -963,7 +999,7 @@
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif;
 }
 
 .cnry .cy-status-chip {
@@ -1119,7 +1155,7 @@
   padding: 4px 26px 4px 8px;
   font-size: 13px;
   border-radius: var(--radius-pill);
-  background-color: var(--input);
+  background-color: var(--panel);
   margin-top: 0;
 }
 
@@ -1443,7 +1479,7 @@
 }
 
 .cnry .cy-drawer-section-title {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif;
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1622,14 +1658,23 @@
   }
 
   .cnry .cy-topnav {
-    order: 10;
-    width: 100%;
+    order: 0;
+    width: auto;
     flex: none;
-    justify-content: flex-start;
-    padding: 4px 0 2px;
-    border-top: 1px solid var(--border);
+    justify-content: center;
+    padding: 0;
+    border-top: none;
     grid-column: auto;
     justify-self: auto;
+    overflow: visible;
+  }
+
+  .cnry .cy-topnav-item {
+    display: none;
+  }
+
+  .cnry .cy-topnav-burger {
+    display: inline-flex;
   }
 
   .cnry .cy-search-expanded {
@@ -1651,7 +1696,7 @@
     width: auto;
     max-width: none;
     max-height: min(65vh, 520px);
-    background: color-mix(in srgb, var(--panel) 98%, transparent);
+    background: var(--panel);
   }
 
   .cnry .cy-main {
@@ -1762,7 +1807,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-lg), 0 4px 20px color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: var(--shadow-lg);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -2068,7 +2113,7 @@
 }
 
 .cnry .cy-cal-side-section-title {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif;
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -2155,7 +2200,7 @@
 }
 
 .cnry .cy-cal-task-status {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif;
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;

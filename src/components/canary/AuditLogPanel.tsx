@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { getAuditLog, type AuditEntry } from '@/app/actions/entity-updates'
 
-const MONO = "'IBM Plex Mono', monospace"
+const MONO = "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif"
 
 interface AuditLogPanelProps {
   tableName: string

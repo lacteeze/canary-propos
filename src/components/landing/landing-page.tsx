@@ -307,25 +307,27 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
             )}
           </div>
 
-          <div className="cl2-hdrctl" style={{ position: 'relative', flex: 'none' }}>
-            <button type="button" className="cl2-btn-yellow" onClick={() => { setSignInOpen(!signInOpen); setPanelOpen(false) }} style={{ border: 'none', background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 999, padding: '9px 18px', fontWeight: 700, fontSize: '13.5px', cursor: 'pointer' }}>
-              {copy.tSignIn}
-            </button>
-            {signInOpen && (
-              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 230, background: 'var(--elev)', color: 'var(--text)', border: '1px solid var(--border2)', borderRadius: 14, boxShadow: 'var(--shadow)', padding: 8, zIndex: 60 }}>
-                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--faint)', padding: '6px 10px 8px' }}>{copy.tPortalTitle}</div>
-                {SIGN_IN_LINKS.map((link) => (
-                  <Link key={link.label} href={link.href} className="cl2-portal-link" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 9, textDecoration: 'none', color: 'inherit', fontWeight: 600, fontSize: '13.5px' }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 3, background: link.dot, flex: 'none' }} />{link.label}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
+          <div className="cl2-hdr-actions" style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 'none' }}>
+            <div style={{ position: 'relative', flex: 'none' }}>
+              <button type="button" className="cl2-btn-yellow" onClick={() => { setSignInOpen(!signInOpen); setPanelOpen(false); setMobileOpen(false) }} style={{ border: 'none', background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 999, padding: '9px 18px', fontWeight: 700, fontSize: '13.5px', cursor: 'pointer' }}>
+                {copy.tSignIn}
+              </button>
+              {signInOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 230, background: 'var(--elev)', color: 'var(--text)', border: '1px solid var(--border2)', borderRadius: 14, boxShadow: 'var(--shadow)', padding: 8, zIndex: 60 }}>
+                  <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--faint)', padding: '6px 10px 8px' }}>{copy.tPortalTitle}</div>
+                  {SIGN_IN_LINKS.map((link) => (
+                    <Link key={link.label} href={link.href} className="cl2-portal-link" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 9, textDecoration: 'none', color: 'inherit', fontWeight: 600, fontSize: '13.5px' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 3, background: link.dot, flex: 'none' }} />{link.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
 
-          <button type="button" className="cl2-burger" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Menu" style={{ flex: 'none', width: 38, height: 38, borderRadius: 10, border: `1px solid ${hdr.searchBorder}`, background: hdr.searchBg, color: hdr.hdrText, cursor: 'pointer', placeItems: 'center', fontSize: 17, lineHeight: 1, marginLeft: 'auto' }}>
-            {mobileOpen ? '✕' : '☰'}
-          </button>
+            <button type="button" className="cl2-burger" onClick={() => { setMobileOpen(!mobileOpen); setSignInOpen(false) }} aria-label="Menu" style={{ flex: 'none', width: 38, height: 38, borderRadius: 10, border: `1px solid ${hdr.searchBorder}`, background: hdr.searchBg, color: hdr.hdrText, cursor: 'pointer', placeItems: 'center', fontSize: 17, lineHeight: 1 }}>
+              {mobileOpen ? '✕' : '☰'}
+            </button>
+          </div>
         </div>
 
         {mobileOpen && (
@@ -346,9 +348,33 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
                 </a>
               ))}
             </nav>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <Link href="/login" style={{ textDecoration: 'none', background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 999, padding: '11px 20px', fontWeight: 700, fontSize: 14 }}>{copy.tSignIn}</Link>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const next = dark ? 'light' : 'dark'
+                setTheme(next)
+                try { localStorage.setItem('canary_land_theme', next) } catch { /* ignore */ }
+              }}
+              aria-label="Toggle dark mode"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+                padding: '11px 2px',
+                border: 'none',
+                borderTop: `1px solid ${hdr.hdrBorder}`,
+                background: 'transparent',
+                color: hdr.hdrText,
+                cursor: 'pointer',
+                fontWeight: 700,
+                fontSize: 16,
+                textAlign: 'left',
+              }}
+            >
+              <span>{dark ? 'Light mode' : 'Dark mode'}</span>
+              <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>{dark ? '☀' : '☾'}</span>
+            </button>
           </div>
         )}
       </header>

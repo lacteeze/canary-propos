@@ -27,6 +27,8 @@ export default async function CanaryAppPage() {
   if (caller === 'no-person') redirect('/onboarding')
 
   const db = await loadCanaryDb(caller.orgId)
+  // STR/task matching should not bind to archived units (keeps them off the leasing timeline).
+  const activeProperties = db.properties.filter((p) => !p.archivedAt)
 
   // One properties fetch shared by calendar + tasks loaders
   let hospitableProperties: Awaited<ReturnType<typeof fetchAllProperties>> | undefined
@@ -38,9 +40,9 @@ export default async function CanaryAppPage() {
     }
   }
 
-  const hospitableCalendar = await loadHospitableCalendar(db.properties, hospitableProperties)
+  const hospitableCalendar = await loadHospitableCalendar(activeProperties, hospitableProperties)
   const hospitableTasks = await loadHospitableTasks(
-    db.properties,
+    activeProperties,
     hospitableCalendar.strBookings,
     hospitableProperties
   )

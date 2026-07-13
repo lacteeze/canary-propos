@@ -6,8 +6,16 @@
   display: none !important;
 }
 
+.cpub-theme-desktop {
+  display: grid;
+}
+
 @media (max-width: 860px) {
   .cpub-nav {
+    display: none !important;
+  }
+
+  .cpub-theme-desktop {
     display: none !important;
   }
 
@@ -125,6 +133,120 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(244, 239, 230, 0.85);
+}
+
+/* Listing detail hero overlay — desktop/tablet matches pre-regression inline layout */
+.cpub-listing-hero-topbar {
+  padding: 72px clamp(20px, 4vw, 32px) 0;
+}
+
+.cpub-listing-hero-overlay {
+  padding: 96px clamp(20px, 4vw, 32px) 36px;
+  min-height: min(56vh, 520px);
+}
+
+.cpub-listing-hero-eyebrow {
+  margin: 0 0 10px;
+  color: var(--yellow);
+}
+
+.cpub-listing-hero-title {
+  margin: 0;
+  font-size: clamp(28px, 4.5vw, 44px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #f4efe6;
+  line-height: 1.08;
+  max-width: 720px;
+}
+
+.cpub-listing-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 18px 28px;
+  margin-top: 14px;
+  padding-top: 0;
+  border-top: 1px solid rgba(244, 239, 230, 0.18);
+}
+
+.cpub-listing-hero-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 22px;
+  font-weight: 600;
+  color: #f4efe6;
+}
+
+.cpub-listing-hero-stat span {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(244, 239, 230, 0.78);
+}
+
+.cpub-listing-hero-price {
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+
+.cpub-listing-hero-price span {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(244, 239, 230, 0.7);
+}
+
+/* Mobile-only: shrink type; keep spacing, labels, and structure */
+@media (max-width: 640px) {
+  .cpub-listing-hero-topbar {
+    padding: 64px 16px 0;
+  }
+
+  .cpub-listing-hero-overlay {
+    padding: 72px 16px 20px;
+    min-height: min(48vh, 420px);
+  }
+
+  .cpub-listing-hero-eyebrow {
+    margin-bottom: 6px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+
+  .cpub-listing-hero-title {
+    font-size: clamp(20px, 5.8vw, 26px);
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+  }
+
+  .cpub-listing-hero-meta {
+    gap: 8px 14px;
+    margin-top: 10px;
+  }
+
+  .cpub-listing-hero-stat {
+    gap: 5px;
+    font-size: 15px;
+  }
+
+  .cpub-listing-hero-stat span {
+    font-size: 12px;
+  }
+
+  .cpub-listing-hero-price {
+    margin-left: 0;
+    font-size: 17px;
+  }
+
+  .cpub-listing-hero-price span {
+    font-size: 12px;
+  }
 }
 
 .cpub-amenity {

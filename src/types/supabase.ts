@@ -461,6 +461,38 @@ export type Database = {
           },
         ]
       }
+      listing_alert_subscribers: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          org_id: string
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          org_id: string
+          source?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          org_id?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_alert_subscribers_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leases: {
         Row: {
           appsheet_created_at: string | null

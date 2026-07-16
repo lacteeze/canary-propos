@@ -18,6 +18,7 @@ import {
 import { DEFAULT_STAYS_HREF } from '@/lib/hospitable/map-property-to-stay'
 import type { BrowseListing } from '@/lib/listings/browse-types'
 import { createClient } from '@/lib/supabase/client'
+import { subscribeListingAlerts } from '@/app/actions/listing-alerts'
 import './landing-styles.css'
 
 interface LandingPageProps {
@@ -78,6 +79,28 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
   const [carIdx, setCarIdx] = useState(0)
   const [nlEmail, setNlEmail] = useState('')
   const [nlSent, setNlSent] = useState(false)
+  const [nlBusy, setNlBusy] = useState(false)
+  const [nlError, setNlError] = useState<string | null>(null)
+
+  const submitListingAlert = useCallback(async () => {
+    if (nlBusy) return
+    setNlError(null)
+    setNlBusy(true)
+    try {
+      const result = await subscribeListingAlerts(nlEmail)
+      if (result.success) {
+        setNlSent(true)
+      } else {
+        setNlSent(false)
+        setNlError(result.error)
+      }
+    } catch {
+      setNlSent(false)
+      setNlError('Something went wrong. Please try again or email info@canarypm.ca.')
+    } finally {
+      setNlBusy(false)
+    }
+  }, [nlBusy, nlEmail])
 
   const copy = useMemo(() => getLandingCopy(lang), [lang])
   const dark = theme === 'dark'
@@ -632,9 +655,41 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
               <h2 style={{ margin: '0 0 6px', fontSize: 'clamp(24px, 3vw, 38px)', fontWeight: 700, letterSpacing: '-.025em' }}>{copy.tNlH2}</h2>
               <p style={{ margin: 0, color: 'var(--ink-dim)', fontSize: '14.5px' }}>{copy.tNlSub}</p>
             </div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', flex: '0 1 460px', minWidth: 280 }}>
-              <input value={nlEmail} onChange={(e) => { setNlEmail(e.target.value); setNlSent(false) }} onKeyDown={(e) => e.key === 'Enter' && /@/.test(nlEmail) && setNlSent(true)} placeholder="you@email.com" aria-label="Email for new-listing alerts" style={{ flex: 1, minWidth: 180, background: 'var(--ink2)', border: '1px solid var(--ink-border)', borderRadius: 999, padding: '14px 20px', outline: 'none', fontSize: '14.5px', color: 'var(--ink-text)' }} />
-              <button type="button" onClick={() => /@/.test(nlEmail) && setNlSent(true)} style={{ flex: 'none', border: 'none', background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 999, padding: '14px 26px', fontWeight: 700, fontSize: '14.5px', cursor: 'pointer' }}>{nlSent ? copy.tNlSent : copy.tNlBtn}</button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: '0 1 460px', minWidth: 280 }}>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <input
+                  value={nlEmail}
+                  onChange={(e) => {
+                    setNlEmail(e.target.value)
+                    setNlSent(false)
+                    setNlError(null)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void submitListingAlert()
+                    }
+                  }}
+                  type="email"
+                  autoComplete="email"
+                  disabled={nlBusy || nlSent}
+                  placeholder="you@email.com"
+                  aria-label="Email for new-listing alerts"
+                  aria-invalid={Boolean(nlError)}
+                  style={{ flex: 1, minWidth: 180, background: 'var(--ink2)', border: `1px solid ${nlError ? '#f87171' : 'var(--ink-border)'}`, borderRadius: 999, padding: '14px 20px', outline: 'none', fontSize: '14.5px', color: 'var(--ink-text)' }}
+                />
+                <button
+                  type="button"
+                  disabled={nlBusy || nlSent}
+                  onClick={() => void submitListingAlert()}
+                  style={{ flex: 'none', border: 'none', background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 999, padding: '14px 26px', fontWeight: 700, fontSize: '14.5px', cursor: nlBusy || nlSent ? 'default' : 'pointer', opacity: nlBusy ? 0.7 : 1 }}
+                >
+                  {nlSent ? copy.tNlSent : nlBusy ? copy.tNlBusy : copy.tNlBtn}
+                </button>
+              </div>
+              {nlError ? (
+                <p role="alert" style={{ margin: 0, color: '#fca5a5', fontSize: 13 }}>{nlError}</p>
+              ) : null}
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 28, padding: '40px 0 30px' }}>

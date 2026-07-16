@@ -60,7 +60,7 @@ export function LandingHomesBrowse({ listings, staysHref, copy }: LandingHomesBr
       >
         Nothing available right this minute — new homes are posted here the moment they&apos;re
         ready.{' '}
-        <a href="mailto:info@canarypm.ca" style={{ color: 'var(--accent)', fontWeight: 600 }}>
+        <a href="#contact" style={{ color: 'var(--accent)', fontWeight: 600 }}>
           Join the waitlist
         </a>
         .

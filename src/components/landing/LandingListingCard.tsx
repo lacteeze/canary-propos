@@ -272,7 +272,7 @@ export function LandingListingCard({
                 bottom: 10,
                 display: 'flex',
                 justifyContent: 'center',
-                gap: 5,
+                gap: 3,
                 zIndex: 1,
                 pointerEvents: 'none',
               }}
@@ -281,8 +281,8 @@ export function LandingListingCard({
                 <span
                   key={i}
                   style={{
-                    width: 6,
-                    height: 6,
+                    width: 4,
+                    height: 4,
                     borderRadius: '50%',
                     background: i === photoIndex ? '#fff' : 'rgba(255,255,255,.45)',
                     boxShadow: '0 0 2px rgba(0,0,0,.35)',

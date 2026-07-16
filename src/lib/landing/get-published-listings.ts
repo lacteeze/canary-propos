@@ -8,7 +8,6 @@ import {
 import type { BrowseListing } from '@/lib/listings/browse-types'
 import { getListingPhotoPathsByPropertyIds } from '@/lib/storage/property-listing-media'
 import { signListingPhotoPaths } from '@/lib/storage/listing-photos'
-import { CARD_PHOTOS } from '@/lib/landing/content'
 
 export async function getPublishedListings(
   orgSlug = process.env.NEXT_PUBLIC_DEFAULT_ORG_SLUG ?? 'canary'
@@ -34,22 +33,31 @@ export async function getPublishedListings(
     .filter((id): id is string => !!id)
 
   const pathsByProperty = await getListingPhotoPathsByPropertyIds(propertyIds)
-  const coverPaths = rows.map((row, index) => {
+
+  const pathLists = rows.map((row) => {
     const propertyId = row.units?.properties?.id
-    const fromMedia = propertyId ? pathsByProperty.get(propertyId)?.[0] : undefined
-    const fromLegacy = row.units?.properties?.photo_paths?.[0]
-    return fromMedia || fromLegacy || null
+    const fromMedia = propertyId ? pathsByProperty.get(propertyId) : undefined
+    const fromLegacy = (row.units?.properties?.photo_paths ?? []).filter(
+      (p): p is string => !!p && !/^https?:\/\//i.test(p)
+    )
+    return (fromMedia?.length ? fromMedia : fromLegacy) as string[]
   })
-  const signedCovers = await signListingPhotoPaths(coverPaths.map((p) => p ?? ''))
+
+  // Sign only covers on initial load — remaining gallery URLs load on first carousel click.
+  const coverPaths = pathLists.map((paths) => paths[0] ?? '')
+  const signedCovers = await signListingPhotoPaths(coverPaths)
 
   const orgQuery = orgSlug ? `?org=${orgSlug}` : ''
 
   return rows.map((row, index) => {
-    const signed = signedCovers[index]
+    const paths = pathLists[index]
+    const cover = signedCovers[index] || null
     const mapped = mapListingRow(row, '', orgQuery, index)
     return {
       ...mapped,
-      photo: signed || CARD_PHOTOS[index % CARD_PHOTOS.length],
+      photo: cover,
+      photos: cover ? [cover] : [],
+      photoCount: paths.length,
     }
   })
 }

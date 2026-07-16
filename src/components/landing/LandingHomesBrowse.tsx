@@ -117,8 +117,13 @@ export function LandingHomesBrowse({ listings, staysHref, copy }: LandingHomesBr
                 </span>
               </h3>
               <div className="cl2-card-grid">
-                {group.listings.map((listing) => (
-                  <LandingListingCard key={listing.id} listing={listing} copy={copy} />
+                {group.listings.map((listing, index) => (
+                  <LandingListingCard
+                    key={listing.id}
+                    listing={listing}
+                    copy={copy}
+                    priority={group === groups[0] && index < 4}
+                  />
                 ))}
               </div>
             </section>

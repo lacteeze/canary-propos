@@ -241,7 +241,11 @@ export async function reorderPropertyMedia(input: {
   return { success: true }
 }
 
-/** Make a listing photo the public hero (sort_order 0). */
+/**
+ * Make a listing photo the public hero (sort_order 0).
+ * UI treats hero as “first in list” via reorderPropertyMedia; this helper remains
+ * for callers that want to promote a photo without supplying a full order.
+ */
 export async function setListingHeroPhoto(input: {
   propertyId: string
   mediaId: string
@@ -330,6 +334,72 @@ export async function deletePropertyMedia(
   revalidatePath('/properties/' + row.property_id)
   revalidatePath('/app')
   return { success: true }
+}
+
+/** Delete every listing photo for a property (storage + DB). Private photos are untouched. */
+export async function deleteAllPropertyListingMedia(
+  propertyId: string
+): Promise<ActionResult & { deleted?: number }> {
+  const ctx = await getCallerContext()
+  if (!ctx) return { success: false, error: 'You must be signed in.' }
+  if (!isManager(ctx.person.role as unknown as string[])) {
+    return { success: false, error: 'Only managers can delete property photos.' }
+  }
+
+  const propertyIdParsed = z.string().uuid().safeParse(propertyId)
+  if (!propertyIdParsed.success) {
+    return { success: false, error: 'Invalid property.' }
+  }
+
+  const { data: rows, error: fetchError } = await ctx.supabase
+    .from('property_media')
+    .select('id, storage_path')
+    .eq('property_id', propertyIdParsed.data)
+    .eq('org_id', ctx.person.org_id)
+    .eq('visibility', 'listing')
+
+  if (fetchError) {
+    console.error('[deleteAllPropertyListingMedia:fetch]', fetchError)
+    return { success: false, error: 'Failed to load listing photos.' }
+  }
+
+  if (!rows?.length) {
+    return { success: true, deleted: 0 }
+  }
+
+  const paths = rows.map((row) => row.storage_path).filter(Boolean)
+  if (paths.length) {
+    const { error: storageError } = await ctx.supabase.storage
+      .from('org-assets')
+      .remove(paths)
+    if (storageError) {
+      console.error('[deleteAllPropertyListingMedia:storage]', storageError)
+    }
+  }
+
+  const { error } = await ctx.supabase
+    .from('property_media')
+    .delete()
+    .eq('property_id', propertyIdParsed.data)
+    .eq('org_id', ctx.person.org_id)
+    .eq('visibility', 'listing')
+
+  if (error) {
+    console.error('[deleteAllPropertyListingMedia]', error)
+    return { success: false, error: 'Failed to delete listing photos.' }
+  }
+
+  await syncLegacyPhotoPaths(
+    ctx.supabase,
+    propertyIdParsed.data,
+    ctx.person.org_id
+  )
+
+  revalidatePath('/properties/' + propertyIdParsed.data)
+  revalidatePath('/app')
+  revalidatePath('/')
+  revalidatePath('/listings')
+  return { success: true, deleted: rows.length }
 }
 
 /** @deprecated Prefer addPropertyMedia — kept for older callers that pass full path arrays. */

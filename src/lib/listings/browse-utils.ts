@@ -1,4 +1,3 @@
-import { CARD_PHOTOS } from '@/lib/landing/content'
 import { deriveTermTypeFromHighlights } from '@/lib/landing/listing-term'
 import type {
   BrowseFilters,
@@ -107,7 +106,7 @@ export function mapListingRow(
   listing: ListingRow,
   storageBase: string,
   orgQuery: string,
-  index = 0
+  _index = 0
 ): BrowseListing {
   const unit = listing.units
   const property = unit?.properties
@@ -124,10 +123,11 @@ export function mapListingRow(
   if (label) tags.push(`🐾 ${label}`)
   if (suffix === 'incl') tags.push('Utilities included')
 
-  const photo =
-    property?.photo_paths?.[0]
-      ? `${storageBase}/${property.photo_paths[0]}`
-      : CARD_PHOTOS[index % CARD_PHOTOS.length]
+  const rawPaths = (property?.photo_paths ?? []).filter(
+    (p): p is string => !!p && !/^https?:\/\//i.test(p)
+  )
+  const photos = rawPaths.map((p) => (storageBase ? `${storageBase}/${p}` : p))
+  const photo = photos[0] ?? null
 
   return {
     id: listing.id,
@@ -150,6 +150,8 @@ export function mapListingRow(
     petLabel: label,
     tags: tags.slice(0, 2),
     photo,
+    photos,
+    photoCount: photos.length,
     createdAt: listing.created_at,
     availableFrom: listing.available_from,
   }

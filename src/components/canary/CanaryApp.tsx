@@ -64,6 +64,7 @@ const TL_STATUS_OPTIONS = [
   { key: 'expiring', label: 'Expiring', dot: 'var(--red)' },
   { key: 'upcoming', label: 'Upcoming', dot: 'var(--amber)' },
   { key: 'draft', label: 'Drafts', dot: 'var(--accent)' },
+  { key: 'published', label: 'Listings', dot: 'var(--green)' },
   { key: 'renewal_sent', label: 'Renewals sent', dot: 'var(--purple)' },
   { key: 'str', label: 'STR stays', dot: 'var(--blue)' },
   { key: 'owner_occupied', label: 'Owner occupied', dot: 'var(--amber)' },
@@ -845,6 +846,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
     expiring: !tlFilterActive || tlStatusFilter.includes('expiring'),
     upcoming: !tlFilterActive || tlStatusFilter.includes('upcoming'),
     draft: !tlFilterActive || tlStatusFilter.includes('draft'),
+    published: !tlFilterActive || tlStatusFilter.includes('published'),
     renewal_sent: !tlFilterActive || tlStatusFilter.includes('renewal_sent'),
     str: !tlFilterActive || tlStatusFilter.includes('str'),
     owner_occupied: !tlFilterActive || tlStatusFilter.includes('owner_occupied'),
@@ -1030,6 +1032,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
     })
     const showDrafts = (d: CanaryDraft) => {
       if (d.status === 'renewal_sent') return filt.renewal_sent
+      if (d.status === 'published') return filt.published
       return filt.draft
     };
     (draftsByProp.get(address) || []).forEach((d) => {

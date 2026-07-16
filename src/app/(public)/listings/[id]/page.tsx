@@ -95,12 +95,10 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
   const fullAddress = heroAddress || listing.listing_title
 
   const fromMedia = property?.id ? await getListingPhotoPathsForProperty(property.id) : []
-  const photoPaths: string[] =
+  const photoPaths: string[] = (
     fromMedia.length > 0 ? fromMedia : (property?.photo_paths ?? [])
-  const { all: listingPhotos } = await resolveListingGalleryPhotos(
-    photoPaths,
-    id.charCodeAt(0)
-  )
+  ).filter((p: string) => !!p && !/^https?:\/\//i.test(p))
+  const { all: listingPhotos } = await resolveListingGalleryPhotos(photoPaths)
 
   const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
   const mapsQuery = encodeURIComponent(fullAddress)

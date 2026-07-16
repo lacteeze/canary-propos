@@ -42,7 +42,15 @@ export interface BrowseListing {
   petFriendly: boolean
   petLabel: string | null
   tags: string[]
+  /** Cover / first photo URL (same as photos[0] when present). */
   photo: string | null
+  /**
+   * Signed photo URLs for the card. Initial browse payload only includes the
+   * cover; remaining URLs load on first carousel advance (`photoCount` > 1).
+   */
+  photos: string[]
+  /** Total listing photos available for the card carousel (may exceed `photos.length`). */
+  photoCount: number
   createdAt: string
   availableFrom: string | null
 }

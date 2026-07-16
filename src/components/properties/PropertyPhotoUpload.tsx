@@ -6,10 +6,10 @@ import React, { useEffect, useRef, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import {
   addPropertyMedia,
+  deleteAllPropertyListingMedia,
   deletePropertyMedia,
   listPropertyMedia,
   reorderPropertyMedia,
-  setListingHeroPhoto,
   type PropertyMediaItem,
   type PropertyMediaVisibility,
 } from '@/app/actions/property-media'
@@ -48,6 +48,36 @@ function isAcceptedImage(file: File): boolean {
   return ext === 'jpg' || ext === 'jpeg' || ext === 'png' || ext === 'webp'
 }
 
+/** Move selected ids as a block, preserving relative order. Matches single-item splice semantics. */
+function moveItemsAsGroup(
+  sectionItems: DisplayItem[],
+  movedIds: string[],
+  toId: string
+): DisplayItem[] | null {
+  const movedSet = new Set(movedIds)
+  if (movedSet.has(toId) || movedIds.length === 0) return null
+
+  const draggedId = movedIds[0]
+  const draggedFromIndex = sectionItems.findIndex((i) => i.id === draggedId)
+  const toIndex = sectionItems.findIndex((i) => i.id === toId)
+  if (draggedFromIndex < 0 || toIndex < 0) return null
+
+  const moving = sectionItems.filter((i) => movedSet.has(i.id))
+  const remaining = sectionItems.filter((i) => !movedSet.has(i.id))
+  const toIndexInRemaining = remaining.findIndex((i) => i.id === toId)
+  if (toIndexInRemaining < 0) return null
+
+  // Same as splice(from,1)+splice(to,0,item): drag down inserts after target; drag up at target.
+  const insertAt =
+    draggedFromIndex < toIndex ? toIndexInRemaining + 1 : toIndexInRemaining
+
+  return [
+    ...remaining.slice(0, insertAt),
+    ...moving,
+    ...remaining.slice(insertAt),
+  ]
+}
+
 export function PropertyPhotoUpload({
   propertyId,
   orgId,
@@ -61,9 +91,11 @@ export function PropertyPhotoUpload({
   const [uploading, setUploading] = useState<PropertyMediaVisibility | null>(null)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState<PropertyMediaVisibility | null>(null)
-  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [draggingIds, setDraggingIds] = useState<string[]>([])
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [reordering, setReordering] = useState(false)
+  const [deletingAllListing, setDeletingAllListing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const listingInputRef = useRef<HTMLInputElement>(null)
   const privateInputRef = useRef<HTMLInputElement>(null)
@@ -72,9 +104,11 @@ export function PropertyPhotoUpload({
     private: 0,
   })
   const reorderDragRef = useRef<{
-    id: string
+    ids: string[]
     visibility: PropertyMediaVisibility
   } | null>(null)
+  const lastClickedIdRef = useRef<string | null>(null)
+  const suppressClickRef = useRef(false)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -218,58 +252,106 @@ export function PropertyPhotoUpload({
       return
     }
     setItems((prev) => prev.filter((i) => i.id !== id))
+    setSelectedIds((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
     onChanged?.()
   }
 
-  async function handleSetHero(mediaId: string) {
-    if (reordering || uploading) return
+  async function handleDeleteAllListing() {
+    const toDelete = items.filter((i) => i.visibility === 'listing')
+    const count = toDelete.length
+    if (!count || deletingAllListing || uploading) return
+
+    const confirmed = window.confirm(
+      `Delete all ${count} listing photo${count === 1 ? '' : 's'}? This cannot be undone.`
+    )
+    if (!confirmed) return
+
+    setDeletingAllListing(true)
     setError(null)
-    setReordering(true)
     try {
-      const result = await setListingHeroPhoto({ propertyId, mediaId })
+      const result = await deleteAllPropertyListingMedia(propertyId)
       if (!result.success) {
         setError(result.error)
         return
       }
-      setItems((prev) => {
-        const listing = prev.filter((i) => i.visibility === 'listing')
-        const others = prev.filter((i) => i.visibility !== 'listing')
-        const hero = listing.find((i) => i.id === mediaId)
-        if (!hero) return prev
-        const rest = listing.filter((i) => i.id !== mediaId)
-        const nextListing = [hero, ...rest].map((item, index) => ({
-          ...item,
-          sortOrder: index,
-        }))
-        return [...nextListing, ...others]
+      const deletedIds = new Set(toDelete.map((i) => i.id))
+      setItems((prev) => prev.filter((i) => i.visibility !== 'listing'))
+      setSelectedIds((prev) => {
+        const next = new Set([...prev].filter((id) => !deletedIds.has(id)))
+        return next.size === prev.size ? prev : next
       })
       onChanged?.()
+    } catch (err) {
+      setError('Failed to delete listing photos.')
+      console.error('[PropertyPhotoUpload:deleteAllListing]', err)
     } finally {
-      setReordering(false)
+      setDeletingAllListing(false)
     }
   }
 
   function clearReorderDrag() {
     reorderDragRef.current = null
-    setDraggingId(null)
+    setDraggingIds([])
     setDropTargetId(null)
+  }
+
+  function handlePhotoClick(
+    e: React.MouseEvent,
+    itemId: string,
+    list: DisplayItem[]
+  ) {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false
+      return
+    }
+
+    const ids = list.map((i) => i.id)
+    const sectionIdSet = new Set(ids)
+
+    if (e.shiftKey && lastClickedIdRef.current && sectionIdSet.has(lastClickedIdRef.current)) {
+      const from = ids.indexOf(lastClickedIdRef.current)
+      const to = ids.indexOf(itemId)
+      if (from >= 0 && to >= 0) {
+        const [a, b] = from < to ? [from, to] : [to, from]
+        setSelectedIds(new Set(ids.slice(a, b + 1)))
+        return
+      }
+    }
+
+    if (e.metaKey || e.ctrlKey) {
+      setSelectedIds((prev) => {
+        // Keep selection within one section.
+        const next = new Set([...prev].filter((id) => sectionIdSet.has(id)))
+        if (next.has(itemId)) next.delete(itemId)
+        else next.add(itemId)
+        return next
+      })
+      lastClickedIdRef.current = itemId
+      return
+    }
+
+    setSelectedIds(new Set([itemId]))
+    lastClickedIdRef.current = itemId
   }
 
   async function commitReorder(
     targetVisibility: PropertyMediaVisibility,
-    fromId: string,
+    movedIds: string[],
     toId: string
   ) {
-    if (fromId === toId || reordering || uploading) return
+    if (movedIds.length === 0 || movedIds.includes(toId) || reordering || uploading || deletingAllListing) {
+      return
+    }
 
     const sectionItems = items.filter((i) => i.visibility === targetVisibility)
-    const fromIndex = sectionItems.findIndex((i) => i.id === fromId)
-    const toIndex = sectionItems.findIndex((i) => i.id === toId)
-    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return
+    const nextSection = moveItemsAsGroup(sectionItems, movedIds, toId)
+    if (!nextSection) return
 
-    const nextSection = [...sectionItems]
-    const [moved] = nextSection.splice(fromIndex, 1)
-    nextSection.splice(toIndex, 0, moved)
     const orderedIds = nextSection.map((i) => i.id)
     const withOrder = nextSection.map((item, index) => ({
       ...item,
@@ -335,7 +417,6 @@ export function PropertyPhotoUpload({
         ? 'repeat(auto-fill, minmax(96px, 1fr))'
         : 'repeat(3, 1fr)',
     gap: gallery ? 10 : compact ? 8 : 12,
-    marginBottom: 10,
   }
 
   const btnStyle: React.CSSProperties = themed
@@ -362,44 +443,104 @@ export function PropertyPhotoUpload({
         cursor: 'pointer',
       }
 
+  const deleteAllBtnStyle: React.CSSProperties = themed
+    ? {
+        border: '1px solid color-mix(in srgb, var(--red) 35%, var(--border))',
+        background: 'color-mix(in srgb, var(--red) 8%, var(--elev))',
+        color: 'var(--red)',
+        borderRadius: 6,
+        padding: '3px 8px',
+        fontWeight: 600,
+        fontSize: 11,
+        letterSpacing: '.02em',
+        cursor: deletingAllListing ? 'wait' : 'pointer',
+        display: 'inline-flex',
+        alignItems: 'center',
+        opacity: deletingAllListing || !!uploading ? 0.55 : 1,
+        lineHeight: 1.2,
+      }
+    : {
+        display: 'inline-flex',
+        alignItems: 'center',
+        borderRadius: 6,
+        border: '1px solid #fecaca',
+        background: '#fef2f2',
+        padding: '4px 8px',
+        fontSize: 12,
+        fontWeight: 500,
+        color: '#b91c1c',
+        cursor: deletingAllListing ? 'wait' : 'pointer',
+        opacity: deletingAllListing || !!uploading ? 0.55 : 1,
+      }
+
   function renderGrid(list: DisplayItem[], sectionVisibility: PropertyMediaVisibility) {
     if (!list.length) return null
-    const busy = !!uploading || reordering
+    const busy = !!uploading || reordering || deletingAllListing
+    const sectionIdSet = new Set(list.map((i) => i.id))
+    const selectedInSection = [...selectedIds].filter((id) => sectionIdSet.has(id))
 
     return (
       <div style={gridStyle}>
         {list.map((item, index) => {
-          const isDragging = draggingId === item.id
+          const isSelected = selectedIds.has(item.id)
+          const isDragging = draggingIds.includes(item.id)
           const isDropTarget =
-            dropTargetId === item.id && draggingId !== null && draggingId !== item.id
+            dropTargetId === item.id &&
+            draggingIds.length > 0 &&
+            !draggingIds.includes(item.id)
 
           return (
             <div
               key={item.id}
               draggable={!busy}
+              onClick={(e) => {
+                if (busy) return
+                handlePhotoClick(e, item.id, list)
+              }}
               onDragStart={(e) => {
                 if (busy) {
                   e.preventDefault()
                   return
                 }
                 e.stopPropagation()
+                suppressClickRef.current = true
+
+                // If this photo is already multi-selected, move the whole group;
+                // otherwise drag only this photo.
+                const orderedBlock =
+                  selectedIds.has(item.id) && selectedInSection.length > 1
+                    ? list.filter((i) => selectedIds.has(i.id)).map((i) => i.id)
+                    : [item.id]
+
+                if (!selectedIds.has(item.id)) {
+                  setSelectedIds(new Set([item.id]))
+                  lastClickedIdRef.current = item.id
+                }
+
+                // ids[0] = grab anchor (for insert direction); block order preserved via Set filter.
+                const dragIds = [item.id, ...orderedBlock.filter((id) => id !== item.id)]
                 reorderDragRef.current = {
-                  id: item.id,
+                  ids: dragIds,
                   visibility: sectionVisibility,
                 }
-                e.dataTransfer.setData(MEDIA_DND_TYPE, item.id)
-                e.dataTransfer.setData('text/plain', item.id)
+                e.dataTransfer.setData(MEDIA_DND_TYPE, dragIds.join(','))
+                e.dataTransfer.setData('text/plain', dragIds.join(','))
                 e.dataTransfer.effectAllowed = 'move'
-                setDraggingId(item.id)
+                setDraggingIds(dragIds)
                 setDropTargetId(null)
               }}
               onDragEnd={() => {
                 clearReorderDrag()
+                // Suppress the click that browsers fire after a successful drag.
+                window.setTimeout(() => {
+                  suppressClickRef.current = false
+                }, 150)
               }}
               onDragOver={(e) => {
                 if (!isMediaReorderDrag(e) || isExternalFileDrag(e)) return
                 const drag = reorderDragRef.current
                 if (!drag || drag.visibility !== sectionVisibility) return
+                if (drag.ids.includes(item.id)) return
                 e.preventDefault()
                 e.stopPropagation()
                 e.dataTransfer.dropEffect = 'move'
@@ -416,20 +557,32 @@ export function PropertyPhotoUpload({
                 e.preventDefault()
                 e.stopPropagation()
                 const drag = reorderDragRef.current
-                const fromId =
-                  drag?.id ??
-                  (e.dataTransfer.getData(MEDIA_DND_TYPE) ||
-                    e.dataTransfer.getData('text/plain'))
+                const raw =
+                  drag?.ids?.length
+                    ? drag.ids
+                    : (
+                        e.dataTransfer.getData(MEDIA_DND_TYPE) ||
+                        e.dataTransfer.getData('text/plain')
+                      )
+                        .split(',')
+                        .filter(Boolean)
                 clearReorderDrag()
-                if (!fromId || drag?.visibility !== sectionVisibility) return
-                void commitReorder(sectionVisibility, fromId, item.id)
+                if (!raw.length || drag?.visibility !== sectionVisibility) return
+                // Rebuild moved block in list order; keep grab anchor as ids[0] for direction.
+                const grabId = raw[0]
+                const movedInOrder = list
+                  .filter((i) => raw.includes(i.id))
+                  .map((i) => i.id)
+                const movedIds = [
+                  grabId,
+                  ...movedInOrder.filter((id) => id !== grabId),
+                ]
+                void commitReorder(sectionVisibility, movedIds, item.id)
               }}
               title={
                 sectionVisibility === 'listing' && index === 0
-                  ? 'Hero photo for the public listing page · drag to reorder'
-                  : sectionVisibility === 'listing'
-                    ? 'Drag to reorder · use Set hero to make this the listing hero'
-                    : 'Drag to reorder'
+                  ? 'Hero photo (first in list) · click to select · drag to reorder'
+                  : 'Click to select · Shift/Ctrl/Cmd+click multi-select · drag to reorder'
               }
               style={{
                 position: 'relative',
@@ -441,16 +594,24 @@ export function PropertyPhotoUpload({
                   ? themed
                     ? '1.5px solid var(--accent)'
                     : '1.5px solid #d97706'
-                  : themed
-                    ? '1px solid var(--border)'
-                    : '1px solid transparent',
+                  : isSelected
+                    ? themed
+                      ? '1.5px solid var(--accent)'
+                      : '1.5px solid #d97706'
+                    : themed
+                      ? '1px solid var(--border)'
+                      : '1px solid transparent',
                 opacity: isDragging ? 0.4 : 1,
                 cursor: busy ? 'default' : 'grab',
                 boxShadow: isDropTarget
                   ? themed
                     ? '0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent)'
                     : '0 0 0 2px rgba(217, 119, 6, 0.25)'
-                  : undefined,
+                  : isSelected
+                    ? themed
+                      ? '0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent)'
+                      : '0 0 0 2px rgba(217, 119, 6, 0.2)'
+                    : undefined,
                 transition: 'opacity 120ms ease, border-color 120ms ease, box-shadow 120ms ease',
               }}
             >
@@ -466,6 +627,33 @@ export function PropertyPhotoUpload({
                   pointerEvents: 'none',
                 }}
               />
+              {isSelected && (
+                <span
+                  aria-hidden
+                  style={{
+                    position: 'absolute',
+                    top: 4,
+                    left: 4,
+                    width: 18,
+                    height: 18,
+                    borderRadius: 4,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: themed
+                      ? 'var(--accent)'
+                      : '#d97706',
+                    color: themed ? 'var(--bg, #0c0c0c)' : '#fff',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    lineHeight: 1,
+                    pointerEvents: 'none',
+                    boxShadow: '0 1px 3px rgba(0,0,0,.35)',
+                  }}
+                >
+                  ✓
+                </span>
+              )}
               {sectionVisibility === 'listing' && index === 0 && (
                 <span
                   style={{
@@ -486,39 +674,36 @@ export function PropertyPhotoUpload({
                   Hero
                 </span>
               )}
-              {sectionVisibility === 'listing' && index > 0 && (
-                <button
-                  type="button"
-                  title="Use as hero photo on the public listing page"
-                  disabled={busy}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    void handleSetHero(item.id)
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
+              {draggingIds.length > 1 && isDragging && draggingIds[0] === item.id && (
+                <span
                   style={{
                     position: 'absolute',
-                    left: 4,
+                    right: 4,
                     bottom: 4,
-                    border: 'none',
-                    borderRadius: 4,
-                    padding: '3px 7px',
-                    fontSize: 10,
+                    borderRadius: 999,
+                    minWidth: 20,
+                    height: 20,
+                    padding: '0 6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: themed ? 'var(--accent)' : '#d97706',
+                    color: themed ? 'var(--bg, #0c0c0c)' : '#fff',
+                    fontSize: 11,
                     fontWeight: 700,
-                    letterSpacing: '.03em',
-                    textTransform: 'uppercase',
-                    background: 'rgba(0,0,0,.7)',
-                    color: '#fff',
-                    cursor: busy ? 'wait' : 'pointer',
+                    pointerEvents: 'none',
                   }}
                 >
-                  Set hero
-                </button>
+                  {draggingIds.length}
+                </span>
               )}
               <button
                 type="button"
                 title="Remove photo"
-                onClick={() => void handleDelete(item.id)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void handleDelete(item.id)
+                }}
                 onMouseDown={(e) => e.stopPropagation()}
                 style={{
                   position: 'absolute',
@@ -544,23 +729,26 @@ export function PropertyPhotoUpload({
     )
   }
 
-  function renderUpload(
+  /** Dashed drop frame that wraps the photo grid (and empty state). File drops anywhere
+   *  inside upload; media reorder stays on thumbnails via stopPropagation. */
+  function renderDropFrame(
     target: PropertyMediaVisibility,
-    inputRef: React.RefObject<HTMLInputElement | null>
+    inputRef: React.RefObject<HTMLInputElement | null>,
+    body: React.ReactNode
   ) {
     const busy = uploading === target
     const isDragTarget = dragOver === target
-    const disabled = !!uploading
+    const disabled = !!uploading || deletingAllListing
 
     const dropZoneStyle: React.CSSProperties = themed
       ? {
           marginTop: 2,
           border: `1.5px dashed ${isDragTarget ? 'var(--accent)' : 'var(--border2)'}`,
           borderRadius: 12,
-          padding: '14px 12px',
+          padding: gallery ? '12px' : '12px 10px',
           background: isDragTarget
             ? 'color-mix(in srgb, var(--accent) 14%, var(--elev))'
-            : 'var(--elev)',
+            : 'color-mix(in srgb, var(--elev) 70%, transparent)',
           transition: 'border-color 120ms ease, background 120ms ease',
           opacity: disabled && !busy ? 0.55 : 1,
         }
@@ -568,7 +756,7 @@ export function PropertyPhotoUpload({
           marginTop: 2,
           border: `1.5px dashed ${isDragTarget ? '#d97706' : '#d6d3d1'}`,
           borderRadius: 10,
-          padding: '14px 12px',
+          padding: '12px 10px',
           background: isDragTarget ? '#fffbeb' : '#fafaf9',
           transition: 'border-color 120ms ease, background 120ms ease',
           opacity: disabled && !busy ? 0.55 : 1,
@@ -603,7 +791,7 @@ export function PropertyPhotoUpload({
         }}
         onDrop={(e) => {
           if (isMediaReorderDrag(e) || !isExternalFileDrag(e)) {
-            // Thumbnail reorder drops belong to the grid, not the upload zone.
+            // Thumbnail reorder drops belong to the grid, not the upload frame.
             if (isMediaReorderDrag(e)) {
               e.preventDefault()
               e.stopPropagation()
@@ -621,7 +809,15 @@ export function PropertyPhotoUpload({
         }}
         style={dropZoneStyle}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            flexWrap: 'wrap',
+            marginBottom: body ? 12 : 0,
+          }}
+        >
           <label style={{ cursor: busy ? 'wait' : disabled ? 'not-allowed' : 'pointer' }}>
             <input
               ref={inputRef}
@@ -644,6 +840,7 @@ export function PropertyPhotoUpload({
               : 'Drag & drop or browse · JPEG, PNG, or WebP · max 20 MB · full resolution'}
           </span>
         </div>
+        {body}
       </div>
     )
   }
@@ -652,16 +849,44 @@ export function PropertyPhotoUpload({
     <div>
       {showListing && (
         <div style={sectionStyle}>
-          <div style={labelStyle}>Listing photos</div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+              marginBottom: 8,
+            }}
+          >
+            <div style={{ ...labelStyle, marginBottom: 0 }}>Listing photos</div>
+            {listingItems.length > 0 && (
+              <button
+                type="button"
+                title="Delete all listing photos"
+                disabled={deletingAllListing || !!uploading}
+                onClick={() => void handleDeleteAllListing()}
+                style={deleteAllBtnStyle}
+              >
+                {deletingAllListing ? 'Deleting…' : 'Delete all'}
+              </button>
+            )}
+          </div>
           <div style={hintStyle}>
             Shown on the landing page and public listing when this property has a live listing.
-            First photo is the hero on the listing page — click Set hero on any photo, or drag to reorder.
+            The first photo is the hero. Click to select · Shift or Ctrl/Cmd+click for multi-select ·
+            drag to reorder (selected photos move together).
           </div>
-          {renderGrid(listingItems, 'listing')}
-          {!listingItems.length && (
-            <div style={{ ...hintStyle, marginBottom: 10 }}>No listing photos yet.</div>
+          {renderDropFrame(
+            'listing',
+            listingInputRef,
+            listingItems.length
+              ? renderGrid(listingItems, 'listing')
+              : (
+                <div style={{ ...hintStyle, marginBottom: 0, textAlign: 'center', padding: '8px 4px' }}>
+                  No listing photos yet. Drop images here or browse.
+                </div>
+              )
           )}
-          {renderUpload('listing', listingInputRef)}
         </div>
       )}
 
@@ -670,13 +895,19 @@ export function PropertyPhotoUpload({
           <div style={labelStyle}>{themed ? '🔒 Private photos' : 'Private photos (staff only)'}</div>
           <div style={hintStyle}>
             Inspections, historical, and pre-renovation photos. Never shown on public listings.
-            Drag thumbnails to reorder.
+            Click to select · Shift or Ctrl/Cmd+click for multi-select · drag to reorder.
           </div>
-          {renderGrid(privateItems, 'private')}
-          {!privateItems.length && (
-            <div style={{ ...hintStyle, marginBottom: 10 }}>No private photos yet.</div>
+          {renderDropFrame(
+            'private',
+            privateInputRef,
+            privateItems.length
+              ? renderGrid(privateItems, 'private')
+              : (
+                <div style={{ ...hintStyle, marginBottom: 0, textAlign: 'center', padding: '8px 4px' }}>
+                  No private photos yet. Drop images here or browse.
+                </div>
+              )
           )}
-          {renderUpload('private', privateInputRef)}
         </div>
       )}
 

@@ -9,7 +9,8 @@ export interface LandingListing {
   baths: string
   extra: string
   termType: 'long' | 'mid'
-  photo: string
+  /** Signed cover URL, or null when the property has no uploaded listing photos. */
+  photo: string | null
   href: string
 }
 
@@ -29,17 +30,6 @@ export const HERO_IMAGES = [
   '/landing/erik-mclean-JYe98fMiiJw-unsplash.jpg',
   '/landing/laura-lefurgey-smith-Fq3WTAAEFHg-unsplash.jpg',
   '/landing/francis-nie-304OB4_Cd9Q-unsplash.jpg',
-] as const
-
-export const CARD_PHOTOS = [
-  'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&q=70&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&q=70&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1484154218962-a197022b5858?w=800&q=70&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=70&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1560184897-ae75f418493e?w=800&q=70&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=800&q=70&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1560185007-c5ca9d2c014d?w=800&q=70&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1583608205776-bfd35f0d9f83?w=800&q=70&auto=format&fit=crop',
 ] as const
 
 export const STAY_PHOTOS = [

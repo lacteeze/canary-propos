@@ -297,43 +297,90 @@ export function ListingPhotoGallery({ photos, title, children, topBar }: Listing
       </div>
     ) : null
 
+  const hasPhotos = photos.length > 0
+
   return (
     <>
       <section
-        role="button"
-        tabIndex={0}
-        aria-label={`View larger photo of ${title}`}
-        onClick={() => openAt(0)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            openAt(0)
-          }
-        }}
+        role={hasPhotos ? 'button' : undefined}
+        tabIndex={hasPhotos ? 0 : undefined}
+        aria-label={hasPhotos ? `View larger photo of ${title}` : undefined}
+        onClick={hasPhotos ? () => openAt(0) : undefined}
+        onKeyDown={
+          hasPhotos
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  openAt(0)
+                }
+              }
+            : undefined
+        }
         style={{
           position: 'relative',
           width: '100%',
           minHeight: 'min(56vh, 520px)',
           marginTop: 0,
           overflow: 'hidden',
-          background: 'var(--ink)',
-          cursor: 'zoom-in',
+          background: hasPhotos
+            ? 'var(--ink)'
+            : 'linear-gradient(160deg, #1a1612 0%, #2a241c 42%, #1c1814 100%)',
+          cursor: hasPhotos ? 'zoom-in' : 'default',
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={photos[0]}
-          alt={title}
-          style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            objectPosition: 'center',
-            pointerEvents: 'none',
-          }}
-        />
+        {hasPhotos ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={photos[0]}
+            alt={title}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              objectPosition: 'center',
+              pointerEvents: 'none',
+            }}
+          />
+        ) : (
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              pointerEvents: 'none',
+              paddingBottom: '18%',
+            }}
+          >
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                color: 'rgba(244,239,230,.45)',
+              }}
+            >
+              Gallery
+            </span>
+            <span
+              style={{
+                fontSize: 'clamp(20px, 3vw, 28px)',
+                fontWeight: 600,
+                letterSpacing: '-0.02em',
+                color: 'rgba(244,239,230,.78)',
+              }}
+            >
+              Photos coming soon
+            </span>
+          </div>
+        )}
         <div
           style={{
             position: 'absolute',

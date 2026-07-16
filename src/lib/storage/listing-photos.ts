@@ -4,7 +4,6 @@
 // property has a published listing (storage_select_anon_listing_photos).
 
 import { createPublicClient } from '@/lib/supabase/public'
-import { CARD_PHOTOS } from '@/lib/landing/content'
 
 const SIGNED_TTL_SECONDS = 60 * 60 // 1 hour
 
@@ -16,6 +15,7 @@ export function isHttpUrl(value: string): boolean {
  * Batch-sign storage paths for public pages.
  * Preserves input length and order — empty/missing paths stay '' at the same index
  * so callers can map `signed[i]` back to listing `i` safely.
+ * HTTP(S) URLs are not signed (legacy / external); only storage object paths are.
  */
 export async function signListingPhotoPaths(
   paths: Array<string | null | undefined>
@@ -45,33 +45,30 @@ export async function signListingPhotoPaths(
 
   return normalized.map((path) => {
     if (!path) return ''
-    if (isHttpUrl(path)) return path
+    // Only serve real storage uploads — do not pass through external stock URLs
+    if (isHttpUrl(path)) return ''
     return byPath.get(path) ?? ''
   })
 }
 
 export async function resolveListingCoverPhoto(
-  path: string | null | undefined,
-  fallbackIndex = 0
-): Promise<string> {
-  if (!path?.trim()) return CARD_PHOTOS[fallbackIndex % CARD_PHOTOS.length]
-  if (isHttpUrl(path)) return path
+  path: string | null | undefined
+): Promise<string | null> {
+  if (!path?.trim()) return null
+  if (isHttpUrl(path)) return null
   const [signed] = await signListingPhotoPaths([path])
-  return signed || CARD_PHOTOS[fallbackIndex % CARD_PHOTOS.length]
+  return signed || null
 }
 
 export async function resolveListingGalleryPhotos(
-  paths: string[],
-  fallbackIndex = 0
-): Promise<{ hero: string; gallery: string[]; all: string[] }> {
+  paths: string[]
+): Promise<{ hero: string | null; gallery: string[]; all: string[] }> {
   if (!paths.length) {
-    const hero = CARD_PHOTOS[fallbackIndex % CARD_PHOTOS.length]
-    return { hero, gallery: [], all: [hero] }
+    return { hero: null, gallery: [], all: [] }
   }
   const signed = (await signListingPhotoPaths(paths)).filter(Boolean)
   if (!signed.length) {
-    const hero = CARD_PHOTOS[fallbackIndex % CARD_PHOTOS.length]
-    return { hero, gallery: [], all: [hero] }
+    return { hero: null, gallery: [], all: [] }
   }
   return { hero: signed[0], gallery: signed.slice(1), all: signed }
 }

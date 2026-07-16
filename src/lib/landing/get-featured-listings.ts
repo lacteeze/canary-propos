@@ -1,6 +1,6 @@
 import { createPublicClient } from '@/lib/supabase/public'
 import { getOrgBySlug } from '@/lib/orgs'
-import { CARD_PHOTOS, type LandingListing } from './content'
+import type { LandingListing } from './content'
 import { deriveTermTypeFromHighlights } from './listing-term'
 import { getListingPhotoPathsByPropertyIds } from '@/lib/storage/property-listing-media'
 import { signListingPhotoPaths } from '@/lib/storage/listing-photos'
@@ -51,7 +51,8 @@ export async function getFeaturedListings(
     } | null
     const property = unit?.properties
     const fromMedia = property?.id ? pathsByProperty.get(property.id)?.[0] : undefined
-    return fromMedia || property?.photo_paths?.[0] || null
+    const legacy = property?.photo_paths?.find((p) => p && !/^https?:\/\//i.test(p))
+    return fromMedia || legacy || null
   })
   const signedCovers = await signListingPhotoPaths(coverPaths.map((p) => p ?? ''))
   const orgQuery = orgSlug ? `?org=${orgSlug}` : ''
@@ -84,7 +85,7 @@ export async function getFeaturedListings(
       baths: String(unit?.bathrooms ?? '—').replace(/\.0$/, ''),
       extra: petFriendly ? '🐾 pet friendly' : (property?.city ?? ''),
       termType: deriveTermTypeFromHighlights(listing.highlights),
-      photo: signedCovers[index] || CARD_PHOTOS[index % CARD_PHOTOS.length],
+      photo: signedCovers[index] || null,
       href: `/listings/${listing.id}${orgQuery}`,
     }
   })

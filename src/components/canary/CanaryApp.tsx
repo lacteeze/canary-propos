@@ -39,6 +39,7 @@ import {
 } from './layout'
 import MessagesView from './MessagesView'
 import PropertyOccupancyCalendar from './PropertyOccupancyCalendar'
+import PropertyPhotosView from './PropertyPhotosView'
 import type { CanaryDb, CanaryDraft, CanaryHospitableTask, CanaryInquiry, CanaryLease, CanaryOwnerOccupiedBlock, CanaryPayment, CanaryPerson, CanaryPortfolio, CanaryProject, CanaryProperty, CanaryRole, CanaryStrBooking, DraftListingStatus, HospitableCalendarData, HospitableTasksData } from '@/lib/canary/types'
 import { deleteLocalOwnerOccupiedBlock, loadLocalOwnerOccupiedBlocks } from '@/lib/canary/owner-occupied-storage'
 import { isOpenHospitableTask } from '@/lib/hospitable/map-tasks'
@@ -1306,7 +1307,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
       getters: {},
     },
     properties: {
-      views: ['cards', 'table', 'kanban'],
+      views: ['cards', 'photos', 'table', 'kanban'],
       rows: qsort(filteredProps, {
         address: (p: CanaryProperty) => short(p.address).toLowerCase(), city: (p: CanaryProperty) => ((p.city || '') + ' ' + (p.area || '')).toLowerCase(), status: (p: CanaryProperty) => p.status || '', beds: (p: CanaryProperty) => parseFloat(p.beds) || 0, baths: (p: CanaryProperty) => parseFloat(p.baths) || 0, parking: (p: CanaryProperty) => parseFloat(p.parking) || 0, rate: (p: CanaryProperty) => p.rate || 0,
       }),
@@ -1402,7 +1403,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
   }
 
   const pdef = pageDefs[page]
-  const viewLabels: Record<string, string> = { timeline: 'Timeline', table: 'Table', cards: 'Cards', list: 'List', kanban: 'Kanban', gantt: 'Gantt' }
+  const viewLabels: Record<string, string> = { timeline: 'Timeline', table: 'Table', cards: 'Cards', photos: 'Photos', list: 'List', kanban: 'Kanban', gantt: 'Gantt' }
   const curView = pdef ? pageViews[page] || pdef.views[0] : ''
   const cycleView = useCallback(() => {
     if (!pdef) return
@@ -1414,6 +1415,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
   const genRows = pdef ? pdef.rows : []
   const tblCap = 200
   const showDefault = pdef ? curView === pdef.views[0] && pdef.views[0] !== 'table' : true
+  const showPhotos = page === 'properties' && curView === 'photos'
   const showTable = pdef ? curView === 'table' : false
   const showKanban = pdef ? curView === 'kanban' : false
   const showGantt = page === 'projects' && curView === 'gantt'
@@ -2801,6 +2803,12 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                       ),
                     }
                   })}
+                />
+              )}
+              {showPhotos && (
+                <PropertyPhotosView
+                  properties={genRows as CanaryProperty[]}
+                  onOpen={(id) => setDrawer({ kind: 'property', id })}
                 />
               )}
             </section>

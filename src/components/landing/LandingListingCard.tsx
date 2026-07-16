@@ -119,6 +119,7 @@ export function LandingListingCard({
       }}
     >
       <div
+        className="cl2-card-media"
         style={{
           height: 190,
           position: 'relative',
@@ -239,7 +240,6 @@ export function LandingListingCard({
                 ...arrowBtnStyle,
                 left: 0,
                 justifyContent: 'flex-start',
-                opacity: loadingGallery ? 0.55 : 1,
               }}
             >
               <span style={arrowGlyphStyle}>←</span>
@@ -258,12 +258,12 @@ export function LandingListingCard({
                 ...arrowBtnStyle,
                 right: 0,
                 justifyContent: 'flex-end',
-                opacity: loadingGallery ? 0.55 : 1,
               }}
             >
               <span style={arrowGlyphStyle}>→</span>
             </button>
             <div
+              className="cl2-dots"
               aria-hidden="true"
               style={{
                 position: 'absolute',

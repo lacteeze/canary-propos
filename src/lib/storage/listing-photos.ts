@@ -1,14 +1,15 @@
 // src/lib/storage/listing-photos.ts
-// Public listing photo URLs for the private org-assets bucket.
-// Anon may create signed URLs only for …/properties/{id}/photos/… when the
-// property has a published listing (storage_select_anon_listing_photos).
+// Signed URLs for property listing photos in the private org-assets bucket.
+// - Public pages: anon may sign only …/properties/{id}/photos/… when the
+//   property has a published listing (storage_select_anon_listing_photos).
+// - Authenticated staff: may sign any org asset they can SELECT (storage_select_staff).
 
 import { createPublicClient } from '@/lib/supabase/public'
 
 const SIGNED_TTL_SECONDS = 60 * 60 // 1 hour
 
-// Reuse signed URLs for a window shorter than their TTL. These are anon,
-// public listing photos (no per-user data), so caching is safe. Two wins:
+// Reuse signed URLs for a window shorter than their TTL. These are listing
+// photos (no per-user data), so caching is safe. Two wins:
 //  1. Skips the Storage sign round-trip for recently-signed paths.
 //  2. Returns a *stable* URL string per path, so a cover shown on the landing
 //     card and the hero on the detail page resolve to the identical URL — the
@@ -16,18 +17,33 @@ const SIGNED_TTL_SECONDS = 60 * 60 // 1 hour
 const SIGNED_CACHE_TTL_MS = 50 * 60 * 1000 // 50 min (< 1h signed TTL)
 const signedUrlCache = new Map<string, { url: string; expiresAt: number }>()
 
+type SignedUrlRow = { path: string | null; signedUrl: string | null; error?: string | null }
+
+type OrgAssetsSigner = {
+  storage: {
+    from: (bucket: string) => {
+      createSignedUrls: (
+        paths: string[],
+        expiresIn: number
+      ) => PromiseLike<{ data: SignedUrlRow[] | null; error: { message: string } | null }>
+    }
+  }
+}
+
 export function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value)
 }
 
 /**
- * Batch-sign storage paths for public pages.
+ * Batch-sign org-assets storage paths with a caller-supplied Supabase client.
  * Preserves input length and order — empty/missing paths stay '' at the same index
  * so callers can map `signed[i]` back to listing `i` safely.
  * HTTP(S) URLs are not signed (legacy / external); only storage object paths are.
  */
-export async function signListingPhotoPaths(
-  paths: Array<string | null | undefined>
+export async function signOrgAssetPaths(
+  paths: Array<string | null | undefined>,
+  supabase: OrgAssetsSigner,
+  logLabel = 'signOrgAssetPaths'
 ): Promise<string[]> {
   const normalized = paths.map((p) => (p ?? '').trim())
   if (!normalized.some(Boolean)) return normalized.map(() => '')
@@ -50,21 +66,23 @@ export async function signListingPhotoPaths(
     }
   }
 
-  if (toSign.length) {
-    const supabase = createPublicClient()
+  // Chunk to stay within Storage API batch limits on large portfolios.
+  const CHUNK = 100
+  for (let i = 0; i < toSign.length; i += CHUNK) {
+    const chunk = toSign.slice(i, i + CHUNK)
     const { data, error } = await supabase.storage
       .from('org-assets')
-      .createSignedUrls(toSign, SIGNED_TTL_SECONDS)
+      .createSignedUrls(chunk, SIGNED_TTL_SECONDS)
 
     if (error || !data) {
-      console.error('[signListingPhotoPaths]', error?.message)
-    } else {
-      const expiresAt = now + SIGNED_CACHE_TTL_MS
-      for (const row of data) {
-        if (row.path && row.signedUrl) {
-          byPath.set(row.path, row.signedUrl)
-          signedUrlCache.set(row.path, { url: row.signedUrl, expiresAt })
-        }
+      console.error(`[${logLabel}]`, error?.message)
+      continue
+    }
+    const expiresAt = now + SIGNED_CACHE_TTL_MS
+    for (const row of data) {
+      if (row.path && row.signedUrl) {
+        byPath.set(row.path, row.signedUrl)
+        signedUrlCache.set(row.path, { url: row.signedUrl, expiresAt })
       }
     }
   }
@@ -75,6 +93,15 @@ export async function signListingPhotoPaths(
     if (isHttpUrl(path)) return ''
     return byPath.get(path) ?? ''
   })
+}
+
+/**
+ * Batch-sign storage paths for public pages (anon client).
+ */
+export async function signListingPhotoPaths(
+  paths: Array<string | null | undefined>
+): Promise<string[]> {
+  return signOrgAssetPaths(paths, createPublicClient(), 'signListingPhotoPaths')
 }
 
 export async function resolveListingCoverPhoto(

@@ -122,13 +122,48 @@ html:has(.cland2.cl2-dark) body {
   background: #141414;
 }
 
-.cland2 .cl2-swipe {
-  opacity: 0;
+.cland2 .cl2-swipe,
+.cland2 .cl2-dots {
   transition: opacity 0.2s;
 }
 
-.cland2 a:hover .cl2-swipe {
-  opacity: 1;
+/* Desktop: hide gallery arrows/dots until the photo area is hovered (or focused).
+   Touch / coarse pointers: no (hover: hover) — controls stay visible and usable. */
+@media (hover: hover) {
+  .cland2 .cl2-card-media .cl2-swipe {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .cland2 .cl2-card-media .cl2-dots {
+    opacity: 0;
+  }
+
+  .cland2 .cl2-card-media:hover .cl2-swipe,
+  .cland2 .cl2-card-media:focus-within .cl2-swipe {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .cland2 .cl2-card-media:hover .cl2-dots,
+  .cland2 .cl2-card-media:focus-within .cl2-dots {
+    opacity: 1;
+  }
+
+  .cland2 .cl2-card-media:hover .cl2-swipe:disabled,
+  .cland2 .cl2-card-media:focus-within .cl2-swipe:disabled {
+    opacity: 0.55;
+  }
+}
+
+.cland2 .cl2-swipe:disabled {
+  cursor: default;
+}
+
+@media (hover: none) {
+  .cland2 .cl2-swipe:disabled {
+    opacity: 0.55;
+  }
 }
 
 .cland2 .cl2-str-pill {

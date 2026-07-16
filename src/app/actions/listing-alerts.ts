@@ -1,6 +1,6 @@
 'use server'
 // Public landing-page "Notify me" / new-listing alert signup.
-// Persists the email, then sends confirmation + company notification via Resend.
+// Persists the email, then sends confirmation + company notification via Pingram.
 // Does not report success if email delivery fails (no silent fake success).
 
 import React from 'react'
@@ -8,7 +8,7 @@ import { z } from 'zod'
 import { createClient as createClientJs } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { getOrgBySlug } from '@/lib/orgs'
-import { sendEmail } from '@/lib/email/send'
+import { sendPingramEmail } from '@/lib/email/pingram'
 import { ListingAlertConfirmEmail } from '@/lib/email/templates/ListingAlertConfirmEmail'
 import { ListingAlertNotifyEmail } from '@/lib/email/templates/ListingAlertNotifyEmail'
 
@@ -107,8 +107,8 @@ export async function subscribeListingAlerts(emailInput: string): Promise<Listin
     }
   }
 
-  if (!process.env.RESEND_API_KEY) {
-    console.error('[listing-alerts] RESEND_API_KEY is not set — signup saved, emails not sent')
+  if (!process.env.PINGRAM_API_KEY) {
+    console.error('[listing-alerts] PINGRAM_API_KEY is not set — signup saved, emails not sent')
     return {
       success: false,
       error:
@@ -124,7 +124,8 @@ export async function subscribeListingAlerts(emailInput: string): Promise<Listin
     timeStyle: 'short',
   })
 
-  const confirmResult = await sendEmail({
+  const confirmResult = await sendPingramEmail({
+    type: 'listing_alert_confirm',
     to: email,
     subject: `You're on the list — new listings from ${org.name}`,
     from: 'Canary Property Management <notifications@canarypm.ca>',
@@ -147,7 +148,8 @@ export async function subscribeListingAlerts(emailInput: string): Promise<Listin
   const notifyTo = companyNotifyRecipients(managerEmail)
   const notifyResults = await Promise.all(
     notifyTo.map((to) =>
-      sendEmail({
+      sendPingramEmail({
+        type: 'listing_alert_notify',
         to,
         subject: `New listing alert signup: ${email}`,
         from: 'Canary PropOS <notifications@canarypm.ca>',

@@ -7,6 +7,15 @@ import { createPublicClient } from '@/lib/supabase/public'
 
 const SIGNED_TTL_SECONDS = 60 * 60 // 1 hour
 
+// Reuse signed URLs for a window shorter than their TTL. These are anon,
+// public listing photos (no per-user data), so caching is safe. Two wins:
+//  1. Skips the Storage sign round-trip for recently-signed paths.
+//  2. Returns a *stable* URL string per path, so a cover shown on the landing
+//     card and the hero on the detail page resolve to the identical URL — the
+//     browser reuses the already-downloaded image (near-instant hero).
+const SIGNED_CACHE_TTL_MS = 50 * 60 * 1000 // 50 min (< 1h signed TTL)
+const signedUrlCache = new Map<string, { url: string; expiresAt: number }>()
+
 export function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value)
 }
@@ -23,22 +32,39 @@ export async function signListingPhotoPaths(
   const normalized = paths.map((p) => (p ?? '').trim())
   if (!normalized.some(Boolean)) return normalized.map(() => '')
 
-  const storagePaths = [
+  const uniquePaths = [
     ...new Set(normalized.filter((p) => p.length > 0 && !isHttpUrl(p))),
   ]
 
   const byPath = new Map<string, string>()
-  if (storagePaths.length) {
+  const now = Date.now()
+
+  // Serve cached signatures first; only sign the paths we don't already have.
+  const toSign: string[] = []
+  for (const p of uniquePaths) {
+    const cached = signedUrlCache.get(p)
+    if (cached && cached.expiresAt > now) {
+      byPath.set(p, cached.url)
+    } else {
+      toSign.push(p)
+    }
+  }
+
+  if (toSign.length) {
     const supabase = createPublicClient()
     const { data, error } = await supabase.storage
       .from('org-assets')
-      .createSignedUrls(storagePaths, SIGNED_TTL_SECONDS)
+      .createSignedUrls(toSign, SIGNED_TTL_SECONDS)
 
     if (error || !data) {
       console.error('[signListingPhotoPaths]', error?.message)
     } else {
+      const expiresAt = now + SIGNED_CACHE_TTL_MS
       for (const row of data) {
-        if (row.path && row.signedUrl) byPath.set(row.path, row.signedUrl)
+        if (row.path && row.signedUrl) {
+          byPath.set(row.path, row.signedUrl)
+          signedUrlCache.set(row.path, { url: row.signedUrl, expiresAt })
+        }
       }
     }
   }

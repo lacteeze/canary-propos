@@ -329,10 +329,15 @@ export function ListingPhotoGallery({ photos, title, children, topBar }: Listing
         }}
       >
         {hasPhotos ? (
+          // Hero is the LCP element — load it eagerly at high priority so it
+          // wins bandwidth over the (lazy) thumbnail strip below.
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={photos[0]}
             alt={title}
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
             style={{
               position: 'absolute',
               inset: 0,
@@ -532,10 +537,14 @@ export function ListingPhotoGallery({ photos, title, children, topBar }: Listing
                     overflow: 'hidden',
                   }}
                 >
+                  {/* Defer thumbnail bytes so the hero paints first; the strip
+                      is horizontally scrollable so off-screen thumbs stay idle. */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={src}
                     alt={`Photo ${photoIndex + 1}`}
+                    loading="lazy"
+                    decoding="async"
                     style={{
                       display: 'block',
                       height: 'clamp(160px, 26vw, 224px)',

@@ -1,6 +1,7 @@
 // src/app/(public)/listings/[id]/page.tsx
 // Public listing detail — hero photo, landing-page branding, inquiry + application forms.
 import { notFound } from 'next/navigation'
+import { preload } from 'react-dom'
 import Link from 'next/link'
 import { InquiryForm } from '@/components/listings/InquiryForm'
 import { ApplicationForm } from '@/components/listings/ApplicationForm'
@@ -94,11 +95,27 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
   const heroAddress = [streetLine, cityLine, provinceLine].filter(Boolean).join(', ')
   const fullAddress = heroAddress || listing.listing_title
 
-  const fromMedia = property?.id ? await getListingPhotoPathsForProperty(property.id) : []
-  const photoPaths: string[] = (
-    fromMedia.length > 0 ? fromMedia : (property?.photo_paths ?? [])
-  ).filter((p: string) => !!p && !/^https?:\/\//i.test(p))
-  const { all: listingPhotos } = await resolveListingGalleryPhotos(photoPaths)
+  const listingCity = property?.city ?? "St. John's"
+
+  // Resolve gallery photos and the similar-listings feed in parallel — they're
+  // independent, so we avoid a server-side request waterfall (lower TTFB).
+  const galleryPromise = (async () => {
+    const fromMedia = property?.id ? await getListingPhotoPathsForProperty(property.id) : []
+    const photoPaths: string[] = (
+      fromMedia.length > 0 ? fromMedia : (property?.photo_paths ?? [])
+    ).filter((p: string) => !!p && !/^https?:\/\//i.test(p))
+    return resolveListingGalleryPhotos(photoPaths)
+  })()
+  const [{ all: listingPhotos }, allPublished] = await Promise.all([
+    galleryPromise,
+    getPublishedListings(orgSlug),
+  ])
+
+  // Preload the hero (LCP) image into the streamed <head> so the browser starts
+  // fetching it before the gallery component hydrates.
+  if (listingPhotos[0]) {
+    preload(listingPhotos[0], { as: 'image', fetchPriority: 'high' })
+  }
 
   const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
   const mapsQuery = encodeURIComponent(fullAddress)
@@ -123,8 +140,6 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
   })()
   const parkingLabel = parkingFromText
 
-  const listingCity = property?.city ?? "St. John's"
-  const allPublished = await getPublishedListings(orgSlug)
   const carouselGroups = getDetailPageCarouselGroups(allPublished, id, listingCity)
   const cardCopy = getLandingCopy('en')
   const listingCardCopy = {

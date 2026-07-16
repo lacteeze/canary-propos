@@ -4,7 +4,7 @@
 // Faithful React port of the CanaryApp.dc design prototype, wired to live
 // Supabase data (loaded server-side in src/app/(canary)/app/page.tsx).
 import React, { useCallback, useMemo, useRef, useState, useTransition } from 'react'
-import { Bell, CalendarIcon, ChevronDown, Menu, MessageSquare, Repeat2, Search, X } from 'lucide-react'
+import { Bell, CalendarIcon, ChevronDown, ImageOff, Menu, MessageSquare, Repeat2, Search, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { activateDraftListing, deleteDraftListing, saveDraftListing, savePaymentEntry } from '@/app/actions/canary'
@@ -2768,6 +2768,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                   gapPx={12}
                   items={(genRows as CanaryProperty[]).map((p) => {
                     const [chipBg, chipColor] = chipFor(p.status)
+                    const missingPhotos = !p.listingPhotoPaths?.length
                     return {
                       id: p.id,
                       className: 'cy-hov-card cy-card',
@@ -2776,7 +2777,18 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                       children: (
                         <>
                           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                            <div style={{ fontWeight: 700, fontSize: 15, minWidth: 0 }}>{short(p.address)}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+                              <div style={{ fontWeight: 700, fontSize: 15, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{short(p.address)}</div>
+                              {missingPhotos ? (
+                                <span
+                                  title="No listing photos"
+                                  aria-label="No listing photos"
+                                  style={{ flex: 'none', display: 'inline-flex', color: 'var(--faint)', opacity: 0.85 }}
+                                >
+                                  <ImageOff size={14} strokeWidth={2} aria-hidden="true" />
+                                </span>
+                              ) : null}
+                            </div>
                             <span style={{ flex: 'none', fontSize: 11, fontWeight: 700, letterSpacing: '.04em', padding: '3px 9px', borderRadius: 6, background: chipBg, color: chipColor }}>{p.status || '—'}</span>
                           </div>
                           <div style={{ color: 'var(--dim)', fontSize: '12.5px', margin: '2px 0 10px' }}>{[p.city, p.area].filter(Boolean).join(' · ') || p.address.split(',').slice(1, 2).join('').trim()}</div>
@@ -3147,7 +3159,14 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                           </label>
                         )}
                         {pdef.cols.map((c) => (
-                          <span key={c.key} style={{ flex: c.flex, minWidth: 0, textAlign: (c.align || 'left') as 'left' | 'right', color: c.color ? c.color(r) : c.dim ? 'var(--dim)' : 'var(--text)', fontWeight: c.bold ? 650 : 400, fontFamily: c.mono ? MONO : 'inherit', fontSize: c.mono ? 12 : '13.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{String(c.get(r))}</span>
+                          <span key={c.key} style={{ flex: c.flex, minWidth: 0, textAlign: (c.align || 'left') as 'left' | 'right', color: c.color ? c.color(r) : c.dim ? 'var(--dim)' : 'var(--text)', fontWeight: c.bold ? 650 : 400, fontFamily: c.mono ? MONO : 'inherit', fontSize: c.mono ? 12 : '13.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            {page === 'properties' && c.key === 'address' && propRow && !propRow.listingPhotoPaths?.length ? (
+                              <span title="No listing photos" aria-label="No listing photos" style={{ flex: 'none', display: 'inline-flex', color: 'var(--faint)', opacity: 0.85 }}>
+                                <ImageOff size={13} strokeWidth={2} aria-hidden="true" />
+                              </span>
+                            ) : null}
+                            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{String(c.get(r))}</span>
+                          </span>
                         ))}
                       </div>
                     )

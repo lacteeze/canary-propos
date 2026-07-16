@@ -13,6 +13,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { createClient } from '@/lib/supabase/client'
+import { setAuthPersistPreference } from '@/lib/supabase/auth-persist'
 import { magicLinkSchema, type MagicLinkValues } from '@/lib/validation/auth'
 
 interface MagicLinkFormProps {
@@ -32,6 +33,8 @@ export function MagicLinkForm({ onSwitchToPassword }: MagicLinkFormProps) {
   async function onSubmit(values: MagicLinkValues) {
     setIsLoading(true)
     setError(null)
+
+    setAuthPersistPreference(true)
 
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithOtp({

@@ -13,6 +13,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { createClient } from '@/lib/supabase/client'
+import { setAuthPersistPreference } from '@/lib/supabase/auth-persist'
 import { signInSchema, type SignInValues } from '@/lib/validation/auth'
 
 interface SignInFormProps {
@@ -27,13 +28,16 @@ export function SignInForm({ onSwitchToMagicLink }: SignInFormProps) {
 
   const form = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: '', password: '', rememberMe: true },
   })
 
   async function onSubmit(values: SignInValues) {
     setIsLoading(true)
     setErrorHeading(null)
     setErrorBody(null)
+
+    // Set preference before sign-in so auth cookies get the right lifetime
+    setAuthPersistPreference(values.rememberMe)
 
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithPassword({
@@ -116,6 +120,27 @@ export function SignInForm({ onSwitchToMagicLink }: SignInFormProps) {
                 </div>
               </FormControl>
               <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="rememberMe"
+          render={({ field }) => (
+            <FormItem>
+              <label className="auth-remember">
+                <input
+                  type="checkbox"
+                  className="auth-checkbox"
+                  checked={field.value}
+                  onChange={(e) => field.onChange(e.target.checked)}
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  ref={field.ref}
+                />
+                <span className="auth-remember-label">Keep me signed in</span>
+              </label>
             </FormItem>
           )}
         />

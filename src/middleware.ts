@@ -3,6 +3,11 @@
 // Source: https://supabase.com/docs/guides/auth/server-side/nextjs
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import {
+  AUTH_PERSIST_COOKIE,
+  applyAuthCookieMaxAge,
+  isAuthPersistEnabled,
+} from '@/lib/supabase/auth-persist'
 
 function isPublicListingsPath(pathname: string): boolean {
   return pathname.startsWith('/listings')
@@ -56,15 +61,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request })
   }
 
-  // Public listings routes bypass auth entirely — extract org slug and return early
-  if (isPublicListingsPath(pathname)) {
-    const slug = extractOrgSlug(request)
-    const requestHeaders = new Headers(request.headers)
-    requestHeaders.set('x-org-slug', slug)
-    return NextResponse.next({ request: { headers: requestHeaders } })
+  const isListings = isPublicListingsPath(pathname)
+  const requestHeaders = new Headers(request.headers)
+  if (isListings) {
+    // Public listings stay public, but still refresh session cookies below
+    requestHeaders.set('x-org-slug', extractOrgSlug(request))
   }
 
-  let supabaseResponse = NextResponse.next({ request })
+  let supabaseResponse = NextResponse.next({
+    request: { headers: requestHeaders },
+  })
+
+  const persist = isAuthPersistEnabled(
+    request.cookies.get(AUTH_PERSIST_COOKIE)?.value,
+  )
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -78,9 +88,15 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )
-          supabaseResponse = NextResponse.next({ request })
+          supabaseResponse = NextResponse.next({
+            request: { headers: requestHeaders },
+          })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(
+              name,
+              value,
+              applyAuthCookieMaxAge(options, persist),
+            )
           )
         },
       },
@@ -91,6 +107,11 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
+
+  // Listings are public — session was refreshed above; skip auth redirects
+  if (isListings) {
+    return supabaseResponse
+  }
 
   const role = user?.app_metadata?.role as string | undefined
 

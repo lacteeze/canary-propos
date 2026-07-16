@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { SIGN_IN_LINKS } from '@/lib/landing/content'
 import { usePublicTheme } from '@/components/public/PublicThemeProvider'
+import { createClient } from '@/lib/supabase/client'
 
 const NAV = [
   { href: '/#homes', label: 'Homes' },
@@ -22,6 +23,7 @@ export function PublicHeader({ overlay = false }: PublicHeaderProps) {
   const [solid, setSolid] = useState(!overlay)
   const [signInOpen, setSignInOpen] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [signedIn, setSignedIn] = useState(false)
   const { dark, toggleTheme } = usePublicTheme()
 
   useEffect(() => {
@@ -31,6 +33,13 @@ export function PublicHeader({ overlay = false }: PublicHeaderProps) {
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [overlay])
+
+  useEffect(() => {
+    const supabase = createClient()
+    void supabase.auth.getUser().then(({ data: { user } }) => {
+      setSignedIn(!!user)
+    })
+  }, [])
 
   const hdrBg = solid
     ? dark
@@ -115,48 +124,58 @@ export function PublicHeader({ overlay = false }: PublicHeaderProps) {
             {dark ? '☀' : '☾'}
           </button>
 
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
+          {signedIn ? (
+            <Link
+              href="/app"
               className="cl2-btn-yellow"
-              onClick={() => { setSignInOpen((v) => !v); setMobileOpen(false) }}
-              style={{ border: 'none', background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 999, padding: '9px 18px', fontWeight: 700, fontSize: '13.5px', cursor: 'pointer' }}
+              style={{ border: 'none', background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 999, padding: '9px 18px', fontWeight: 700, fontSize: '13.5px', textDecoration: 'none', display: 'inline-block' }}
             >
-              Sign in
-            </button>
-            {signInOpen && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 8px)',
-                  right: 0,
-                  width: 230,
-                  background: 'var(--elev)',
-                  color: 'var(--text)',
-                  border: '1px solid var(--border2)',
-                  borderRadius: 14,
-                  boxShadow: 'var(--shadow)',
-                  padding: 8,
-                  zIndex: 60,
-                }}
+              Open app
+            </Link>
+          ) : (
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className="cl2-btn-yellow"
+                onClick={() => { setSignInOpen((v) => !v); setMobileOpen(false) }}
+                style={{ border: 'none', background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 999, padding: '9px 18px', fontWeight: 700, fontSize: '13.5px', cursor: 'pointer' }}
               >
-                <div style={{ fontFamily: 'var(--font-ibm-plex-mono), monospace', fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--faint)', padding: '6px 10px 8px' }}>
-                  Choose your portal
+                Sign in
+              </button>
+              {signInOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 8px)',
+                    right: 0,
+                    width: 230,
+                    background: 'var(--elev)',
+                    color: 'var(--text)',
+                    border: '1px solid var(--border2)',
+                    borderRadius: 14,
+                    boxShadow: 'var(--shadow)',
+                    padding: 8,
+                    zIndex: 60,
+                  }}
+                >
+                  <div style={{ fontFamily: 'var(--font-ibm-plex-mono), monospace', fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--faint)', padding: '6px 10px 8px' }}>
+                    Choose your portal
+                  </div>
+                  {SIGN_IN_LINKS.map((link) => (
+                    <Link
+                      key={link.label}
+                      href={link.href}
+                      className="cl2-portal-link"
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 9, textDecoration: 'none', color: 'inherit', fontWeight: 600, fontSize: '13.5px' }}
+                    >
+                      <span style={{ width: 8, height: 8, borderRadius: 3, background: link.dot, flex: 'none' }} />
+                      {link.label}
+                    </Link>
+                  ))}
                 </div>
-                {SIGN_IN_LINKS.map((link) => (
-                  <Link
-                    key={link.label}
-                    href={link.href}
-                    className="cl2-portal-link"
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 9, textDecoration: 'none', color: 'inherit', fontWeight: 600, fontSize: '13.5px' }}
-                  >
-                    <span style={{ width: 8, height: 8, borderRadius: 3, background: link.dot, flex: 'none' }} />
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           <button
             type="button"

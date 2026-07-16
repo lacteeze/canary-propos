@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { setAuthPersistPreference } from '@/lib/supabase/auth-persist'
 
 // Google SVG logo
 function GoogleLogo() {
@@ -55,6 +56,7 @@ export function OAuthButtons() {
 
   async function handleOAuth(provider: 'google' | 'apple') {
     setLoadingProvider(provider)
+    setAuthPersistPreference(true)
     const supabase = createClient()
     await supabase.auth.signInWithOAuth({
       provider,

@@ -8,6 +8,7 @@ export const signInSchema = z.object({
   password: z
     .string()
     .min(8, 'Password must be at least 8 characters'),
+  rememberMe: z.boolean(),
 })
 
 export const magicLinkSchema = z.object({

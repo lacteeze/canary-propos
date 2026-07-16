@@ -19,6 +19,8 @@ export interface LandingStay {
   town: string
   beds: string
   baths: string
+  /** Guest capacity number only — label comes from landing copy (`sleeps`). */
+  sleeps: string
   extra: string
   photo: string
   href: string
@@ -70,6 +72,7 @@ export function getLandingCopy(lang: LandingLang) {
       tAnswerFoot: 'Les réponses sont basées sur nos services et annonces actuelles. Encore incertain?',
       tEmailUs: 'Écrivez-nous',
       tSignIn: 'Se connecter',
+      tOpenApp: "Ouvrir l'app",
       tPortalTitle: 'Choisissez votre portail',
       tHeroBadge: 'ST. JOHN\'S · TERRE-NEUVE · FIÈREMENT LOCAL',
       tHero1: 'La location, enfin',
@@ -201,6 +204,7 @@ export function getLandingCopy(lang: LandingLang) {
     tAnswerFoot: 'Answers are based on our services and current listings. Still unsure?',
     tEmailUs: 'Email us',
     tSignIn: 'Sign in',
+    tOpenApp: 'Open app',
     tPortalTitle: 'Choose your portal',
     tHeroBadge: 'ST. JOHN\'S · NEWFOUNDLAND · PROUDLY LOCAL',
     tHero1: 'Renting, finally',
@@ -325,10 +329,10 @@ export function getLandingCopy(lang: LandingLang) {
 export function getDefaultStays(): LandingStay[] {
   const copy = getLandingCopy('en')
   return [
-    { short: 'Downtown loft', town: "St. John's", beds: '2', baths: '1', extra: `${copy.sleeps}4`, photo: STAY_PHOTOS[0], href: 'https://airbnb.ca/p/canarypm' },
-    { short: 'Waterfront suite', town: "St. John's", beds: '1', baths: '1', extra: `${copy.sleeps}2`, photo: STAY_PHOTOS[1], href: 'https://airbnb.ca/p/canarypm' },
-    { short: 'Heritage row house', town: 'Mount Pearl', beds: '3', baths: '2', extra: `${copy.sleeps}6`, photo: STAY_PHOTOS[2], href: 'https://airbnb.ca/p/canarypm' },
-    { short: 'Garden cottage', town: 'Paradise', beds: '2', baths: '1', extra: `${copy.sleeps}4`, photo: STAY_PHOTOS[3], href: 'https://airbnb.ca/p/canarypm' },
+    { short: 'Downtown loft', town: "St. John's", beds: '2', baths: '1', sleeps: '4', extra: '', photo: STAY_PHOTOS[0], href: 'https://airbnb.ca/p/canarypm' },
+    { short: 'Waterfront suite', town: "St. John's", beds: '1', baths: '1', sleeps: '2', extra: '', photo: STAY_PHOTOS[1], href: 'https://airbnb.ca/p/canarypm' },
+    { short: 'Heritage row house', town: 'Mount Pearl', beds: '3', baths: '2', sleeps: '6', extra: '', photo: STAY_PHOTOS[2], href: 'https://airbnb.ca/p/canarypm' },
+    { short: 'Garden cottage', town: 'Paradise', beds: '2', baths: '1', sleeps: '4', extra: '', photo: STAY_PHOTOS[3], href: 'https://airbnb.ca/p/canarypm' },
   ]
 }
 

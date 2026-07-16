@@ -19,8 +19,9 @@ export function mapPropertyToStay(
 
   const beds = formatCount(property.capacity?.bedrooms)
   const baths = formatCount(property.capacity?.bathrooms)
-  const sleeps = property.capacity?.max
-  const extra = sleeps != null && !Number.isNaN(sleeps) ? `sleeps ${sleeps}` : ''
+  const maxGuests = property.capacity?.max
+  const sleeps =
+    maxGuests != null && !Number.isNaN(maxGuests) ? formatCount(maxGuests) : ''
 
   const siteUrl = property.bookings?.site_urls?.find(Boolean)
   const href = siteUrl?.trim() || DEFAULT_STAYS_HREF
@@ -28,7 +29,7 @@ export function mapPropertyToStay(
     property.picture?.trim() ||
     STAY_PHOTOS[photoFallbackIndex % STAY_PHOTOS.length]
 
-  return { short, town, beds, baths, extra, photo, href }
+  return { short, town, beds, baths, sleeps, extra: '', photo, href }
 }
 
 export function mapPropertiesToStays(properties: HospitableProperty[]): LandingStay[] {

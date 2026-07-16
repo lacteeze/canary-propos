@@ -2,6 +2,11 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import {
+  AUTH_PERSIST_COOKIE,
+  applyAuthCookieMaxAge,
+  isAuthPersistEnabled,
+} from '@/lib/supabase/auth-persist'
 
 // All roles land in the CanaryApp portal — role scoping happens inside /app
 const ROLE_REDIRECT_MAP: Record<string, string> = {
@@ -19,6 +24,9 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const cookieStore = await cookies()
+    const persist = isAuthPersistEnabled(
+      cookieStore.get(AUTH_PERSIST_COOKIE)?.value,
+    )
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -29,7 +37,7 @@ export async function GET(request: NextRequest) {
           },
           setAll(cookiesToSet) {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
+              cookieStore.set(name, value, applyAuthCookieMaxAge(options, persist)),
             )
           },
         },

@@ -1,6 +1,11 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import type { Database } from '@/types/supabase'
+import {
+  AUTH_PERSIST_COOKIE,
+  applyAuthCookieMaxAge,
+  isAuthPersistEnabled,
+} from '@/lib/supabase/auth-persist'
 
 export async function createClient() {
   const cookieStore = await cookies()
@@ -14,8 +19,11 @@ export async function createClient() {
         },
         setAll(cookiesToSet) {
           try {
+            const persist = isAuthPersistEnabled(
+              cookieStore.get(AUTH_PERSIST_COOKIE)?.value,
+            )
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
+              cookieStore.set(name, value, applyAuthCookieMaxAge(options, persist)),
             )
           } catch {
             // Server Component — cookie writes are handled by middleware.
@@ -23,6 +31,6 @@ export async function createClient() {
           }
         },
       },
-    }
+    },
   )
 }

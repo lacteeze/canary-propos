@@ -123,6 +123,27 @@
   font-size: 13px;
 }
 
+/* keep me signed in */
+.auth-remember {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.auth-checkbox {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.auth-remember-label {
+  font-size: 13.5px;
+  color: var(--dim);
+  line-height: 1.4;
+}
+
 /* password eye toggle */
 .auth-eye {
   position: absolute;

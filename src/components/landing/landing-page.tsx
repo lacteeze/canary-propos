@@ -17,6 +17,7 @@ import {
 } from '@/lib/landing/content'
 import { DEFAULT_STAYS_HREF } from '@/lib/hospitable/map-property-to-stay'
 import type { BrowseListing } from '@/lib/listings/browse-types'
+import { createClient } from '@/lib/supabase/client'
 import './landing-styles.css'
 
 interface LandingPageProps {
@@ -64,6 +65,7 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
   const [lang, setLang] = useState<LandingLang>('en')
   const [langOpen, setLangOpen] = useState(false)
   const [signInOpen, setSignInOpen] = useState(false)
+  const [signedIn, setSignedIn] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
   const [searchBusy, setSearchBusy] = useState(false)
@@ -130,6 +132,13 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
     } catch {
       // ignore
     }
+  }, [])
+
+  useEffect(() => {
+    const supabase = createClient()
+    void supabase.auth.getUser().then(({ data: { user } }) => {
+      setSignedIn(!!user)
+    })
   }, [])
 
   useEffect(() => {
@@ -308,21 +317,31 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
           </div>
 
           <div className="cl2-hdr-actions" style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 'none' }}>
-            <div style={{ position: 'relative', flex: 'none' }}>
-              <button type="button" className="cl2-btn-yellow" onClick={() => { setSignInOpen(!signInOpen); setPanelOpen(false); setMobileOpen(false) }} style={{ border: 'none', background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 999, padding: '9px 18px', fontWeight: 700, fontSize: '13.5px', cursor: 'pointer' }}>
-                {copy.tSignIn}
-              </button>
-              {signInOpen && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 230, background: 'var(--elev)', color: 'var(--text)', border: '1px solid var(--border2)', borderRadius: 14, boxShadow: 'var(--shadow)', padding: 8, zIndex: 60 }}>
-                  <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--faint)', padding: '6px 10px 8px' }}>{copy.tPortalTitle}</div>
-                  {SIGN_IN_LINKS.map((link) => (
-                    <Link key={link.label} href={link.href} className="cl2-portal-link" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 9, textDecoration: 'none', color: 'inherit', fontWeight: 600, fontSize: '13.5px' }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 3, background: link.dot, flex: 'none' }} />{link.label}
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
+            {signedIn ? (
+              <Link
+                href="/app"
+                className="cl2-btn-yellow"
+                style={{ border: 'none', background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 999, padding: '9px 18px', fontWeight: 700, fontSize: '13.5px', textDecoration: 'none', display: 'inline-block' }}
+              >
+                {copy.tOpenApp}
+              </Link>
+            ) : (
+              <div style={{ position: 'relative', flex: 'none' }}>
+                <button type="button" className="cl2-btn-yellow" onClick={() => { setSignInOpen(!signInOpen); setPanelOpen(false); setMobileOpen(false) }} style={{ border: 'none', background: 'var(--yellow)', color: 'var(--yellow-text)', borderRadius: 999, padding: '9px 18px', fontWeight: 700, fontSize: '13.5px', cursor: 'pointer' }}>
+                  {copy.tSignIn}
+                </button>
+                {signInOpen && (
+                  <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 230, background: 'var(--elev)', color: 'var(--text)', border: '1px solid var(--border2)', borderRadius: 14, boxShadow: 'var(--shadow)', padding: 8, zIndex: 60 }}>
+                    <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--faint)', padding: '6px 10px 8px' }}>{copy.tPortalTitle}</div>
+                    {SIGN_IN_LINKS.map((link) => (
+                      <Link key={link.label} href={link.href} className="cl2-portal-link" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 9, textDecoration: 'none', color: 'inherit', fontWeight: 600, fontSize: '13.5px' }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 3, background: link.dot, flex: 'none' }} />{link.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <button type="button" className="cl2-burger" onClick={() => { setMobileOpen(!mobileOpen); setSignInOpen(false) }} aria-label="Menu" style={{ flex: 'none', width: 38, height: 38, borderRadius: 10, border: `1px solid ${hdr.searchBorder}`, background: hdr.searchBg, color: hdr.hdrText, cursor: 'pointer', placeItems: 'center', fontSize: 17, lineHeight: 1 }}>
               {mobileOpen ? '✕' : '☰'}
@@ -498,15 +517,18 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
                 <div style={{ height: 190, backgroundImage: `url('${stay.photo}')`, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative' }}>
                   <span className="cl2-str-pill">{copy.tBookDirect}</span>
                 </div>
-                <div style={{ padding: '15px 17px 17px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                    <span style={{ fontWeight: 700, fontSize: 16, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stay.short}</span>
-                    <span style={{ flex: 'none', fontWeight: 700, fontSize: 14, color: 'var(--accent)' }}>{stay.town}</span>
+                <div style={{ padding: '15px 17px 17px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minHeight: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 16, lineHeight: 1.25, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {stay.short}
                   </div>
-                  <div style={{ display: 'flex', gap: 12, fontSize: 13, color: 'var(--dim)' }}>
-                    <span><b style={{ color: 'var(--text)' }}>{stay.beds}</b> {copy.tBed}</span>
-                    <span><b style={{ color: 'var(--text)' }}>{stay.baths}</b> {copy.tBath}</span>
-                    <span>{stay.extra}</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 12, fontSize: 13, color: 'var(--dim)' }}>
+                    <span><b style={{ color: 'var(--text)', fontWeight: 700 }}>{stay.beds}</b> {copy.tBed}</span>
+                    <span><b style={{ color: 'var(--text)', fontWeight: 700 }}>{stay.baths}</b> {copy.tBath}</span>
+                    {stay.sleeps ? (
+                      <span><b style={{ color: 'var(--text)', fontWeight: 700 }}>{stay.sleeps}</b> {copy.sleeps.trim()}</span>
+                    ) : null}
+                    {stay.extra ? <span>{stay.extra}</span> : null}
+                    <span style={{ marginLeft: 'auto', fontWeight: 700, fontSize: 14, color: 'var(--accent)' }}>{stay.town}</span>
                   </div>
                 </div>
               </a>

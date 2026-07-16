@@ -41,6 +41,10 @@ function createAdminClientInternal() {
 
 // --- Shared: lookup manager email for an org (uses service role) ---
 async function lookupManagerEmail(orgId: string): Promise<string | null> {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn('[inquiries] SUPABASE_SERVICE_ROLE_KEY unset — skipping manager email lookup')
+    return null
+  }
   try {
     const admin = createAdminClientInternal()
     const { data } = await admin
@@ -100,35 +104,39 @@ async function sendManagerNotification(params: {
 }
 
 // --- Shared: validate org_id matches the listing (T-03-13 — cross-org injection prevention) ---
+// Uses the anon client + published-only RLS — must NOT require SUPABASE_SERVICE_ROLE_KEY.
+// Public showing/apply forms run without service role on some hosts; failing closed with
+// "Invalid listing or organization" was masking a missing env var (production incident).
 async function validateListingOrg(
   listingId: string,
   submittedOrgId: string
 ): Promise<{ valid: boolean; listingTitle: string; propertyAddress: string }> {
   try {
-    const admin = createAdminClientInternal()
+    const supabase = createAnonClient()
 
-    // Step 1: Fetch listing to validate org ownership
-    const { data: listing } = await admin
+    // Step 1: Fetch published listing to validate org ownership (listings_select_anon)
+    const { data: listing, error: listingError } = await supabase
       .from('listings')
       .select('id, org_id, listing_title, unit_id')
       .eq('id', listingId)
+      .eq('status', 'published')
       .single()
 
-    if (!listing || listing.org_id !== submittedOrgId) {
+    if (listingError || !listing || listing.org_id !== submittedOrgId) {
       return { valid: false, listingTitle: '', propertyAddress: '' }
     }
 
-    // Step 2: Fetch property address via unit
+    // Step 2: Fetch property address via unit (anon read allowed for published listings)
     let propertyAddress = ''
     if (listing.unit_id) {
-      const { data: unit } = await admin
+      const { data: unit } = await supabase
         .from('units')
         .select('property_id')
         .eq('id', listing.unit_id)
         .single()
 
       if (unit?.property_id) {
-        const { data: property } = await admin
+        const { data: property } = await supabase
           .from('properties')
           .select('street_address, city, province')
           .eq('id', unit.property_id)

@@ -4,7 +4,7 @@
 // Faithful React port of the CanaryApp.dc design prototype, wired to live
 // Supabase data (loaded server-side in src/app/(canary)/app/page.tsx).
 import React, { useCallback, useMemo, useRef, useState, useTransition } from 'react'
-import { Bell, CalendarIcon, ChevronDown, ImageOff, Menu, MessageSquare, Repeat2, Search, X } from 'lucide-react'
+import { Bell, CalendarIcon, ChevronDown, ImageOff, Mail, Menu, MessageSquare, Repeat2, Search, Settings, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { activateDraftListing, deleteDraftListing, saveDraftListing, savePaymentEntry } from '@/app/actions/canary'
@@ -37,6 +37,8 @@ import {
   SECTION_LAYOUT_PRESET,
   useViewLayout,
 } from './layout'
+import GmailInboxView from './GmailInboxView'
+import { LeasingPipelineView } from './LeasingPipelineView'
 import MessagesView from './MessagesView'
 import PropertyOccupancyCalendar from './PropertyOccupancyCalendar'
 import PropertyPhotosView from './PropertyPhotosView'
@@ -731,7 +733,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
     .sort((a, b) => (parseDate(b.sentAt)?.getTime() ?? 0) - (parseDate(a.sentAt)?.getTime() ?? 0))
     .slice(0, 6)
   const dashApplications = scoped.inquiries
-    .filter((i) => i.type === 'application' && i.status === 'new')
+    .filter((i) => i.status === 'new' || i.status === 'application_sent')
     .sort((a, b) => (parseDate(b.submittedAt)?.getTime() ?? 0) - (parseDate(a.submittedAt)?.getTime() ?? 0))
     .slice(0, 6)
   const openRenewalsTimeline = useCallback(() => {
@@ -739,39 +741,31 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
     setView('leases')
   }, [])
 
-  // ---------- leasing pipeline KPIs ----------
+  // ---------- leasing pipeline KPIs (status-based lead funnel) ----------
+  const sortInquiries = useCallback(
+    (list: CanaryInquiry[]) =>
+      [...list].sort(
+        (a, b) =>
+          (parseDate(b.submittedAt)?.getTime() ?? 0) - (parseDate(a.submittedAt)?.getTime() ?? 0),
+      ),
+    [],
+  )
   const leasingNewInquiries = useMemo(
-    () =>
-      scoped.inquiries
-        .filter((i) => i.type === 'inquiry' && i.status === 'new')
-        .sort((a, b) => (parseDate(b.submittedAt)?.getTime() ?? 0) - (parseDate(a.submittedAt)?.getTime() ?? 0)),
-    [scoped.inquiries],
+    () => sortInquiries(scoped.inquiries.filter((i) => i.status === 'new')),
+    [scoped.inquiries, sortInquiries],
   )
   const leasingViewings = useMemo(
-    () =>
-      scoped.inquiries
-        .filter((i) => i.type === 'inquiry' && i.status === 'contacted')
-        .sort((a, b) => (parseDate(b.submittedAt)?.getTime() ?? 0) - (parseDate(a.submittedAt)?.getTime() ?? 0)),
-    [scoped.inquiries],
+    () => sortInquiries(scoped.inquiries.filter((i) => i.status === 'contacted')),
+    [scoped.inquiries, sortInquiries],
   )
   const leasingApplications = useMemo(
-    () =>
-      scoped.inquiries
-        .filter((i) => i.type === 'application')
-        .sort((a, b) => (parseDate(b.submittedAt)?.getTime() ?? 0) - (parseDate(a.submittedAt)?.getTime() ?? 0)),
-    [scoped.inquiries],
+    () => sortInquiries(scoped.inquiries.filter((i) => i.status === 'application_sent')),
+    [scoped.inquiries, sortInquiries],
   )
-  const leasingSignedThisMonth = useMemo(() => {
-    const y = now.getFullYear()
-    const m = now.getMonth()
-    return scoped.leases
-      .filter((l) => {
-        if (!['Active', 'Upcoming', 'Expiring'].includes(l.status)) return false
-        const s = parseDate(l.start)
-        return !!s && s.getFullYear() === y && s.getMonth() === m
-      })
-      .sort((a, b) => (parseDate(b.start)?.getTime() ?? 0) - (parseDate(a.start)?.getTime() ?? 0))
-  }, [scoped.leases, now])
+  const leasingSignedPipeline = useMemo(
+    () => sortInquiries(scoped.inquiries.filter((i) => i.status === 'signed')),
+    [scoped.inquiries, sortInquiries],
+  )
   const leasingExpiring = useMemo(
     () =>
       [...expNoRenew].sort(
@@ -787,10 +781,10 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
     [scoped.drafts],
   )
   const leasingKpis: { id: NonNullable<typeof leasingListOpen>; label: string; value: string; color: string }[] = [
-    { id: 'new_inquiry', label: 'Inquiries', value: String(leasingNewInquiries.length), color: 'var(--green)' },
-    { id: 'viewings', label: 'Viewings', value: String(leasingViewings.length), color: 'var(--blue)' },
+    { id: 'new_inquiry', label: 'New', value: String(leasingNewInquiries.length), color: 'var(--green)' },
+    { id: 'viewings', label: 'Contacted', value: String(leasingViewings.length), color: 'var(--blue)' },
     { id: 'applications', label: 'Apps. Sent', value: String(leasingApplications.length), color: 'var(--amber)' },
-    { id: 'signed', label: 'Signed', value: String(leasingSignedThisMonth.length), color: 'var(--text)' },
+    { id: 'signed', label: 'Signed', value: String(leasingSignedPipeline.length), color: 'var(--accent)' },
     { id: 'expiring', label: 'Expiring', value: String(leasingExpiring.length), color: 'var(--red)' },
     { id: 'listings', label: 'Listings', value: String(leasingListingsLive.length), color: 'var(--green)' },
   ]
@@ -1291,7 +1285,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
 
   const pageDefs: Record<string, PageDef> = {
     leases: {
-      views: ['timeline', 'table'],
+      views: ['pipeline', 'timeline', 'table'],
       rows: qsort(scoped.leases.filter(matchLease), {
         property: (l: CanaryLease) => short(l.property).toLowerCase(), status: (l: CanaryLease) => l.status || '', tenants: (l: CanaryLease) => tenantNames(l.tenantInfo).toLowerCase(), start: (l: CanaryLease) => l.start || '', end: (l: CanaryLease) => l.end || '', rent: (l: CanaryLease) => rentNum(l.rent),
       }),
@@ -1403,7 +1397,16 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
   }
 
   const pdef = pageDefs[page]
-  const viewLabels: Record<string, string> = { timeline: 'Timeline', table: 'Table', cards: 'Cards', photos: 'Photos', list: 'List', kanban: 'Kanban', gantt: 'Gantt' }
+  const viewLabels: Record<string, string> = {
+    pipeline: 'Pipeline',
+    timeline: 'Timeline',
+    table: 'Table',
+    cards: 'Cards',
+    photos: 'Photos',
+    list: 'List',
+    kanban: 'Kanban',
+    gantt: 'Gantt',
+  }
   const curView = pdef ? pageViews[page] || pdef.views[0] : ''
   const cycleView = useCallback(() => {
     if (!pdef) return
@@ -1414,7 +1417,11 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
   }, [pdef, curView, page])
   const genRows = pdef ? pdef.rows : []
   const tblCap = 200
-  const showDefault = pdef ? curView === pdef.views[0] && pdef.views[0] !== 'table' : true
+  const showDefault = pdef
+    ? curView === pdef.views[0] && pdef.views[0] !== 'table' && pdef.views[0] !== 'pipeline'
+    : true
+  const showPipeline = view === 'leases' && curView === 'pipeline'
+  const showLeaseTimeline = view === 'leases' && curView === 'timeline'
   const showPhotos = page === 'properties' && curView === 'photos'
   const showTable = pdef ? curView === 'table' : false
   const showKanban = pdef ? curView === 'kanban' : false
@@ -1700,7 +1707,8 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
       { key: 'payments', label: 'Payments', meta: 'Charges & credits', hideFor: ['Vendor'] },
       { key: 'projects', label: 'Projects', meta: 'Maintenance & work' },
       { key: 'tasks', label: 'Tasks', meta: 'Hospitable housekeeping & ops', hideFor: ['Tenant', 'Vendor'] },
-      { key: 'messages', label: 'Messages', meta: 'Inbox', privOnly: true },
+      { key: 'inbox', label: 'Email', meta: 'Gmail triage', privOnly: true },
+      { key: 'messages', label: 'Messages', meta: 'Team chat', privOnly: true },
       { key: 'notifications', label: 'Notifications', meta: 'Alerts & updates' },
       { key: 'portfolios', label: 'Portfolios', meta: 'Owner groupings', privOnly: true },
     ]
@@ -2104,15 +2112,26 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
           </nav>
           <div className="cy-header-tools">
             {priv && (
-              <button
-                type="button"
-                className={`cy-messages-toggle${view === 'messages' ? ' cy-messages-toggle--active' : ''}`}
-                onClick={() => { setView('messages'); setDrawer(null) }}
-                aria-label="Messages"
-                title="Messages"
-              >
-                <MessageSquare size={16} strokeWidth={2} aria-hidden />
-              </button>
+              <>
+                <button
+                  type="button"
+                  className={`cy-messages-toggle${view === 'inbox' ? ' cy-messages-toggle--active' : ''}`}
+                  onClick={() => { setView('inbox'); setDrawer(null) }}
+                  aria-label="Email inbox"
+                  title="Email"
+                >
+                  <Mail size={16} strokeWidth={2} aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  className={`cy-messages-toggle${view === 'messages' ? ' cy-messages-toggle--active' : ''}`}
+                  onClick={() => { setView('messages'); setDrawer(null) }}
+                  aria-label="Messages"
+                  title="Messages"
+                >
+                  <MessageSquare size={16} strokeWidth={2} aria-hidden />
+                </button>
+              </>
             )}
             <div className="cy-header-actions">
               <DropdownMenu>
@@ -2149,6 +2168,12 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                     </>
                   )}
                   <DropdownMenuGroup>
+                    <DropdownMenuItem
+                      onClick={() => { window.location.href = '/settings' }}
+                    >
+                      <Settings size={15} aria-hidden />
+                      Settings
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => window.open('https://canary-propos.vercel.app', '_blank', 'noopener,noreferrer')}
                     >
@@ -2275,7 +2300,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                   </span>
                 </>
               )}
-              {view === 'leases' && showDefault && (
+              {showLeaseTimeline && (
                 <>
                   <DropdownMenu>
                     <DropdownMenuTrigger
@@ -2382,12 +2407,42 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
             <section>
               {topProject && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', background: 'var(--panel)', border: '1px solid var(--red)', borderRadius: 14, padding: '14px 16px', marginBottom: 16 }}>
-                  <span style={{ flex: 'none', fontSize: 11, fontWeight: 700, letterSpacing: '.08em', padding: '4px 10px', borderRadius: 7, background: 'var(--red)', color: 'var(--red-text)' }}>TOP PRIORITY</span>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{topProject.name}</div>
-                    <div style={{ color: 'var(--dim)', fontSize: '12.5px' }}>{[short(topProject.property), topProject.status, topProject.priority].filter(Boolean).join(' · ')}</div>
-                  </div>
-                  <button className="cy-hov" onClick={() => setView('projects')} style={{ flex: 'none', border: '1px solid var(--border)', background: 'var(--elev)', color: 'var(--text)', borderRadius: 9, padding: '8px 13px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>View projects →</button>
+                  <button
+                    type="button"
+                    className="cy-hov"
+                    onClick={() => setDrawer({ kind: 'project', id: topProject.id })}
+                    aria-label={`Open project ${topProject.name}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 14,
+                      minWidth: 0,
+                      flex: 1,
+                      margin: 0,
+                      padding: 0,
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'inherit',
+                      font: 'inherit',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      borderRadius: 9,
+                    }}
+                  >
+                    <span style={{ flex: 'none', fontSize: 11, fontWeight: 700, letterSpacing: '.08em', padding: '4px 10px', borderRadius: 7, background: 'var(--red)', color: 'var(--red-text)' }}>TOP PRIORITY</span>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{topProject.name}</div>
+                      <div style={{ color: 'var(--dim)', fontSize: '12.5px' }}>{[short(topProject.property), topProject.status, topProject.priority].filter(Boolean).join(' · ')}</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    className="cy-hov"
+                    onClick={(e) => { e.stopPropagation(); setView('projects') }}
+                    style={{ flex: 'none', border: '1px solid var(--border)', background: 'var(--elev)', color: 'var(--text)', borderRadius: 9, padding: '8px 13px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+                  >
+                    View projects →
+                  </button>
                 </div>
               )}
               <LayoutGrid
@@ -2551,12 +2606,29 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                           <>
                             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
                               <div style={{ fontWeight: 700, fontSize: 15 }}>Applications sent</div>
-                              <button data-no-layout-dnd onClick={() => router.push('/inquiries')} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>All inquiries →</button>
+                              <button
+                                data-no-layout-dnd
+                                onClick={() => {
+                                  setView('leases')
+                                  setPageViews((pv) => ({ ...pv, leases: 'pipeline' }))
+                                }}
+                                style={{ border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
+                              >
+                                Open pipeline →
+                              </button>
                             </div>
                             {dashApplications.map((i) => {
                               const badge = inquiryStatusBadge(i.status)
                               return (
-                                <div key={i.id} className="cy-hov" onClick={() => router.push('/inquiries')} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
+                                <div
+                                  key={i.id}
+                                  className="cy-hov"
+                                  onClick={() => {
+                                    setView('leases')
+                                    setPageViews((pv) => ({ ...pv, leases: 'pipeline' }))
+                                  }}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}
+                                >
                                   <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--amber)', flex: 'none' }} />
                                   <div style={{ minWidth: 0, flex: 1 }}>
                                     <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{i.name}</div>
@@ -2579,8 +2651,16 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
             </section>
           )}
 
+          {/* ============ LEASING PIPELINE (inquiries) ============ */}
+          {showPipeline && (
+            <LeasingPipelineView
+              inquiries={scoped.inquiries}
+              onChanged={() => router.refresh()}
+            />
+          )}
+
           {/* ============ LEASES TIMELINE ============ */}
-          {view === 'leases' && showDefault && (
+          {showLeaseTimeline && (
             <section>
               {(role === 'Admin' || role === 'Manager') && !hospitableCalendar.connected && (
                 <div
@@ -3082,6 +3162,9 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
             </section>
           )}
 
+          {/* ============ GMAIL INBOX ============ */}
+          {view === 'inbox' && priv && <GmailInboxView />}
+
           {/* ============ MESSAGES ============ */}
           {view === 'messages' && priv && (
             <MessagesView
@@ -3356,27 +3439,35 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
       {/* ============ LEASING KPI LIST POPOUT ============ */}
       {leasingListOpen && (() => {
         const meta: Record<NonNullable<typeof leasingListOpen>, { title: string; sub: string }> = {
-          new_inquiry: { title: 'New inquiries', sub: 'Tenants who submitted a showing request and are awaiting contact.' },
-          viewings: { title: 'Viewings scheduled', sub: 'Inquiries marked contacted — treated as the viewing pipeline until a dedicated schedule exists.' },
-          applications: { title: 'Applications sent', sub: 'Rental applications submitted through public listings.' },
-          signed: { title: 'Leases signed this month', sub: 'Active, upcoming, or expiring leases with a start date in the current month.' },
+          new_inquiry: { title: 'New', sub: 'Fresh leads awaiting first contact.' },
+          viewings: { title: 'Contacted', sub: 'Prospects you have reached out to.' },
+          applications: { title: 'Application sent', sub: 'Prospects who received an application link.' },
+          signed: { title: 'Signed', sub: 'Leads marked signed in the leasing pipeline.' },
           expiring: { title: 'Leases expiring', sub: 'Ending within 90 days with no upcoming renewal on the same property.' },
           listings: { title: 'Listings live', sub: 'Published drafts currently visible on the public site.' },
         }
         const m = meta[leasingListOpen]
         const close = () => setLeasingListOpen(null)
+        const openPipeline = () => {
+          close()
+          setView('leases')
+          setPageViews((pv) => ({ ...pv, leases: 'pipeline' }))
+        }
         const inquiryRows: CanaryInquiry[] =
           leasingListOpen === 'new_inquiry' ? leasingNewInquiries
           : leasingListOpen === 'viewings' ? leasingViewings
           : leasingListOpen === 'applications' ? leasingApplications
+          : leasingListOpen === 'signed' ? leasingSignedPipeline
           : []
         const leaseRows: CanaryLease[] =
-          leasingListOpen === 'signed' ? leasingSignedThisMonth
-          : leasingListOpen === 'expiring' ? leasingExpiring
+          leasingListOpen === 'expiring' ? leasingExpiring
           : []
         const listingRows: CanaryDraft[] = leasingListOpen === 'listings' ? leasingListingsLive : []
         const empty =
-          leasingListOpen === 'new_inquiry' || leasingListOpen === 'viewings' || leasingListOpen === 'applications'
+          leasingListOpen === 'new_inquiry' ||
+          leasingListOpen === 'viewings' ||
+          leasingListOpen === 'applications' ||
+          leasingListOpen === 'signed'
             ? !inquiryRows.length
             : leasingListOpen === 'listings'
               ? !listingRows.length
@@ -3402,7 +3493,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                       key={i.id}
                       type="button"
                       className="cy-hov"
-                      onClick={() => { close(); router.push('/inquiries') }}
+                      onClick={openPipeline}
                       style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 10px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--elev)', cursor: 'pointer', textAlign: 'left', color: 'inherit', width: '100%' }}
                     >
                       <div style={{ minWidth: 0, flex: 1 }}>
@@ -3462,9 +3553,14 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                   <div style={{ color: 'var(--dim)', padding: '18px 8px', textAlign: 'center', fontSize: 13.5 }}>Nothing in this pipeline yet.</div>
                 )}
               </div>
-              {(leasingListOpen === 'new_inquiry' || leasingListOpen === 'viewings' || leasingListOpen === 'applications') && (
+              {(leasingListOpen === 'new_inquiry' ||
+                leasingListOpen === 'viewings' ||
+                leasingListOpen === 'applications' ||
+                leasingListOpen === 'signed') && (
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
-                  <button type="button" className="cy-btn" onClick={() => { close(); router.push('/inquiries') }}>Open inquiries →</button>
+                  <button type="button" className="cy-btn" onClick={openPipeline}>
+                    Open pipeline →
+                  </button>
                 </div>
               )}
             </div>

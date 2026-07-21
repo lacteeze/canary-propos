@@ -205,7 +205,35 @@ export interface CanaryDraft {
 }
 
 export type InquiryType = 'inquiry' | 'application'
-export type InquiryStatus = 'new' | 'contacted' | 'closed'
+export type InquiryStatus =
+  | 'new'
+  | 'contacted'
+  | 'application_sent'
+  | 'signed'
+  | 'closed'
+
+/** Visible leasing pipeline columns (closed is off-board). */
+export const INQUIRY_PIPELINE_STAGES: InquiryStatus[] = [
+  'new',
+  'contacted',
+  'application_sent',
+  'signed',
+]
+
+export const INQUIRY_PIPELINE_LABELS: Record<InquiryStatus, string> = {
+  new: 'New',
+  contacted: 'Contacted',
+  application_sent: 'Application sent',
+  signed: 'Signed',
+  closed: 'Closed',
+}
+
+export interface CanaryInquiryNote {
+  id: string
+  body: string
+  createdAt: string
+  authorName: string
+}
 
 export interface CanaryInquiry {
   id: string
@@ -218,12 +246,25 @@ export interface CanaryInquiry {
   submittedAt: string
   property: string
   moveIn: string
+  /** Visitor message from the public form */
+  note: string
+  /** Org slug for building public apply links */
+  orgSlug: string
+  latestNote: CanaryInquiryNote | null
 }
 
 export function inquiryStatusBadge(status: InquiryStatus): { label: string; color: string } {
   if (status === 'new') return { label: 'NEW', color: 'var(--green)' }
   if (status === 'contacted') return { label: 'CONTACTED', color: 'var(--blue)' }
+  if (status === 'application_sent') return { label: 'APP SENT', color: 'var(--amber)' }
+  if (status === 'signed') return { label: 'SIGNED', color: 'var(--accent)' }
   return { label: 'CLOSED', color: 'var(--dim)' }
+}
+
+export function nextInquiryStage(status: InquiryStatus): InquiryStatus | null {
+  const i = INQUIRY_PIPELINE_STAGES.indexOf(status)
+  if (i < 0 || i >= INQUIRY_PIPELINE_STAGES.length - 1) return null
+  return INQUIRY_PIPELINE_STAGES[i + 1] ?? null
 }
 
 /** Short-term reservation from Hospitable, mapped for the leases timeline. */

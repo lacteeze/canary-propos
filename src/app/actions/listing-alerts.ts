@@ -9,6 +9,7 @@ import { createClient as createClientJs } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { getOrgBySlug } from '@/lib/orgs'
 import { sendPingramEmail } from '@/lib/email/pingram'
+import { PINGRAM_EMAIL_TYPES } from '@/lib/email/pingram-types'
 import { ListingAlertConfirmEmail } from '@/lib/email/templates/ListingAlertConfirmEmail'
 import { ListingAlertNotifyEmail } from '@/lib/email/templates/ListingAlertNotifyEmail'
 
@@ -125,10 +126,10 @@ export async function subscribeListingAlerts(emailInput: string): Promise<Listin
   })
 
   const confirmResult = await sendPingramEmail({
-    type: 'listing_alert_confirm',
+    type: PINGRAM_EMAIL_TYPES.listingAlertConfirm,
     to: email,
     subject: `You're on the list — new listings from ${org.name}`,
-    from: 'Canary Property Management <notifications@canarypm.ca>',
+    from: 'Canary PM <notifications@canarypm.ca>',
     template: React.createElement(ListingAlertConfirmEmail, {
       orgName: org.name,
       subscriberEmail: email,
@@ -149,10 +150,10 @@ export async function subscribeListingAlerts(emailInput: string): Promise<Listin
   const notifyResults = await Promise.all(
     notifyTo.map((to) =>
       sendPingramEmail({
-        type: 'listing_alert_notify',
+        type: PINGRAM_EMAIL_TYPES.listingAlertNotify,
         to,
         subject: `New listing alert signup: ${email}`,
-        from: 'Canary PropOS <notifications@canarypm.ca>',
+        from: 'Canary PM <notifications@canarypm.ca>',
         template: React.createElement(ListingAlertNotifyEmail, {
           subscriberEmail: email,
           orgName: org.name,

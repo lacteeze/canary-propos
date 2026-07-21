@@ -415,6 +415,7 @@ export type Database = {
           phone: string | null
           status: Database["public"]["Enums"]["inquiry_status"]
           type: Database["public"]["Enums"]["inquiry_type"]
+          updated_at: string
         }
         Insert: {
           budget?: number | null
@@ -429,6 +430,7 @@ export type Database = {
           phone?: string | null
           status?: Database["public"]["Enums"]["inquiry_status"]
           type?: Database["public"]["Enums"]["inquiry_type"]
+          updated_at?: string
         }
         Update: {
           budget?: number | null
@@ -443,6 +445,7 @@ export type Database = {
           phone?: string | null
           status?: Database["public"]["Enums"]["inquiry_status"]
           type?: Database["public"]["Enums"]["inquiry_type"]
+          updated_at?: string
         }
         Relationships: [
           {
@@ -454,6 +457,55 @@ export type Database = {
           },
           {
             foreignKeyName: "inquiries_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inquiry_notes: {
+        Row: {
+          author_id: string | null
+          body: string
+          created_at: string
+          id: string
+          inquiry_id: string
+          org_id: string
+        }
+        Insert: {
+          author_id?: string | null
+          body: string
+          created_at?: string
+          id?: string
+          inquiry_id: string
+          org_id: string
+        }
+        Update: {
+          author_id?: string | null
+          body?: string
+          created_at?: string
+          id?: string
+          inquiry_id?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inquiry_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inquiry_notes_inquiry_id_fkey"
+            columns: ["inquiry_id"]
+            isOneToOne: false
+            referencedRelation: "inquiries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inquiry_notes_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -737,6 +789,9 @@ export type Database = {
           created_at: string | null
           gmail_access_token: string | null
           gmail_connected_at: string | null
+          gmail_history_id: string | null
+          gmail_last_sync_at: string | null
+          gmail_last_sync_error: string | null
           gmail_refresh_token: string | null
           gmail_token_expiry: number | null
           id: string
@@ -754,6 +809,9 @@ export type Database = {
           created_at?: string | null
           gmail_access_token?: string | null
           gmail_connected_at?: string | null
+          gmail_history_id?: string | null
+          gmail_last_sync_at?: string | null
+          gmail_last_sync_error?: string | null
           gmail_refresh_token?: string | null
           gmail_token_expiry?: number | null
           id?: string
@@ -771,6 +829,9 @@ export type Database = {
           created_at?: string | null
           gmail_access_token?: string | null
           gmail_connected_at?: string | null
+          gmail_history_id?: string | null
+          gmail_last_sync_at?: string | null
+          gmail_last_sync_error?: string | null
           gmail_refresh_token?: string | null
           gmail_token_expiry?: number | null
           id?: string
@@ -1458,7 +1519,12 @@ export type Database = {
     Enums: {
       chat_thread_type: "property" | "direct"
       checklist_type: "move_in" | "move_out"
-      inquiry_status: "new" | "contacted" | "closed"
+      inquiry_status:
+        | "new"
+        | "contacted"
+        | "application_sent"
+        | "signed"
+        | "closed"
       inquiry_type: "inquiry" | "application"
       listing_status: "draft" | "published" | "unlisted" | "renewal_sent"
       property_type_enum:
@@ -1611,7 +1677,13 @@ export const Constants = {
     Enums: {
       chat_thread_type: ["property", "direct"],
       checklist_type: ["move_in", "move_out"],
-      inquiry_status: ["new", "contacted", "closed"],
+      inquiry_status: [
+        "new",
+        "contacted",
+        "application_sent",
+        "signed",
+        "closed",
+      ],
       inquiry_type: ["inquiry", "application"],
       listing_status: ["draft", "published", "unlisted", "renewal_sent"],
       property_type_enum: [

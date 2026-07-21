@@ -6,6 +6,7 @@ import { createElement } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email/send'
+import { PINGRAM_EMAIL_TYPES } from '@/lib/email/pingram-types'
 import { TenantInviteEmail } from '@/lib/email/templates/TenantInviteEmail'
 import { TeamInviteEmail } from '@/lib/email/templates/TeamInviteEmail'
 
@@ -122,8 +123,10 @@ export async function inviteUser(formData: {
       : 'To be confirmed'
 
     emailResult = await sendEmail({
+      type: PINGRAM_EMAIL_TYPES.tenantInvite,
       to: email,
       subject: `Your tenancy invite from ${orgName}`,
+      from: 'Canary PM <notifications@canarypm.ca>',
       template: createElement(TenantInviteEmail, {
         tenantFirstName: firstName ?? 'there',
         orgName,
@@ -135,8 +138,10 @@ export async function inviteUser(formData: {
     })
   } else {
     emailResult = await sendEmail({
+      type: PINGRAM_EMAIL_TYPES.teamInvite,
       to: email,
       subject: `You've been invited to join ${orgName}`,
+      from: 'Canary PM <notifications@canarypm.ca>',
       template: createElement(TeamInviteEmail, {
         inviteeEmail: email,
         orgName,

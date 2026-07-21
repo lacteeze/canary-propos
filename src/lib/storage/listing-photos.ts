@@ -15,6 +15,8 @@ const SIGNED_TTL_SECONDS = 60 * 60 // 1 hour
 //     card and the hero on the detail page resolve to the identical URL — the
 //     browser reuses the already-downloaded image (near-instant hero).
 const SIGNED_CACHE_TTL_MS = 50 * 60 * 1000 // 50 min (< 1h signed TTL)
+/** Drop cache entries this long before the JWT exp claim. */
+const SIGNED_EXPIRY_SKEW_MS = 60 * 1000
 const signedUrlCache = new Map<string, { url: string; expiresAt: number }>()
 
 type SignedUrlRow = { path: string | null; signedUrl: string | null; error?: string | null }
@@ -32,6 +34,30 @@ type OrgAssetsSigner = {
 
 export function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value)
+}
+
+/** Read JWT `exp` (ms) from a Supabase storage signed URL, or null if unparseable. */
+function signedUrlExpiryMs(url: string): number | null {
+  try {
+    const token = new URL(url).searchParams.get('token')
+    if (!token) return null
+    const payload = token.split('.')[1]
+    if (!payload) return null
+    const padded = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const padLen = (4 - (padded.length % 4)) % 4
+    const json = Buffer.from(padded + '='.repeat(padLen), 'base64').toString('utf8')
+    const exp = (JSON.parse(json) as { exp?: unknown }).exp
+    return typeof exp === 'number' ? exp * 1000 : null
+  } catch {
+    return null
+  }
+}
+
+function cacheExpiryForSignedUrl(url: string, now: number): number {
+  const jwtExp = signedUrlExpiryMs(url)
+  const fromTtl = now + SIGNED_CACHE_TTL_MS
+  if (jwtExp == null) return fromTtl
+  return Math.min(fromTtl, jwtExp - SIGNED_EXPIRY_SKEW_MS)
 }
 
 /**
@@ -56,12 +82,18 @@ export async function signOrgAssetPaths(
   const now = Date.now()
 
   // Serve cached signatures first; only sign the paths we don't already have.
+  // Drop entries past local TTL *or* whose JWT exp has lapsed — Next.js may
+  // replay a cached createSignedUrls response into this Map with a fresh local
+  // TTL, which would otherwise keep serving dead tokens for ~50 minutes.
   const toSign: string[] = []
   for (const p of uniquePaths) {
     const cached = signedUrlCache.get(p)
-    if (cached && cached.expiresAt > now) {
+    const jwtExp = cached ? signedUrlExpiryMs(cached.url) : null
+    const jwtOk = jwtExp == null || jwtExp - SIGNED_EXPIRY_SKEW_MS > now
+    if (cached && cached.expiresAt > now && jwtOk) {
       byPath.set(p, cached.url)
     } else {
+      if (cached) signedUrlCache.delete(p)
       toSign.push(p)
     }
   }
@@ -78,12 +110,16 @@ export async function signOrgAssetPaths(
       console.error(`[${logLabel}]`, error?.message)
       continue
     }
-    const expiresAt = now + SIGNED_CACHE_TTL_MS
     for (const row of data) {
-      if (row.path && row.signedUrl) {
-        byPath.set(row.path, row.signedUrl)
-        signedUrlCache.set(row.path, { url: row.signedUrl, expiresAt })
+      if (!row.path || !row.signedUrl) continue
+      const expiresAt = cacheExpiryForSignedUrl(row.signedUrl, now)
+      // Refuse to cache or return tokens that are already past usable life.
+      if (expiresAt <= now) {
+        console.error(`[${logLabel}] refusing expired signed URL for`, row.path)
+        continue
       }
+      byPath.set(row.path, row.signedUrl)
+      signedUrlCache.set(row.path, { url: row.signedUrl, expiresAt })
     }
   }
 

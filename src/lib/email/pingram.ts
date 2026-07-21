@@ -3,6 +3,7 @@
 import { Pingram } from 'pingram'
 import { render } from '@react-email/components'
 import type { ReactElement } from 'react'
+import { DEFAULT_EMAIL_FROM } from '@/lib/email/brand'
 
 export interface SendPingramEmailOptions {
   /** Pingram notification type (must exist / be allowed in the dashboard). */
@@ -36,7 +37,7 @@ export async function sendPingramEmail({
   to,
   subject,
   template,
-  from = 'Canary PropOS <notifications@canarypm.ca>',
+  from = DEFAULT_EMAIL_FROM,
 }: SendPingramEmailOptions): Promise<SendPingramEmailResult> {
   const apiKey = process.env.PINGRAM_API_KEY
   if (!apiKey) {

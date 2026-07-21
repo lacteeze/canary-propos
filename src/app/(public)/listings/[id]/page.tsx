@@ -18,6 +18,10 @@ import { headers } from 'next/headers'
 import { getListingPhotoPathsForProperty } from '@/lib/storage/property-listing-media'
 import { resolveListingGalleryPhotos } from '@/lib/storage/listing-photos'
 
+/** Signed cover URLs expire (~1h) — must not reuse a cached RSC/fetch payload. */
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+
 interface PageProps {
   params: Promise<{ id: string }>
   searchParams: Promise<{ org?: string }>

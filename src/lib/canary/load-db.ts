@@ -151,8 +151,9 @@ export async function getCaller(): Promise<Caller | 'no-user' | 'no-person'> {
 export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
   const supabase = await createClient()
 
-  const [unitsRes, leasesRes, portfoliosRes, workOrdersRes, peopleRes, listingsRes, inquiriesRes, paymentsRes, expensesRes, mediaRes] =
+  const [orgRes, unitsRes, leasesRes, portfoliosRes, workOrdersRes, peopleRes, listingsRes, inquiriesRes, inquiryNotesRes, paymentsRes, expensesRes, mediaRes] =
     await Promise.all([
+      supabase.from('organizations').select('slug').eq('id', orgId).maybeSingle(),
       supabase
         .from('units')
         .select(
@@ -209,7 +210,7 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
       supabase
         .from('inquiries')
         .select(
-          `id, listing_id, type, name, email, phone, status, created_at, move_in_date,
+          `id, listing_id, type, name, email, phone, status, created_at, move_in_date, note,
            listings!listing_id(
              id,
              units!unit_id(
@@ -220,6 +221,15 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         .eq('org_id', orgId)
         .order('created_at', { ascending: false })
         .limit(200),
+      supabase
+        .from('inquiry_notes')
+        .select(
+          `id, inquiry_id, body, created_at,
+           people!author_id(first_name, last_name)`
+        )
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
+        .limit(500),
       supabase
         .from('payments')
         .select(
@@ -253,16 +263,42 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
   const peopleRows = (peopleRes.data ?? []) as any[]
   const listingRows = (listingsRes.data ?? []) as any[]
   const inquiryRows = (inquiriesRes.data ?? []) as any[]
+  const inquiryNoteRows = (inquiryNotesRes.data ?? []) as any[]
   const paymentRows = (paymentsRes.data ?? []) as any[]
   const expenseRows = (expensesRes.data ?? []) as any[]
   const mediaRows = (mediaRes.data ?? []) as any[]
+  const orgSlug = (orgRes.data as { slug?: string } | null)?.slug ?? 'canary'
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
   if (listingsRes.error) {
     console.error('[loadCanaryDb:listings]', listingsRes.error.message)
   }
+  if (inquiriesRes.error) {
+    console.error('[loadCanaryDb:inquiries]', inquiriesRes.error.message)
+  }
+  if (inquiryNotesRes.error) {
+    console.error('[loadCanaryDb:inquiry_notes]', inquiryNotesRes.error.message)
+  }
   if (mediaRes.error) {
     console.error('[loadCanaryDb:property_media]', mediaRes.error.message)
+  }
+
+  const latestNoteByInquiry = new Map<
+    string,
+    { id: string; body: string; createdAt: string; authorName: string }
+  >()
+  for (const n of inquiryNoteRows) {
+    if (latestNoteByInquiry.has(n.inquiry_id)) continue
+    const author = n.people
+    const authorName = author
+      ? [author.first_name, author.last_name].filter(Boolean).join(' ') || 'Staff'
+      : 'Staff'
+    latestNoteByInquiry.set(n.inquiry_id, {
+      id: n.id,
+      body: n.body,
+      createdAt: String(n.created_at),
+      authorName,
+    })
   }
 
   const listingPhotosByProperty = new Map<string, string[]>()
@@ -505,6 +541,9 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
       submittedAt: String(i.created_at),
       property: fullAddress(i.listings.units.properties.street_address, i.listings.units.properties.city),
       moveIn: i.move_in_date ?? '',
+      note: i.note ?? '',
+      orgSlug,
+      latestNote: latestNoteByInquiry.get(i.id) ?? null,
     }))
 
   const payments: CanaryPayment[] = [

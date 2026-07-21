@@ -137,7 +137,7 @@ export default async function DashboardPage() {
 
         {/* New inquiries callout card (D-12, LIST-07) */}
         <Link
-          href="/inquiries"
+          href="/app"
           className={`flex items-center gap-4 rounded-xl border p-4 transition-colors ${
             (newInquiryCount ?? 0) > 0
               ? 'border-amber-200 bg-amber-50 hover:bg-amber-100'

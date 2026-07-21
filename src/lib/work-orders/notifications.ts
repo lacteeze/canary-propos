@@ -5,108 +5,12 @@
 
 import { createElement } from 'react'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { DEFAULT_EMAIL_FROM } from '@/lib/email/brand'
 import { sendEmail } from '@/lib/email/send'
+import { PINGRAM_EMAIL_TYPES } from '@/lib/email/pingram-types'
+import { OwnerApprovalEmail } from '@/lib/email/templates/OwnerApprovalEmail'
+import { VendorAssignmentEmail } from '@/lib/email/templates/VendorAssignmentEmail'
 import { sendVendorJobSMS } from '@/lib/work-orders/sms'
-
-// --- Email template (inline — no JSX needed for simple HTML) ---
-function renderPendingApprovalEmail(opts: {
-  propertyAddress: string
-  workOrderTitle: string
-  estimatedCost: number
-  approveUrl: string
-  declineUrl: string
-}): React.ReactElement {
-  const { propertyAddress, workOrderTitle, estimatedCost, approveUrl, declineUrl } = opts
-
-  // Build a minimal React element tree compatible with @react-email/components render()
-  return createElement(
-    'html',
-    null,
-    createElement(
-      'body',
-      { style: { fontFamily: 'Arial, sans-serif', maxWidth: '600px', margin: '0 auto', padding: '20px' } },
-      createElement('h2', { style: { color: '#1a1a1a' } }, 'Maintenance Approval Required'),
-      createElement(
-        'p',
-        null,
-        'A maintenance work order for one of your properties requires your approval before work can begin.'
-      ),
-      createElement(
-        'table',
-        { style: { borderCollapse: 'collapse', width: '100%', marginBottom: '24px' } },
-        createElement(
-          'tbody',
-          null,
-          createElement(
-            'tr',
-            null,
-            createElement('td', { style: { padding: '8px 0', fontWeight: 'bold', width: '160px' } }, 'Property:'),
-            createElement('td', { style: { padding: '8px 0' } }, propertyAddress)
-          ),
-          createElement(
-            'tr',
-            null,
-            createElement('td', { style: { padding: '8px 0', fontWeight: 'bold' } }, 'Work Order:'),
-            createElement('td', { style: { padding: '8px 0' } }, workOrderTitle)
-          ),
-          createElement(
-            'tr',
-            null,
-            createElement('td', { style: { padding: '8px 0', fontWeight: 'bold' } }, 'Estimated Cost:'),
-            createElement('td', { style: { padding: '8px 0' } }, `$${estimatedCost.toFixed(2)}`)
-          )
-        )
-      ),
-      createElement(
-        'p',
-        { style: { marginBottom: '16px' } },
-        'Please review and respond below:'
-      ),
-      createElement(
-        'div',
-        { style: { display: 'flex', gap: '12px' } },
-        createElement(
-          'a',
-          {
-            href: approveUrl,
-            style: {
-              display: 'inline-block',
-              padding: '12px 24px',
-              backgroundColor: '#16a34a',
-              color: '#ffffff',
-              textDecoration: 'none',
-              borderRadius: '6px',
-              fontWeight: 'bold',
-              marginRight: '12px',
-            },
-          },
-          'Approve Work Order'
-        ),
-        createElement(
-          'a',
-          {
-            href: declineUrl,
-            style: {
-              display: 'inline-block',
-              padding: '12px 24px',
-              backgroundColor: '#dc2626',
-              color: '#ffffff',
-              textDecoration: 'none',
-              borderRadius: '6px',
-              fontWeight: 'bold',
-            },
-          },
-          'Decline Work Order'
-        )
-      ),
-      createElement(
-        'p',
-        { style: { marginTop: '32px', fontSize: '12px', color: '#6b7280' } },
-        'This approval request was sent by Canary PropOS. If you have questions, contact your property manager.'
-      )
-    )
-  ) as React.ReactElement
-}
 
 /**
  * notifyOwnerPendingApproval — sends an email notification to the property owner
@@ -132,10 +36,10 @@ export async function notifyOwnerPendingApproval(
 ): Promise<void> {
   const adminSupabase = createAdminClient()
 
-  // Look up the work order title
+  // Look up the work order title + description
   const { data: wo } = await adminSupabase
     .from('work_orders')
-    .select('title')
+    .select('title, description')
     .eq('id', workOrderId)
     .eq('org_id', orgId)
     .single()
@@ -163,23 +67,25 @@ export async function notifyOwnerPendingApproval(
     : `Property ${propertyId}`
 
   const workOrderTitle = wo?.title ?? 'Maintenance Work Order'
+  const workOrderDescription = wo?.description?.trim() || 'No description provided.'
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.canarypm.ca'
   const approveUrl = `${baseUrl}/owner/approve/${approveToken}`
   const declineUrl = `${baseUrl}/owner/decline/${declineToken}`
 
-  const template = renderPendingApprovalEmail({
-    propertyAddress,
-    workOrderTitle,
-    estimatedCost,
-    approveUrl,
-    declineUrl,
-  })
-
   const result = await sendEmail({
+    type: PINGRAM_EMAIL_TYPES.workOrderOwnerApproval,
     to: ownerEmail,
     subject: `Approval Required: ${workOrderTitle} — Est. $${estimatedCost.toFixed(2)}`,
-    template,
+    from: DEFAULT_EMAIL_FROM,
+    template: createElement(OwnerApprovalEmail, {
+      propertyAddress,
+      workOrderTitle,
+      workOrderDescription,
+      estimatedCost,
+      approveUrl,
+      declineUrl,
+    }),
   })
 
   if (!result.success) {
@@ -195,88 +101,8 @@ export async function notifyOwnerPendingApproval(
   // target_user_id = owner's user_id, and a link back to /owner/approve/[token]
 }
 
-// ---------------------------------------------------------------------------
-// Vendor assignment notifications (Plan 05-04)
-// ---------------------------------------------------------------------------
-
-function renderVendorAssignmentEmail(opts: {
-  propertyAddress: string
-  workOrderTitle: string
-  workOrderDescription: string
-  noLoginLink: string
-}): React.ReactElement {
-  const { propertyAddress, workOrderTitle, workOrderDescription, noLoginLink } = opts
-
-  return createElement(
-    'html',
-    null,
-    createElement(
-      'body',
-      { style: { fontFamily: 'Arial, sans-serif', maxWidth: '600px', margin: '0 auto', padding: '20px' } },
-      createElement('h2', { style: { color: '#1a1a1a' } }, 'New Work Order — Canary Property Management'),
-      createElement(
-        'p',
-        null,
-        'You have been assigned a new maintenance work order. Please review the details below and update the status when work begins and when completed.'
-      ),
-      createElement(
-        'table',
-        { style: { borderCollapse: 'collapse', width: '100%', marginBottom: '24px' } },
-        createElement(
-          'tbody',
-          null,
-          createElement(
-            'tr',
-            null,
-            createElement('td', { style: { padding: '8px 0', fontWeight: 'bold', width: '140px' } }, 'Property:'),
-            createElement('td', { style: { padding: '8px 0' } }, propertyAddress)
-          ),
-          createElement(
-            'tr',
-            null,
-            createElement('td', { style: { padding: '8px 0', fontWeight: 'bold' } }, 'Job Title:'),
-            createElement('td', { style: { padding: '8px 0' } }, workOrderTitle)
-          ),
-          createElement(
-            'tr',
-            null,
-            createElement('td', { style: { padding: '8px 0', fontWeight: 'bold', verticalAlign: 'top' } }, 'Description:'),
-            createElement('td', { style: { padding: '8px 0', whiteSpace: 'pre-wrap' } }, workOrderDescription)
-          )
-        )
-      ),
-      createElement(
-        'p',
-        { style: { marginBottom: '16px' } },
-        'Use the link below to view full job details and update your status:'
-      ),
-      createElement(
-        'a',
-        {
-          href: noLoginLink,
-          style: {
-            display: 'inline-block',
-            padding: '12px 24px',
-            backgroundColor: '#1d4ed8',
-            color: '#ffffff',
-            textDecoration: 'none',
-            borderRadius: '6px',
-            fontWeight: 'bold',
-          },
-        },
-        'View Job Details'
-      ),
-      createElement(
-        'p',
-        { style: { marginTop: '32px', fontSize: '12px', color: '#6b7280' } },
-        'This notification was sent by Canary PropOS. If you have questions, contact Canary Property Management.'
-      )
-    )
-  ) as React.ReactElement
-}
-
 /**
- * sendVendorAssignmentNotifications — fires SMS (if phone exists) + Resend email to vendor
+ * sendVendorAssignmentNotifications — fires SMS (if phone exists) + Pingram email to vendor
  * when a work order is assigned (status → 'assigned').
  *
  * Both notifications are fire-and-forget: failures are logged but never thrown.
@@ -348,17 +174,17 @@ export async function sendVendorAssignmentNotifications(
     return
   }
 
-  const template = renderVendorAssignmentEmail({
-    propertyAddress,
-    workOrderTitle,
-    workOrderDescription,
-    noLoginLink,
-  })
-
   const result = await sendEmail({
+    type: PINGRAM_EMAIL_TYPES.workOrderVendorAssignment,
     to: vendor.email,
     subject: `New Work Order: ${workOrderTitle} — ${propertyAddress}`,
-    template,
+    from: DEFAULT_EMAIL_FROM,
+    template: createElement(VendorAssignmentEmail, {
+      propertyAddress,
+      workOrderTitle,
+      workOrderDescription,
+      noLoginLink,
+    }),
   })
 
   if (!result.success) {

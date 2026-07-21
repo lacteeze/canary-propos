@@ -37,15 +37,13 @@
 ## 3. Magic Link / Custom SMTP (FOUND-04)
 
 - [ ] Dashboard → Authentication → SMTP Settings
-- [ ] Enable custom SMTP
-- [ ] Host: `smtp.resend.com`
-- [ ] Port: `465` (SSL) or `587` (TLS)
-- [ ] Username: `resend`
-- [ ] Password: your `RESEND_API_KEY` (from Resend dashboard)
-- [ ] Sender email: `noreply@canarypm.ca` (must be verified domain in Resend)
+- [ ] Enable custom SMTP with a provider that supports SMTP relay
+- [ ] Sender email: `noreply@canarypm.ca` (must be verified with that SMTP provider)
 - [ ] Sender name: `Canary PropOS`
 
-> Magic links use Supabase's built-in email flow relayed through Resend as SMTP.
+> App transactional email (inquiries, invites, work orders, listing alerts) uses **Pingram**
+> via `PINGRAM_API_KEY` — not SMTP. Supabase Auth magic links / password reset still need
+> a separate SMTP provider configured here (Pingram is API-based, not Supabase SMTP).
 
 ---
 
@@ -89,7 +87,7 @@
 
 - [ ] Dashboard → Authentication → Email Templates
 - [ ] Review the magic link email template — Supabase default is functional but plain
-- [ ] Phase 5 (Invites) will override with react-email/Resend templates; leave defaults for now
+- [ ] App invites use react-email + Pingram; leave Supabase Auth templates for magic links
 
 ---
 
@@ -99,7 +97,7 @@
 |---------|--------|-------|
 | Google OAuth | Pending | Requires Google Cloud Console credentials |
 | Apple OAuth | Pending | Requires Apple Developer account + .p8 key |
-| Magic link / SMTP | Pending | Requires Resend API key + verified `canarypm.ca` domain |
+| Magic link / SMTP | Pending | Requires SMTP provider + verified `canarypm.ca` sender (separate from Pingram app email) |
 | Session duration (7 days) | Pending | Configure JWT expiry in Supabase dashboard |
 | Realtime private-only | **Required before Phase 2** | Enable immediately — security gate |
 | Redirect URLs | Pending | Add app.canarypm.ca to allowed list |

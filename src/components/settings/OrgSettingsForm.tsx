@@ -1,5 +1,5 @@
 // src/components/settings/OrgSettingsForm.tsx
-// Org settings form — name, logo (stub), province (UI-SPEC §5)
+// Org settings form — name, logo (stub), province — Canary shell styling
 'use client'
 
 import { useState, useTransition } from 'react'
@@ -37,102 +37,89 @@ export function OrgSettingsForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
-      {/* Section: Organization name */}
-      <section>
-        <h2 className="mb-4 text-base font-semibold text-stone-900">Organization name</h2>
-        <div className="mb-4">
-          <label htmlFor="settings-name" className="mb-1 block text-sm font-medium text-stone-700">
-            Name
-          </label>
-          <input
-            id="settings-name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            minLength={2}
-            maxLength={80}
-            placeholder="e.g. Canary Property Management"
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
-          />
-        </div>
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={isPending}
-            className="inline-flex min-h-11 items-center justify-center rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
-          >
-            {isPending ? 'Saving...' : 'Save changes'}
+    <form onSubmit={handleSubmit} className="cy-settings-stack">
+      <section className="cy-section-card cy-settings-card">
+        <h2 className="cy-section-title">Organization name</h2>
+        <label htmlFor="settings-name" className="cy-label">
+          Name
+        </label>
+        <input
+          id="settings-name"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+          minLength={2}
+          maxLength={80}
+          placeholder="e.g. Canary Property Management"
+          className="cy-input"
+        />
+        <div className="cy-settings-actions">
+          <button type="submit" disabled={isPending} className="cy-btn cy-btn--active">
+            {isPending ? 'Saving…' : 'Save changes'}
           </button>
         </div>
       </section>
 
-      {/* Section: Logo (stub — upload wired in future plan) */}
-      <section>
-        <h2 className="mb-4 text-base font-semibold text-stone-900">Logo</h2>
-        <div className="mb-4 flex items-center gap-4">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-dashed border-stone-300 bg-stone-50 text-stone-400">
-            <span className="text-xs text-center leading-tight px-1">Upload logo</span>
+      <section className="cy-section-card cy-settings-card">
+        <h2 className="cy-section-title">Logo</h2>
+        <div className="cy-settings-logo-row">
+          <div className="cy-settings-logo-stub" aria-hidden>
+            Upload logo
           </div>
-          <p className="text-sm text-stone-500">
-            Logo upload will be available soon. Your logo appears on tenant portals and email communications.
+          <p className="cy-settings-help">
+            Logo upload will be available soon. Your logo appears on tenant portals and email
+            communications.
           </p>
         </div>
       </section>
 
-      {/* Section: Province */}
-      <section>
-        <h2 className="mb-4 text-base font-semibold text-stone-900">Province or Territory</h2>
-        <div className="mb-4">
-          <label htmlFor="settings-province" className="mb-1 block text-sm font-medium text-stone-700">
-            Where do you operate?
-          </label>
-          <select
-            id="settings-province"
-            value={province}
-            onChange={(e) => setProvince(e.target.value)}
-            required
-            className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
-          >
-            <option value="" disabled>Select province or territory</option>
-            {CANADIAN_PROVINCES.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={isPending}
-            className="inline-flex min-h-11 items-center justify-center rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
-          >
-            {isPending ? 'Saving...' : 'Save changes'}
+      <section className="cy-section-card cy-settings-card">
+        <h2 className="cy-section-title">Province or Territory</h2>
+        <label htmlFor="settings-province" className="cy-label">
+          Where do you operate?
+        </label>
+        <select
+          id="settings-province"
+          value={province}
+          onChange={(e) => setProvince(e.target.value)}
+          required
+          className="cy-input"
+        >
+          <option value="" disabled>
+            Select province or territory
+          </option>
+          {CANADIAN_PROVINCES.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        <div className="cy-settings-actions">
+          <button type="submit" disabled={isPending} className="cy-btn cy-btn--active">
+            {isPending ? 'Saving…' : 'Save changes'}
           </button>
         </div>
       </section>
 
-      {/* Section: Branding color — Coming soon (UI-SPEC §5) */}
-      <section>
-        <h2 className="mb-4 text-base font-semibold text-stone-900">Branding color</h2>
-        <div className="mb-4">
-          <label htmlFor="settings-brand-color" className="mb-1 block text-sm font-medium text-stone-400">
-            Brand color <span className="ml-1 rounded bg-stone-100 px-1.5 py-0.5 text-xs text-stone-400">Coming soon</span>
-          </label>
-          <input
-            id="settings-brand-color"
-            type="text"
-            disabled
-            placeholder="#D97706"
-            className="w-full cursor-not-allowed rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-400"
-          />
-        </div>
+      <section className="cy-section-card cy-settings-card">
+        <h2 className="cy-section-title">
+          Branding color <span className="cy-settings-soon">Coming soon</span>
+        </h2>
+        <label htmlFor="settings-brand-color" className="cy-label">
+          Brand color
+        </label>
+        <input
+          id="settings-brand-color"
+          type="text"
+          disabled
+          placeholder="#D97706"
+          className="cy-input"
+        />
       </section>
 
       {error && (
-        <p className="text-sm text-red-600" role="alert">
+        <p className="cy-settings-error" role="alert">
           {error}
         </p>
       )}

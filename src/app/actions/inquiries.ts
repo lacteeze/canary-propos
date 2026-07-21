@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { createClient as createClientJs } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { sendEmail } from '@/lib/email/send'
+import { PINGRAM_EMAIL_TYPES } from '@/lib/email/pingram-types'
 import { InquiryNotificationEmail } from '@/lib/email/templates/InquiryNotificationEmail'
 import React from 'react'
 import { createClient } from '@/lib/supabase/server'
@@ -84,10 +85,11 @@ async function sendManagerNotification(params: {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.canarypm.ca'
   const typeLabel = params.type === 'inquiry' ? 'showing request' : 'application'
 
-  await sendEmail({
+  const result = await sendEmail({
+    type: PINGRAM_EMAIL_TYPES.inquiryNotification,
     to: managerEmail,
     subject: `New ${typeLabel}: ${params.listingTitle}`,
-    from: 'Canary PropOS <notifications@canarypm.ca>',
+    from: 'Canary PM <notifications@canarypm.ca>',
     template: React.createElement(InquiryNotificationEmail, {
       visitorName: params.visitorName,
       visitorEmail: params.visitorEmail,
@@ -98,9 +100,12 @@ async function sendManagerNotification(params: {
       moveInDate: params.moveInDate,
       budget: params.budget,
       note: params.note,
-      dashboardUrl: `${appUrl}/dashboard`,
+      dashboardUrl: `${appUrl}/app`,
     }),
   })
+  if (!result.success) {
+    console.warn('[inquiries] manager notification failed:', result.error)
+  }
 }
 
 // --- Shared: validate org_id matches the listing (T-03-13 — cross-org injection prevention) ---
@@ -184,14 +189,22 @@ const applicationSchema = z.object({
 
 // --- updateInquiryStatus (authenticated — manager only, T-03-17) ---
 
+const PIPELINE_STATUSES = [
+  'new',
+  'contacted',
+  'application_sent',
+  'signed',
+  'closed',
+] as const
+
 const updateStatusSchema = z.object({
   id: z.string().uuid('Invalid inquiry ID'),
-  status: z.enum(['new', 'contacted', 'closed']),
+  status: z.enum(PIPELINE_STATUSES),
 })
 
 export async function updateInquiryStatus(
   id: string,
-  status: 'new' | 'contacted' | 'closed'
+  status: (typeof PIPELINE_STATUSES)[number]
 ): Promise<{ error?: string }> {
   const parsed = updateStatusSchema.safeParse({ id, status })
   if (!parsed.success) {
@@ -219,7 +232,10 @@ export async function updateInquiryStatus(
 
   const { error: updateError } = await supabase
     .from('inquiries')
-    .update({ status: parsed.data.status })
+    .update({
+      status: parsed.data.status,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', parsed.data.id)
     .eq('org_id', person.org_id) // T-03-17: guard by org_id
 
@@ -228,9 +244,107 @@ export async function updateInquiryStatus(
     return { error: 'Failed to update status. Please try again.' }
   }
 
+  revalidatePath('/app')
   revalidatePath('/inquiries')
   revalidatePath('/dashboard')
   return {}
+}
+
+export async function addInquiryNote(
+  inquiryId: string,
+  body: string
+): Promise<{ error?: string; noteId?: string }> {
+  const text = body.trim()
+  if (!text) return { error: 'Note cannot be empty.' }
+  if (text.length > 2000) return { error: 'Note is too long.' }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data: person } = await supabase
+    .from('people')
+    .select('id, org_id, role')
+    .eq('user_id', user.id)
+    .eq('active', true)
+    .single()
+
+  if (!person?.org_id) return { error: 'Not authorized' }
+  if (
+    !person.role?.includes('manager') &&
+    !person.role?.includes('admin') &&
+    !person.role?.includes('employee')
+  ) {
+    return { error: 'Not authorized' }
+  }
+
+  const { data: inquiry } = await supabase
+    .from('inquiries')
+    .select('id')
+    .eq('id', inquiryId)
+    .eq('org_id', person.org_id)
+    .maybeSingle()
+
+  if (!inquiry) return { error: 'Inquiry not found.' }
+
+  const { data: inserted, error } = await supabase
+    .from('inquiry_notes')
+    .insert({
+      org_id: person.org_id,
+      inquiry_id: inquiryId,
+      author_id: person.id,
+      body: text,
+    })
+    .select('id')
+    .single()
+
+  if (error) {
+    console.error('[addInquiryNote]', error)
+    return { error: 'Failed to save note.' }
+  }
+
+  revalidatePath('/app')
+  return { noteId: inserted?.id }
+}
+
+export async function listInquiryNotes(
+  inquiryId: string
+): Promise<Array<{ id: string; body: string; createdAt: string; authorName: string }>> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data: person } = await supabase
+    .from('people')
+    .select('org_id')
+    .eq('user_id', user.id)
+    .eq('active', true)
+    .single()
+  if (!person?.org_id) return []
+
+  const { data } = await supabase
+    .from('inquiry_notes')
+    .select('id, body, created_at, people!author_id(first_name, last_name)')
+    .eq('org_id', person.org_id)
+    .eq('inquiry_id', inquiryId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  return (data ?? []).map((n) => {
+    const author = n.people
+    return {
+      id: n.id,
+      body: n.body,
+      createdAt: String(n.created_at),
+      authorName: author
+        ? [author.first_name, author.last_name].filter(Boolean).join(' ') || 'Staff'
+        : 'Staff',
+    }
+  })
 }
 
 // --- submitInquiry ---

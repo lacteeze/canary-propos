@@ -1,4 +1,5 @@
 import { deriveTermTypeFromHighlights } from '@/lib/landing/listing-term'
+import { listingPublicHref } from '@/lib/listings/listing-href'
 import type {
   BrowseFilters,
   BrowseListing,
@@ -80,6 +81,7 @@ function termDot(termType: BrowseListing['termType']): string {
 
 export type ListingRow = {
   id: string
+  slug?: string | null
   listing_title: string
   listing_description: string | null
   display_rent: number | null
@@ -131,7 +133,7 @@ export function mapListingRow(
 
   return {
     id: listing.id,
-    href: `/listings/${listing.id}${orgQuery}`,
+    href: listingPublicHref({ id: listing.id, slug: listing.slug }, orgQuery),
     shortAddress: shortAddress(property?.street_address ?? listing.listing_title),
     city: property?.city ?? "St. John's",
     province: property?.province ?? 'NL',

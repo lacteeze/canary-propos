@@ -3,6 +3,46 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { allocateUniqueListingSlug } from '@/lib/listings/slugify'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+async function streetAddressForUnit(
+  supabase: SupabaseClient,
+  unitId: string,
+  orgId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('units')
+    .select('id, properties!property_id(street_address)')
+    .eq('id', unitId)
+    .eq('org_id', orgId)
+    .single()
+  if (!data) return null
+  const prop = data.properties as { street_address?: string } | { street_address?: string }[] | null
+  const row = Array.isArray(prop) ? prop[0] : prop
+  return row?.street_address ?? null
+}
+
+async function slugForPublish(opts: {
+  supabase: SupabaseClient
+  orgId: string
+  unitId: string
+  excludeListingId?: string
+  existingSlug?: string | null
+  unitChanged?: boolean
+}): Promise<string | null> {
+  if (opts.existingSlug && !opts.unitChanged) {
+    return opts.existingSlug
+  }
+  const street = await streetAddressForUnit(opts.supabase, opts.unitId, opts.orgId)
+  if (!street) return opts.existingSlug ?? null
+  return allocateUniqueListingSlug({
+    supabase: opts.supabase,
+    orgId: opts.orgId,
+    streetAddress: street,
+    excludeListingId: opts.excludeListingId,
+  })
+}
 
 // --- Types ---
 export type ActionResult =
@@ -76,6 +116,15 @@ export async function createListing(data: {
     return { success: false, error: 'Unit not found or does not belong to your organization.' }
   }
 
+  let slug: string | null = null
+  if (parsed.data.status === 'published') {
+    slug = await slugForPublish({
+      supabase: ctx.supabase,
+      orgId: ctx.person.org_id,
+      unitId: parsed.data.unit_id,
+    })
+  }
+
   // T-03-07: org_id comes from authenticated user, never from form data
   const { error } = await ctx.supabase.from('listings').insert({
     org_id: ctx.person.org_id,
@@ -86,6 +135,7 @@ export async function createListing(data: {
     display_rent: parsed.data.display_rent ?? null,
     available_from: parsed.data.available_from ?? null,
     status: parsed.data.status,
+    slug,
   })
 
   if (error) {
@@ -126,7 +176,7 @@ export async function updateListing(
   // T-03-08: org_id guard on update
   const { data: existing, error: fetchError } = await ctx.supabase
     .from('listings')
-    .select('id')
+    .select('id, slug, unit_id')
     .eq('id', id)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -147,18 +197,33 @@ export async function updateListing(
     return { success: false, error: 'Unit not found or does not belong to your organization.' }
   }
 
+  const unitChanged = existing.unit_id !== parsed.data.unit_id
+  const updatePayload: Record<string, unknown> = {
+    unit_id: parsed.data.unit_id,
+    listing_title: parsed.data.listing_title,
+    listing_description: parsed.data.listing_description ?? null,
+    highlights: parsed.data.highlights.length > 0 ? parsed.data.highlights : null,
+    display_rent: parsed.data.display_rent ?? null,
+    available_from: parsed.data.available_from ?? null,
+    status: parsed.data.status,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (parsed.data.status === 'published') {
+    const slug = await slugForPublish({
+      supabase: ctx.supabase,
+      orgId: ctx.person.org_id,
+      unitId: parsed.data.unit_id,
+      excludeListingId: id,
+      existingSlug: existing.slug,
+      unitChanged: unitChanged || !existing.slug,
+    })
+    if (slug) updatePayload.slug = slug
+  }
+
   const { error } = await ctx.supabase
     .from('listings')
-    .update({
-      unit_id: parsed.data.unit_id,
-      listing_title: parsed.data.listing_title,
-      listing_description: parsed.data.listing_description ?? null,
-      highlights: parsed.data.highlights.length > 0 ? parsed.data.highlights : null,
-      display_rent: parsed.data.display_rent ?? null,
-      available_from: parsed.data.available_from ?? null,
-      status: parsed.data.status,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq('id', id)
     .eq('org_id', ctx.person.org_id)
 
@@ -189,13 +254,36 @@ export async function toggleListingStatus(
     return { success: false, error: 'Invalid status.' }
   }
 
+  const { data: existing, error: fetchError } = await ctx.supabase
+    .from('listings')
+    .select('id, slug, unit_id')
+    .eq('id', id)
+    .eq('org_id', ctx.person.org_id)
+    .single()
+
+  if (fetchError || !existing) {
+    return { success: false, error: 'Listing not found.' }
+  }
+
+  const updatePayload: Record<string, unknown> = {
+    status: parsedStatus.data,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (parsedStatus.data === 'published' && !existing.slug) {
+    const slug = await slugForPublish({
+      supabase: ctx.supabase,
+      orgId: ctx.person.org_id,
+      unitId: existing.unit_id,
+      excludeListingId: id,
+    })
+    if (slug) updatePayload.slug = slug
+  }
+
   // T-03-08: org_id guard
   const { error } = await ctx.supabase
     .from('listings')
-    .update({
-      status: parsedStatus.data,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq('id', id)
     .eq('org_id', ctx.person.org_id)
 

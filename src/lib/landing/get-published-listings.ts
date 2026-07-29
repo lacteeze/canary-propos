@@ -20,7 +20,7 @@ export async function getPublishedListings(
   const { data: listings } = await supabase
     .from('listings')
     .select(
-      `id, listing_title, listing_description, display_rent, highlights, available_from, status, created_at,
+      `id, slug, listing_title, listing_description, display_rent, highlights, available_from, status, created_at,
        units!unit_id(id, bedrooms, bathrooms, asking_rent, amenities,
          properties!property_id(id, street_address, city, province, photo_paths))`
     )

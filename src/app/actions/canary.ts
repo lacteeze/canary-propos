@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { normalizeLeaseTermType, validateLeaseDates } from '@/lib/canary/lease-term'
 import type { LeaseTermType } from '@/lib/canary/lease-term'
+import { allocateUniqueListingSlug } from '@/lib/listings/slugify'
 
 type ActionResult = { success: true; id?: string } | { success: false; error: string }
 
@@ -86,7 +87,7 @@ export async function saveDraftListing(input: {
     descriptionParts.push('Utilities included.')
   }
 
-  const record = {
+  const record: Record<string, unknown> = {
     org_id: ctx.person.org_id,
     unit_id: d.unitId,
     listing_title: title,
@@ -95,6 +96,33 @@ export async function saveDraftListing(input: {
     available_from: d.start || null,
     status: d.status,
     updated_at: new Date().toISOString(),
+  }
+
+  if (d.status === 'published') {
+    let existingSlug: string | null = null
+    let existingUnitId: string | null = null
+    if (d.id) {
+      const { data: existing } = await ctx.supabase
+        .from('listings')
+        .select('slug, unit_id')
+        .eq('id', d.id)
+        .eq('org_id', ctx.person.org_id)
+        .single()
+      existingSlug = existing?.slug ?? null
+      existingUnitId = existing?.unit_id ?? null
+    }
+    const unitChanged = existingUnitId != null && existingUnitId !== d.unitId
+    if (existingSlug && !unitChanged) {
+      record.slug = existingSlug
+    } else {
+      const street = (prop?.street_address as string | undefined) ?? title
+      record.slug = await allocateUniqueListingSlug({
+        supabase: ctx.supabase,
+        orgId: ctx.person.org_id,
+        streetAddress: street,
+        excludeListingId: d.id ?? undefined,
+      })
+    }
   }
 
   if (d.id) {

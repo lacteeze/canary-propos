@@ -4,6 +4,7 @@ import type { LandingListing } from './content'
 import { deriveTermTypeFromHighlights } from './listing-term'
 import { getListingPhotoPathsByPropertyIds } from '@/lib/storage/property-listing-media'
 import { signListingPhotoPaths } from '@/lib/storage/listing-photos'
+import { listingPublicHref } from '@/lib/listings/listing-href'
 
 function formatCAD(amount: number): string {
   return new Intl.NumberFormat('en-CA', {
@@ -28,7 +29,7 @@ export async function getFeaturedListings(
   const { data: listings } = await supabase
     .from('listings')
     .select(
-      `id, listing_title, display_rent, highlights, available_from, status,
+      `id, slug, listing_title, display_rent, highlights, available_from, status,
        units!unit_id(id, bedrooms, bathrooms, asking_rent, amenities,
          properties!property_id(id, street_address, city, province, photo_paths))`
     )
@@ -86,7 +87,7 @@ export async function getFeaturedListings(
       extra: petFriendly ? '🐾 pet friendly' : (property?.city ?? ''),
       termType: deriveTermTypeFromHighlights(listing.highlights),
       photo: signedCovers[index] || null,
-      href: `/listings/${listing.id}${orgQuery}`,
+      href: listingPublicHref({ id: listing.id, slug: listing.slug }, orgQuery),
     }
   })
 }

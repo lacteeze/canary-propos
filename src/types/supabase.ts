@@ -737,6 +737,7 @@ export type Database = {
           listing_description: string | null
           listing_title: string
           org_id: string
+          slug: string | null
           status: Database["public"]["Enums"]["listing_status"]
           unit_id: string
           updated_at: string
@@ -750,6 +751,7 @@ export type Database = {
           listing_description?: string | null
           listing_title: string
           org_id: string
+          slug?: string | null
           status?: Database["public"]["Enums"]["listing_status"]
           unit_id: string
           updated_at?: string
@@ -763,6 +765,7 @@ export type Database = {
           listing_description?: string | null
           listing_title?: string
           org_id?: string
+          slug?: string | null
           status?: Database["public"]["Enums"]["listing_status"]
           unit_id?: string
           updated_at?: string

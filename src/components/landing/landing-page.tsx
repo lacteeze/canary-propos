@@ -43,10 +43,12 @@ function matchListings(query: string, listings: BrowseListing[]) {
   const bedM = q.match(/(\d+)\s*(?:\+\s*)?(?:bedrooms?|bed|br|chambres?|ch\.?)\b/)
   const priceM = q.match(/under\s*\$?\s*([\d,]+)/) || q.match(/\$\s*([\d,]+)/)
   const wantsPets = /\bpet|dog|cat|animaux\b/.test(q)
+  const wantsGarage = /\bgarage\b/i.test(q)
   const free = q
     .replace(/(\d+)\s*(?:\+\s*)?(?:bedrooms?|bed|br|chambres?|ch\.?)\b/g, '')
     .replace(/under\s*\$?[\d,]+/g, '')
     .replace(/\b(pet|dog|cat|animaux)s?\s*(friendly|acceptés?)?\b/g, '')
+    .replace(/\bgarage\b/gi, '')
     .replace(/\b(properties|property|homes?|houses?|apartments?|maisons?|in|st\.?\s*john'?s|nl|for|rent|the|a|with|sous)\b/g, '')
     .trim()
 
@@ -55,6 +57,7 @@ function matchListings(query: string, listings: BrowseListing[]) {
       if (bedM && !(listing.beds >= parseFloat(bedM[1]))) return false
       if (priceM && !(listing.rentN && listing.rentN <= parseFloat(priceM[1].replace(/,/g, '')))) return false
       if (wantsPets && !listing.petFriendly) return false
+      if (wantsGarage && !listing.hasGarage) return false
       if (free && !`${listing.shortAddress} ${listing.city}`.toLowerCase().includes(free)) return false
       return true
     })

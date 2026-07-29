@@ -25,6 +25,7 @@ const DEFAULT_FILTERS: BrowseFilters = {
   beds: '',
   price: '',
   pets: false,
+  garage: false,
   sort: 'new',
 }
 

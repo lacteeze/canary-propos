@@ -97,6 +97,19 @@ export function ListingsFilterBar({
           🐾 Pet friendly
         </button>
 
+        <button
+          type="button"
+          onClick={() => onFiltersChange({ garage: !filters.garage })}
+          className="cursor-pointer rounded-[9px] border px-3 py-2 text-[13px] font-semibold transition-colors"
+          style={{
+            borderColor: filters.garage ? 'var(--accent)' : 'var(--border)',
+            background: filters.garage ? 'var(--accent)' : 'var(--panel)',
+            color: filters.garage ? 'var(--accent-text)' : 'var(--dim)',
+          }}
+        >
+          Garage
+        </button>
+
         <select
           value={filters.sort}
           onChange={(e) => onFiltersChange({ sort: e.target.value as BrowseFilters['sort'] })}

@@ -234,6 +234,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
   const [ownerStayPrefillPropId, setOwnerStayPrefillPropId] = useState<string | undefined>()
   const [localOwnerBlocks, setLocalOwnerBlocks] = useState<CanaryOwnerOccupiedBlock[]>([])
   const [propFilter, setPropFilter] = useState('')
+  const [garageFilter, setGarageFilter] = useState(false)
   const [peopleRole, setPeopleRole] = useState('')
   const [projFilter, setProjFilter] = useState('')
   const [taskFilter, setTaskFilter] = useState('Open')
@@ -702,7 +703,15 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
     .filter((n) => !(n.hideFor && n.hideFor.includes(role)))
 
   // ---------- search matchers ----------
-  const matchProp = (p: CanaryProperty) => !q || p.address.toLowerCase().includes(q)
+  // If q contains "garage", require hasGarage; remaining text matches address substring.
+  const matchProp = (p: CanaryProperty) => {
+    if (!q) return true
+    const wantsGarage = /\bgarage\b/.test(q)
+    const addressQ = q.replace(/\bgarage\b/g, '').replace(/\s+/g, ' ').trim()
+    if (wantsGarage && !p.hasGarage) return false
+    if (addressQ) return p.address.toLowerCase().includes(addressQ)
+    return wantsGarage
+  }
   const matchLease = (l: CanaryLease) => !q || l.property.toLowerCase().includes(q) || (l.tenantInfo || '').toLowerCase().includes(q)
 
   // ---------- dashboard lists ----------
@@ -866,10 +875,11 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
 
   const timelineProps = useMemo(() => {
     // Always active (non-archived) units — independent of properties-page propFilter.
-    const base = activeProps.filter(matchProp)
+    // Garage pill also narrows leasing/timeline property pick for tenant matching.
+    const base = activeProps.filter(matchProp).filter((p) => !garageFilter || p.hasGarage)
     if (!tlVacancyOnly) return base
     return base.filter((p) => isVacantProperty(p, scoped.leases))
-  }, [activeProps, q, tlVacancyOnly, scoped.leases])
+  }, [activeProps, q, garageFilter, tlVacancyOnly, scoped.leases])
   const timelineAddressFor = useCallback(
     (address: string) => resolveToCanaryAddress(address, activeProps) ?? address,
     [activeProps]
@@ -1180,6 +1190,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
     : st === 'STR' || st === 'Airbnb' ? ['var(--blue)', 'var(--bg)']
     : ['var(--elev)', 'var(--dim)']
   const filteredProps = props.filter(matchProp).filter((p) => {
+    if (garageFilter && !p.hasGarage) return false
     if (!propFilter) return true
     if (propFilter === 'Archived') return true
     if (propFilter === 'STR' || propFilter === 'Airbnb') return p.status === 'STR' || p.status === 'Airbnb'
@@ -1723,7 +1734,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
     if (!q) return []
     const hits: SearchHit[] = []
     for (const p of props) {
-      if (!p.address.toLowerCase().includes(q)) continue
+      if (!matchProp(p)) continue
       hits.push({
         key: 'prop-' + p.id,
         label: short(p.address),
@@ -2282,6 +2293,16 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                       </span>
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    className={`cy-pill${garageFilter ? ' cy-pill--active' : ''}`}
+                    onClick={() => setGarageFilter((v) => !v)}
+                  >
+                    Garage{' '}
+                    <span style={{ opacity: 0.6, fontFamily: MONO, fontSize: 11 }}>
+                      {String(activeProps.filter((p) => p.hasGarage).length)}
+                    </span>
+                  </button>
                   <span className="cy-toolbar-count">
                     {filteredProps.length + ' of ' + props.length}
                     {!viewingArchived && archivedProps.length ? ` · ${archivedProps.length} archived` : ''}

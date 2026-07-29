@@ -7,8 +7,10 @@ import { createClient } from '@/lib/supabase/server'
 import { normalizeLeaseTermType, validateLeaseDates } from '@/lib/canary/lease-term'
 import type { LeaseTermType } from '@/lib/canary/lease-term'
 import { allocateUniqueListingSlug } from '@/lib/listings/slugify'
+import type { Database } from '@/types/supabase'
 
 type ActionResult = { success: true; id?: string } | { success: false; error: string }
+type ListingUpsert = Database['public']['Tables']['listings']['Insert']
 
 async function getStaffContext() {
   const supabase = await createClient()
@@ -87,7 +89,7 @@ export async function saveDraftListing(input: {
     descriptionParts.push('Utilities included.')
   }
 
-  const record: Record<string, unknown> = {
+  const record: ListingUpsert = {
     org_id: ctx.person.org_id,
     unit_id: d.unitId,
     listing_title: title,

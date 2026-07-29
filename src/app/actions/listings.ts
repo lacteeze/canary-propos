@@ -5,6 +5,9 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { allocateUniqueListingSlug } from '@/lib/listings/slugify'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/types/supabase'
+
+type ListingUpdate = Database['public']['Tables']['listings']['Update']
 
 async function streetAddressForUnit(
   supabase: SupabaseClient,
@@ -198,7 +201,7 @@ export async function updateListing(
   }
 
   const unitChanged = existing.unit_id !== parsed.data.unit_id
-  const updatePayload: Record<string, unknown> = {
+  const updatePayload: ListingUpdate = {
     unit_id: parsed.data.unit_id,
     listing_title: parsed.data.listing_title,
     listing_description: parsed.data.listing_description ?? null,
@@ -265,7 +268,7 @@ export async function toggleListingStatus(
     return { success: false, error: 'Listing not found.' }
   }
 
-  const updatePayload: Record<string, unknown> = {
+  const updatePayload: ListingUpdate = {
     status: parsedStatus.data,
     updated_at: new Date().toISOString(),
   }

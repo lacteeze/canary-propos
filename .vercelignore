@@ -1,0 +1,8 @@
+.planning
+.cursor
+node_modules
+.next
+.git
+*.zip
+.env*
+supabase/.temp

@@ -198,6 +198,7 @@ export async function updatePropertyField(
 
 const PET_LABELS = ['No pets', 'Pet friendly', 'Cat friendly', 'Dog friendly', 'By approval'] as const
 const PET_AMENITY_RE = /pet|cat|dog|approval/i
+const GARAGE_AMENITY_RE = /\bgarage\b/i
 
 const propertyDetailsSchema = z.object({
   status: z.enum(['Vacant', 'Leased', 'Maintenance', 'STR', 'Office']),
@@ -205,6 +206,7 @@ const propertyDetailsSchema = z.object({
   bathrooms: z.number().min(0).max(50),
   askingRent: z.number().min(0).nullable(),
   pets: z.enum(PET_LABELS),
+  hasGarage: z.boolean(),
   propertyType: z.enum(['house', 'duplex', 'apartment_building', 'condo', 'townhouse', 'other']),
   city: z.string().trim().max(120),
   province: z.string().trim().max(120),
@@ -285,6 +287,27 @@ export async function updatePropertyDetails(unitId: string, input: PropertyDetai
   if (form.pets !== oldPetLabel && !(form.pets === 'No pets' && amenities.length === nonPet.length)) {
     changes.push({ field: 'pets', oldValue: oldPetLabel, newValue: form.pets })
     unitPatch.amenities = form.pets === 'No pets' ? nonPet : [...nonPet, form.pets]
+  }
+  // Compose garage after pets rewrite so both can save in one request (literal "Garage" tag).
+  const currentAmenities: string[] = unitPatch.amenities ?? amenities
+  const oldHasGarage = amenities.some((a) => GARAGE_AMENITY_RE.test(a))
+  const strippedGarage = currentAmenities.filter((a) => !GARAGE_AMENITY_RE.test(a))
+  const nextAmenities = form.hasGarage
+    ? strippedGarage.includes('Garage')
+      ? strippedGarage
+      : [...strippedGarage, 'Garage']
+    : strippedGarage
+  if (form.hasGarage !== oldHasGarage) {
+    changes.push({
+      field: 'garage',
+      oldValue: oldHasGarage ? 'Yes' : 'No',
+      newValue: form.hasGarage ? 'Yes' : 'No',
+    })
+    unitPatch.amenities = nextAmenities
+  } else if (!form.hasGarage && strippedGarage.length !== currentAmenities.length) {
+    unitPatch.amenities = strippedGarage
+  } else if (form.hasGarage && nextAmenities.join('\0') !== currentAmenities.join('\0')) {
+    unitPatch.amenities = nextAmenities
   }
   const oldHospitableId = unit.hospitable_property_id?.trim() || null
   if (form.hospitablePropertyId !== oldHospitableId) {

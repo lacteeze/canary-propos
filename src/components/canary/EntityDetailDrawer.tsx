@@ -517,6 +517,7 @@ function PropertyEditForm({
   const [baths, setBaths] = useState(property.baths || '0')
   const [rent, setRent] = useState(property.rate != null ? String(property.rate) : '')
   const [pets, setPets] = useState(PET_OPTIONS.includes(property.petFriendly as typeof PET_OPTIONS[number]) ? property.petFriendly : 'No pets')
+  const [hasGarage, setHasGarage] = useState(Boolean(property.hasGarage))
   const [portfolioId, setPortfolioId] = useState(property.portfolioId)
   const [ownerId, setOwnerId] = useState(property.ownerId)
   const [feeType, setFeeType] = useState(property.mgmtFeeType === 'flat' ? 'flat' : 'percent')
@@ -547,6 +548,7 @@ function PropertyEditForm({
       bathrooms: bathsN,
       askingRent: rentN,
       pets: pets as PropertyDetailsInput['pets'],
+      hasGarage,
       propertyType: propertyType as PropertyDetailsInput['propertyType'],
       city: city.trim(),
       province: province.trim(),
@@ -608,6 +610,16 @@ function PropertyEditForm({
           <label>{formLabel('Pets')}
             <select className="cy-select cy-select--field" value={pets} onChange={(e) => setPets(e.target.value)}>
               {PET_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </label>
+          <label>{formLabel('Garage')}
+            <select
+              className="cy-select cy-select--field"
+              value={hasGarage ? 'Yes' : 'No'}
+              onChange={(e) => setHasGarage(e.target.value === 'Yes')}
+            >
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
             </select>
           </label>
         </div>
@@ -892,6 +904,7 @@ export default function EntityDetailDrawer({
                 }]
               : []),
             { label: 'Pets', value: p.petFriendly || '—' },
+            { label: 'Garage', value: p.hasGarage ? 'Yes' : 'No' },
             ...(p.archivedAt ? [{ label: 'Archived', value: new Date(p.archivedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) }] : []),
           ]}
         />,

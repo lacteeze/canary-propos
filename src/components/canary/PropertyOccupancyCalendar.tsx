@@ -179,6 +179,7 @@ function PropertyQuickEdit({
   const [pets, setPets] = useState(
     PET_OPTIONS.includes(property.petFriendly as (typeof PET_OPTIONS)[number]) ? property.petFriendly : 'No pets',
   )
+  const [hasGarage, setHasGarage] = useState(Boolean(property.hasGarage))
   const [portfolioId, setPortfolioId] = useState(property.portfolioId)
   const [ownerId, setOwnerId] = useState(property.ownerId)
   const [feeType, setFeeType] = useState(property.mgmtFeeType === 'flat' ? 'flat' : 'percent')
@@ -197,6 +198,7 @@ function PropertyQuickEdit({
     setBaths(property.baths || '0')
     setRent(property.rate != null ? String(property.rate) : '')
     setPets(PET_OPTIONS.includes(property.petFriendly as (typeof PET_OPTIONS)[number]) ? property.petFriendly : 'No pets')
+    setHasGarage(Boolean(property.hasGarage))
     setPortfolioId(property.portfolioId)
     setOwnerId(property.ownerId)
     setFeeType(property.mgmtFeeType === 'flat' ? 'flat' : 'percent')
@@ -217,6 +219,7 @@ function PropertyQuickEdit({
           <div><dt>Beds / Baths</dt><dd>{[property.beds || '—', property.baths || '—'].join(' / ')}</dd></div>
           <div><dt>Asking rate</dt><dd>{property.rate != null ? `${money(property.rate)}/mo` : '—'}</dd></div>
           <div><dt>Pets</dt><dd>{property.petFriendly || '—'}</dd></div>
+          <div><dt>Garage</dt><dd>{property.hasGarage ? 'Yes' : 'No'}</dd></div>
           {priv && (
             <>
               <div><dt>Portfolio</dt><dd>{portfolios.find((p) => p.id === property.portfolioId)?.name ?? '—'}</dd></div>
@@ -250,6 +253,7 @@ function PropertyQuickEdit({
       bathrooms: bathsN,
       askingRent: rentN,
       pets: pets as PropertyDetailsInput['pets'],
+      hasGarage,
       propertyType: propertyType as PropertyDetailsInput['propertyType'],
       city: city.trim(),
       province: province.trim(),
@@ -302,6 +306,16 @@ function PropertyQuickEdit({
         <label>{formLabel('Pets')}
           <select className="cy-select cy-select--field" value={pets} onChange={(e) => setPets(e.target.value)}>
             {PET_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </label>
+        <label>{formLabel('Garage')}
+          <select
+            className="cy-select cy-select--field"
+            value={hasGarage ? 'Yes' : 'No'}
+            onChange={(e) => setHasGarage(e.target.value === 'Yes')}
+          >
+            <option value="No">No</option>
+            <option value="Yes">Yes</option>
           </select>
         </label>
       </div>

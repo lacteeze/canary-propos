@@ -14,6 +14,7 @@ const AMENITY_OPTIONS = [
   { value: 'AC', label: 'AC' },
   { value: 'Balcony', label: 'Balcony' },
   { value: 'Storage', label: 'Storage' },
+  { value: 'Garage', label: 'Garage' },
 ]
 
 const STATUS_OPTIONS = [

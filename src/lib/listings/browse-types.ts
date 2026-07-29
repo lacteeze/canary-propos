@@ -10,6 +10,7 @@ export interface BrowseSearchParams {
   beds?: string
   price?: string
   pets?: string
+  garage?: string
   sort?: string
 }
 
@@ -19,6 +20,7 @@ export interface BrowseFilters {
   beds: string
   price: string
   pets: boolean
+  garage: boolean
   sort: BrowseSort
 }
 
@@ -41,6 +43,7 @@ export interface BrowseListing {
   moveIn: string
   petFriendly: boolean
   petLabel: string | null
+  hasGarage: boolean
   tags: string[]
   /** Cover / first photo URL (same as photos[0] when present). */
   photo: string | null

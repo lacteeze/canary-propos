@@ -2,6 +2,7 @@
 // Loads live Supabase data (scoped by RLS for the signed-in user) and maps it
 // into the CanaryDb shape consumed by the CanaryApp client.
 import { createClient } from '@/lib/supabase/server'
+import { hasGarage } from '@/lib/listings/browse-utils'
 import { normalizeLeaseTermType } from './lease-term'
 import type {
   CanaryDb,
@@ -336,6 +337,7 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         type: (p.property_type ?? '').replace(/_/g, ' '),
         availableDate: '',
         petFriendly: petsLabel(u.amenities, null),
+        hasGarage: hasGarage(u.amenities, null),
         utilitiesIncluded: '',
         description: '',
         portfolioId: p.portfolio_id ?? '',

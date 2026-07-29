@@ -22,6 +22,7 @@ export interface CanaryProperty {
   type: string
   availableDate: string
   petFriendly: string
+  hasGarage: boolean
   utilitiesIncluded: string
   description: string
   portfolioId: string

@@ -18,6 +18,7 @@ export function parseBrowseFilters(params: BrowseSearchParams): BrowseFilters {
     beds: params.beds ?? '',
     price: params.price ?? '',
     pets: params.pets === '1' || params.pets === 'true',
+    garage: params.garage === '1' || params.garage === 'true',
     sort: sort === 'lo' || sort === 'hi' || sort === 'soon' ? sort : 'new',
   }
 }
@@ -63,6 +64,15 @@ function isPetFriendly(amenities: string[] | null, description: string | null): 
   return /pet\s*friendly|pets?\s*(considered|by\s*approval|allowed|welcome)|dog\s*friendly|cat\s*friendly|\byes\b/i.test(
     text
   )
+}
+
+/** True iff amenities (and optional description) contain a bare `garage` token. */
+export function hasGarage(
+  amenities: string[] | null,
+  description?: string | null
+): boolean {
+  const text = [...(amenities ?? []), description ?? ''].join(' ')
+  return /\bgarage\b/i.test(text)
 }
 
 function petLabel(amenities: string[] | null, description: string | null): string | null {
@@ -117,6 +127,7 @@ export function mapListingRow(
   const termLabel =
     termType === 'mid' ? 'Mid-term' : 'Long-term'
   const pet = isPetFriendly(unit?.amenities ?? null, listing.listing_description)
+  const garage = hasGarage(unit?.amenities ?? null, listing.listing_description)
   const parking = extractParking(listing.listing_description, listing.highlights)
   const suffix = rentSuffix(listing.listing_description)
   const label = petLabel(unit?.amenities ?? null, listing.listing_description)
@@ -124,6 +135,7 @@ export function mapListingRow(
   const tags: string[] = []
   if (label) tags.push(`🐾 ${label}`)
   if (suffix === 'incl') tags.push('Utilities included')
+  else if (garage) tags.push('Garage')
 
   const rawPaths = (property?.photo_paths ?? []).filter(
     (p): p is string => !!p && !/^https?:\/\//i.test(p)
@@ -150,6 +162,7 @@ export function mapListingRow(
     moveIn: formatMoveIn(listing.available_from),
     petFriendly: pet,
     petLabel: label,
+    hasGarage: garage,
     tags: tags.slice(0, 2),
     photo,
     photos,
@@ -183,6 +196,7 @@ export function filterListings(listings: BrowseListing[], filters: BrowseFilters
     }
 
     if (filters.pets && !listing.petFriendly) return false
+    if (filters.garage && !listing.hasGarage) return false
 
     return true
   })

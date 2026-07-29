@@ -63,10 +63,8 @@ export async function middleware(request: NextRequest) {
 
   const isListings = isPublicListingsPath(pathname)
   const requestHeaders = new Headers(request.headers)
-  if (isListings) {
-    // Public listings stay public, but still refresh session cookies below
-    requestHeaders.set('x-org-slug', extractOrgSlug(request))
-  }
+  // Org slug for public listing detail (UUID + root SEO /{slug}) and other pages that read the header
+  requestHeaders.set('x-org-slug', extractOrgSlug(request))
 
   let supabaseResponse = NextResponse.next({
     request: { headers: requestHeaders },
@@ -108,7 +106,8 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Listings are public — session was refreshed above; skip auth redirects
+  // /listings/* is public — session was refreshed above; skip auth redirects.
+  // Root /{slug} is also public: it is not isProtectedPath, so unauth users are not redirected.
   if (isListings) {
     return supabaseResponse
   }

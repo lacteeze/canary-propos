@@ -1,5 +1,5 @@
-// src/app/(public)/listings/[id]/page.tsx
-// Public listing detail — UUID path; redirects to /{slug} when slug is set.
+// src/app/(public)/[slug]/page.tsx
+// Root-level SEO address slug for published listings (e.g. /151-a-signal-hill-road).
 import { notFound, permanentRedirect } from 'next/navigation'
 import { preload } from 'react-dom'
 import {
@@ -11,6 +11,7 @@ import { getLandingCopy } from '@/lib/landing/content'
 import { getPublishedListings } from '@/lib/landing/get-published-listings'
 import { getDetailPageCarouselGroups } from '@/lib/listings/browse-utils'
 import { isListingUuid } from '@/lib/listings/listing-href'
+import { isReservedListingSlug } from '@/lib/listings/reserved-slugs'
 import { createPublicClient } from '@/lib/supabase/public'
 import { getOrgBySlug } from '@/lib/orgs'
 import { headers } from 'next/headers'
@@ -22,13 +23,15 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
 interface PageProps {
-  params: Promise<{ id: string }>
+  params: Promise<{ slug: string }>
   searchParams: Promise<{ org?: string }>
 }
 
-export default async function ListingDetailPage({ params, searchParams }: PageProps) {
-  const { id } = await params
+export default async function ListingSlugPage({ params, searchParams }: PageProps) {
+  const { slug } = await params
   const { org: orgSlugParam } = await searchParams
+
+  if (isReservedListingSlug(slug)) notFound()
 
   const headersList = await headers()
   const orgSlug =
@@ -40,35 +43,22 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
   if (!org) notFound()
 
   const orgQuery = orgSlugParam ? `?org=${orgSlugParam}` : ''
-  const supabase = createPublicClient()
 
-  let listing: ListingDetailListing | null = null
-
-  if (isListingUuid(id)) {
-    const { data } = await supabase
-      .from('listings')
-      .select(LISTING_DETAIL_SELECT)
-      .eq('id', id)
-      .eq('org_id', org.id)
-      .eq('status', 'published')
-      .single()
-    listing = data as ListingDetailListing | null
-    if (!listing) notFound()
-    if (listing.slug) {
-      permanentRedirect(`/${listing.slug}${orgQuery}`)
-    }
-  } else {
-    const { data } = await supabase
-      .from('listings')
-      .select(LISTING_DETAIL_SELECT)
-      .eq('slug', id)
-      .eq('org_id', org.id)
-      .eq('status', 'published')
-      .single()
-    listing = data as ListingDetailListing | null
-    if (!listing) notFound()
-    permanentRedirect(`/${listing.slug ?? id}${orgQuery}`)
+  if (isListingUuid(slug)) {
+    permanentRedirect(`/listings/${slug}${orgQuery}`)
   }
+
+  const supabase = createPublicClient()
+  const { data } = await supabase
+    .from('listings')
+    .select(LISTING_DETAIL_SELECT)
+    .eq('slug', slug)
+    .eq('org_id', org.id)
+    .eq('status', 'published')
+    .single()
+
+  const listing = data as ListingDetailListing | null
+  if (!listing) notFound()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const unit = listing.units as any

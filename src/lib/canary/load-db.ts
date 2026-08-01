@@ -161,7 +161,7 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         .from('units')
         .select(
           `id, unit_number, bedrooms, bathrooms, status, asking_rent, amenities, hospitable_property_id, archived_at,
-           properties!property_id(id, street_address, city, province, property_type, portfolio_id, owner_id, management_fee_type, management_fee_value)`
+           properties!property_id(id, slug, street_address, city, province, property_type, portfolio_id, owner_id, management_fee_type, management_fee_value)`
         )
         .eq('org_id', orgId),
       supabase
@@ -328,6 +328,7 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         id: u.id,
         unitId: u.id,
         propertyDbId: p.id,
+        slug: p.slug ?? null,
         address: fullAddress(street, p.city),
         status: unitStatusLabel(u.status),
         beds: u.bedrooms != null ? String(u.bedrooms) : '',

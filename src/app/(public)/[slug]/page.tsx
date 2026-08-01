@@ -1,22 +1,17 @@
 // src/app/(public)/[slug]/page.tsx
-// Root-level SEO address slug for published listings (e.g. /151-a-signal-hill-road).
+// Root-level SEO slug: published listing first, else public property page (incl. leased).
 import { notFound, permanentRedirect } from 'next/navigation'
-import { preload } from 'react-dom'
 import {
-  LISTING_DETAIL_SELECT,
-  ListingDetailView,
-  type ListingDetailListing,
-} from '@/components/listings/ListingDetailView'
-import { getLandingCopy } from '@/lib/landing/content'
-import { getPublishedListings } from '@/lib/landing/get-published-listings'
-import { getDetailPageCarouselGroups } from '@/lib/listings/browse-utils'
+  loadPublishedListingBySlug,
+  loadPublishedListingForProperty,
+  loadPropertyBySlug,
+  renderPublishedListingPage,
+  renderPropertyPublicPage,
+} from '@/lib/listings/public-slug-page'
 import { isListingUuid } from '@/lib/listings/listing-href'
 import { isReservedListingSlug } from '@/lib/listings/reserved-slugs'
-import { createPublicClient } from '@/lib/supabase/public'
 import { getOrgBySlug } from '@/lib/orgs'
 import { headers } from 'next/headers'
-import { getListingPhotoPathsForProperty } from '@/lib/storage/property-listing-media'
-import { resolveListingGalleryPhotos } from '@/lib/storage/listing-photos'
 
 /** Signed cover URLs expire (~1h) — must not reuse a cached RSC/fetch payload. */
 export const dynamic = 'force-dynamic'
@@ -27,7 +22,7 @@ interface PageProps {
   searchParams: Promise<{ org?: string }>
 }
 
-export default async function ListingSlugPage({ params, searchParams }: PageProps) {
+export default async function PublicSlugPage({ params, searchParams }: PageProps) {
   const { slug } = await params
   const { org: orgSlugParam } = await searchParams
 
@@ -48,57 +43,21 @@ export default async function ListingSlugPage({ params, searchParams }: PageProp
     permanentRedirect(`/listings/${slug}${orgQuery}`)
   }
 
-  const supabase = createPublicClient()
-  const { data } = await supabase
-    .from('listings')
-    .select(LISTING_DETAIL_SELECT)
-    .eq('slug', slug)
-    .eq('org_id', org.id)
-    .eq('status', 'published')
-    .single()
-
-  const listing = data as ListingDetailListing | null
-  if (!listing) notFound()
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const unit = listing.units as any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const property = unit?.properties as any
-  const listingCity = property?.city ?? "St. John's"
-
-  const galleryPromise = (async () => {
-    const fromMedia = property?.id ? await getListingPhotoPathsForProperty(property.id) : []
-    const photoPaths: string[] = (
-      fromMedia.length > 0 ? fromMedia : (property?.photo_paths ?? [])
-    ).filter((p: string) => !!p && !/^https?:\/\//i.test(p))
-    return resolveListingGalleryPhotos(photoPaths)
-  })()
-  const [{ all: listingPhotos }, allPublished] = await Promise.all([
-    galleryPromise,
-    getPublishedListings(orgSlug),
-  ])
-
-  if (listingPhotos[0]) {
-    preload(listingPhotos[0], { as: 'image', fetchPriority: 'high' })
+  // 1) Published listing with this slug
+  const listingBySlug = await loadPublishedListingBySlug(org.id, slug)
+  if (listingBySlug) {
+    return renderPublishedListingPage({ listing: listingBySlug, orgSlug })
   }
 
-  const carouselGroups = getDetailPageCarouselGroups(allPublished, listing.id, listingCity)
-  const cardCopy = getLandingCopy('en')
-  const listingCardCopy = {
-    tBed: cardCopy.tBed,
-    tBath: cardCopy.tBath,
-    tPark: cardCopy.tPark,
-    longTerm: cardCopy.longTerm,
-    midTerm: cardCopy.midTerm,
+  // 2) Property with this slug
+  const property = await loadPropertyBySlug(org.id, slug)
+  if (!property) notFound()
+
+  // Prefer full listing detail when any unit on the property is published
+  const publishedOnProperty = await loadPublishedListingForProperty(org.id, property.id)
+  if (publishedOnProperty) {
+    return renderPublishedListingPage({ listing: publishedOnProperty, orgSlug })
   }
 
-  return (
-    <ListingDetailView
-      listing={listing}
-      listingPhotos={listingPhotos}
-      carouselGroups={carouselGroups}
-      orgSlug={orgSlug}
-      listingCardCopy={listingCardCopy}
-    />
-  )
+  return renderPropertyPublicPage({ property, orgSlug, orgId: org.id })
 }

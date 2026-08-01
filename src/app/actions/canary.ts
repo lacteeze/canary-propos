@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { normalizeLeaseTermType, validateLeaseDates } from '@/lib/canary/lease-term'
 import type { LeaseTermType } from '@/lib/canary/lease-term'
-import { allocateUniqueListingSlug } from '@/lib/listings/slugify'
+import { allocateListingSlugPreferProperty } from '@/lib/listings/slugify'
 import type { Database } from '@/types/supabase'
 
 type ActionResult = { success: true; id?: string } | { success: false; error: string }
@@ -71,7 +71,7 @@ export async function saveDraftListing(input: {
 
   const { data: unit } = await ctx.supabase
     .from('units')
-    .select('id, properties!property_id(street_address, city)')
+    .select('id, property_id, properties!property_id(id, street_address, city, slug)')
     .eq('id', d.unitId)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -118,12 +118,22 @@ export async function saveDraftListing(input: {
       record.slug = existingSlug
     } else {
       const street = (prop?.street_address as string | undefined) ?? title
-      record.slug = await allocateUniqueListingSlug({
+      record.slug = await allocateListingSlugPreferProperty({
         supabase: ctx.supabase,
         orgId: ctx.person.org_id,
         streetAddress: street,
+        propertySlug: (prop?.slug as string | null | undefined) ?? null,
         excludeListingId: d.id ?? undefined,
       })
+      const propertyId = (prop?.id as string | undefined) ?? unit.property_id
+      if (propertyId && !prop?.slug && record.slug) {
+        await ctx.supabase
+          .from('properties')
+          .update({ slug: record.slug, updated_at: new Date().toISOString() })
+          .eq('id', propertyId)
+          .eq('org_id', ctx.person.org_id)
+          .is('slug', null)
+      }
     }
   }
 

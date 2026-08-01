@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { allocateUniquePropertySlug } from '@/lib/listings/slugify'
 
 // --- Types ---
 export type ActionResult =
@@ -70,6 +71,18 @@ export async function createProperty(data: {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
   }
 
+  let slug: string
+  try {
+    slug = await allocateUniquePropertySlug({
+      supabase: ctx.supabase,
+      orgId: ctx.person.org_id,
+      streetAddress: parsed.data.street_address,
+    })
+  } catch (err) {
+    console.error('[createProperty:slug]', err)
+    return { success: false, error: 'Failed to create property. Please try again.' }
+  }
+
   const { error } = await ctx.supabase.from('properties').insert({
     org_id: ctx.person.org_id,
     street_address: parsed.data.street_address,
@@ -79,6 +92,7 @@ export async function createProperty(data: {
     property_type: parsed.data.property_type,
     owner_id: parsed.data.owner_id ?? null,
     portfolio_id: parsed.data.portfolio_id ?? null,
+    slug,
   })
 
   if (error) {
@@ -118,7 +132,7 @@ export async function updateProperty(
   // Verify ownership (org scoping)
   const { data: existing, error: fetchError } = await ctx.supabase
     .from('properties')
-    .select('id')
+    .select('id, slug')
     .eq('id', id)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -127,18 +141,45 @@ export async function updateProperty(
     return { success: false, error: 'Property not found.' }
   }
 
+  const patch: {
+    street_address: string
+    city: string
+    province: string
+    postal_code: string | null
+    property_type: typeof parsed.data.property_type
+    owner_id: string | null
+    portfolio_id: string | null
+    updated_at: string
+    slug?: string
+  } = {
+    street_address: parsed.data.street_address,
+    city: parsed.data.city,
+    province: parsed.data.province,
+    postal_code: parsed.data.postal_code ?? null,
+    property_type: parsed.data.property_type,
+    owner_id: parsed.data.owner_id ?? null,
+    portfolio_id: parsed.data.portfolio_id ?? null,
+    updated_at: new Date().toISOString(),
+  }
+
+  // Stable URL: only allocate when missing
+  if (!existing.slug) {
+    try {
+      patch.slug = await allocateUniquePropertySlug({
+        supabase: ctx.supabase,
+        orgId: ctx.person.org_id,
+        streetAddress: parsed.data.street_address,
+        excludePropertyId: id,
+      })
+    } catch (err) {
+      console.error('[updateProperty:slug]', err)
+      return { success: false, error: 'Failed to update property. Please try again.' }
+    }
+  }
+
   const { error } = await ctx.supabase
     .from('properties')
-    .update({
-      street_address: parsed.data.street_address,
-      city: parsed.data.city,
-      province: parsed.data.province,
-      postal_code: parsed.data.postal_code ?? null,
-      property_type: parsed.data.property_type,
-      owner_id: parsed.data.owner_id ?? null,
-      portfolio_id: parsed.data.portfolio_id ?? null,
-      updated_at: new Date().toISOString(),
-    })
+    .update(patch)
     .eq('id', id)
     .eq('org_id', ctx.person.org_id)
 

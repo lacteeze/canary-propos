@@ -10,6 +10,8 @@ export interface CanaryProperty {
   id: string
   /** properties.id — used for property-scoped chat threads */
   propertyDbId: string
+  /** Stable public URL slug (`/{slug}`) */
+  slug: string | null
   /** Full address line, e.g. "12 Duckworth St, St. John's" */
   address: string
   status: string // Vacant | Leased | Maintenance | STR | Office | —

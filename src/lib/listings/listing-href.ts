@@ -14,3 +14,17 @@ export function listingPublicHref(
   }
   return `/listings/${listing.id}${orgQuery}`
 }
+
+/** Stable public property URL (`/{slug}` or absolute canarypm.ca when requested). */
+export function propertyPublicHref(
+  property: { slug?: string | null },
+  opts?: { orgQuery?: string; absolute?: boolean },
+): string | null {
+  if (!property.slug) return null
+  const orgQuery = opts?.orgQuery ?? ''
+  const path = `/${property.slug}${orgQuery}`
+  if (opts?.absolute) {
+    return `https://canarypm.ca${path}`
+  }
+  return path
+}

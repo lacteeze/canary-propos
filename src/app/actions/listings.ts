@@ -3,27 +3,50 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { allocateUniqueListingSlug } from '@/lib/listings/slugify'
+import { allocateListingSlugPreferProperty } from '@/lib/listings/slugify'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 
 type ListingUpdate = Database['public']['Tables']['listings']['Update']
 
-async function streetAddressForUnit(
+async function propertyContextForUnit(
   supabase: SupabaseClient,
   unitId: string,
   orgId: string,
-): Promise<string | null> {
+): Promise<{ street: string | null; propertyId: string | null; propertySlug: string | null }> {
   const { data } = await supabase
     .from('units')
-    .select('id, properties!property_id(street_address)')
+    .select('id, property_id, properties!property_id(id, street_address, slug)')
     .eq('id', unitId)
     .eq('org_id', orgId)
     .single()
-  if (!data) return null
-  const prop = data.properties as { street_address?: string } | { street_address?: string }[] | null
+  if (!data) return { street: null, propertyId: null, propertySlug: null }
+  const prop = data.properties as
+    | { id?: string; street_address?: string; slug?: string | null }
+    | { id?: string; street_address?: string; slug?: string | null }[]
+    | null
   const row = Array.isArray(prop) ? prop[0] : prop
-  return row?.street_address ?? null
+  return {
+    street: row?.street_address ?? null,
+    propertyId: row?.id ?? data.property_id ?? null,
+    propertySlug: row?.slug ?? null,
+  }
+}
+
+async function ensurePropertySlugMatchesListing(opts: {
+  supabase: SupabaseClient
+  orgId: string
+  propertyId: string | null
+  propertySlug: string | null
+  listingSlug: string
+}) {
+  if (!opts.propertyId || opts.propertySlug) return
+  await opts.supabase
+    .from('properties')
+    .update({ slug: opts.listingSlug, updated_at: new Date().toISOString() })
+    .eq('id', opts.propertyId)
+    .eq('org_id', opts.orgId)
+    .is('slug', null)
 }
 
 async function slugForPublish(opts: {
@@ -37,14 +60,23 @@ async function slugForPublish(opts: {
   if (opts.existingSlug && !opts.unitChanged) {
     return opts.existingSlug
   }
-  const street = await streetAddressForUnit(opts.supabase, opts.unitId, opts.orgId)
-  if (!street) return opts.existingSlug ?? null
-  return allocateUniqueListingSlug({
+  const ctx = await propertyContextForUnit(opts.supabase, opts.unitId, opts.orgId)
+  if (!ctx.street) return opts.existingSlug ?? null
+  const slug = await allocateListingSlugPreferProperty({
     supabase: opts.supabase,
     orgId: opts.orgId,
-    streetAddress: street,
+    streetAddress: ctx.street,
+    propertySlug: ctx.propertySlug,
     excludeListingId: opts.excludeListingId,
   })
+  await ensurePropertySlugMatchesListing({
+    supabase: opts.supabase,
+    orgId: opts.orgId,
+    propertyId: ctx.propertyId,
+    propertySlug: ctx.propertySlug,
+    listingSlug: slug,
+  })
+  return slug
 }
 
 // --- Types ---

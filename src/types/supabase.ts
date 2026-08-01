@@ -1219,6 +1219,7 @@ export type Database = {
           postal_code: string | null
           property_type: Database["public"]["Enums"]["property_type_enum"]
           province: string
+          slug: string | null
           street_address: string
           updated_at: string | null
         }
@@ -1238,6 +1239,7 @@ export type Database = {
           postal_code?: string | null
           property_type?: Database["public"]["Enums"]["property_type_enum"]
           province: string
+          slug?: string | null
           street_address: string
           updated_at?: string | null
         }
@@ -1257,6 +1259,7 @@ export type Database = {
           postal_code?: string | null
           property_type?: Database["public"]["Enums"]["property_type_enum"]
           province?: string
+          slug?: string | null
           street_address?: string
           updated_at?: string | null
         }
@@ -1538,6 +1541,10 @@ export type Database = {
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       org_id: { Args: never; Returns: string }
       person_id: { Args: never; Returns: string }
+      public_property_lease_end: {
+        Args: { p_property_id: string }
+        Returns: string | null
+      }
       tables_without_rls: {
         Args: never
         Returns: {

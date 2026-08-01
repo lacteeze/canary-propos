@@ -19,6 +19,7 @@ import { LEASE_TERM_LABELS } from '@/lib/canary/lease-term'
 import type { CanaryDb, CanaryLease, CanaryPerson, CanaryProperty } from '@/lib/canary/types'
 import { leaseDbStatusFromDisplay } from '@/lib/canary/types'
 import AuditLogPanel from './AuditLogPanel'
+import { CopyPublicLinkButton } from './CopyPublicLinkButton'
 import DatePickerField, { formatDisplayDate } from './DatePickerField'
 import { PropertyPhotoUpload } from '@/components/properties/PropertyPhotoUpload'
 
@@ -905,6 +906,9 @@ export default function EntityDetailDrawer({
               : []),
             { label: 'Pets', value: p.petFriendly || '—' },
             { label: 'Garage', value: p.hasGarage ? 'Yes' : 'No' },
+            ...(p.slug
+              ? [{ label: 'Public link', value: <CopyPublicLinkButton slug={p.slug} /> }]
+              : []),
             ...(p.archivedAt ? [{ label: 'Archived', value: new Date(p.archivedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) }] : []),
           ]}
         />,

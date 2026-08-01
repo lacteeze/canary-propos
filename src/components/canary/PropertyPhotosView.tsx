@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ImageOff } from 'lucide-react'
 import { signPropertyCoverPaths } from '@/app/actions/property-cover-photos'
 import type { CanaryProperty } from '@/lib/canary/types'
+import { CopyPublicLinkButton } from './CopyPublicLinkButton'
 
 function short(addr: string | null | undefined): string {
   return (addr || '').split(',')[0].trim()
@@ -81,7 +82,7 @@ export default function PropertyPhotosView({ properties, onOpen }: PropertyPhoto
             className="cy-photo-card cy-hov-card"
             onClick={() => onOpen(p.id)}
           >
-            <div className="cy-photo-card-media">
+            <div className="cy-photo-card-media" style={{ position: 'relative' }}>
               {cover ? (
                 // Signed storage URLs — skip next/image optimizer fanout on portfolio grid
                 // eslint-disable-next-line @next/next/no-img-element
@@ -110,6 +111,14 @@ export default function PropertyPhotosView({ properties, onOpen }: PropertyPhoto
               >
                 {p.status || '—'}
               </span>
+              {p.slug ? (
+                <span
+                  style={{ position: 'absolute', top: 8, left: 8, zIndex: 1 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <CopyPublicLinkButton slug={p.slug} compact />
+                </span>
+              ) : null}
             </div>
             <div className="cy-photo-card-body">
               <div className="cy-photo-card-title">{short(p.address)}</div>

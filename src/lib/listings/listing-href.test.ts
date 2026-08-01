@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isListingUuid, listingPublicHref } from './listing-href'
+import { isListingUuid, listingPublicHref, propertyPublicHref } from './listing-href'
 
 describe('isListingUuid', () => {
   it('returns true for standard UUID strings', () => {
@@ -26,5 +26,23 @@ describe('listingPublicHref', () => {
     expect(
       listingPublicHref({ id: 'uuid', slug: null }, '?org=canary'),
     ).toBe('/listings/uuid?org=canary')
+  })
+})
+
+describe('propertyPublicHref', () => {
+  it('returns relative path by default', () => {
+    expect(propertyPublicHref({ slug: '151-a-signal-hill-road' })).toBe(
+      '/151-a-signal-hill-road',
+    )
+  })
+
+  it('returns absolute canarypm.ca URL when requested', () => {
+    expect(
+      propertyPublicHref({ slug: '151-a-signal-hill-road' }, { absolute: true }),
+    ).toBe('https://canarypm.ca/151-a-signal-hill-road')
+  })
+
+  it('returns null without slug', () => {
+    expect(propertyPublicHref({ slug: null })).toBeNull()
   })
 })

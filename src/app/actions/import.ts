@@ -550,6 +550,21 @@ async function importProperties(ctx: Ctx, records: Record<string, string>[]): Pr
     const portfolioId = first.portfolio_name ? resolvePortfolioId(portfolios, first.portfolio_name) : null
     let propertyId = existingProps.get(key)
     if (!propertyId) {
+      const { allocateUniquePropertySlug } = await import('@/lib/listings/slugify')
+      let propertySlug: string
+      try {
+        propertySlug = await allocateUniquePropertySlug({
+          supabase: ctx.supabase,
+          orgId: ctx.person.org_id,
+          streetAddress: first.street_address.trim(),
+        })
+      } catch (slugErr) {
+        console.error('[importCsv:properties:slug]', slugErr)
+        rows.forEach((r) =>
+          errors.push({ line: r.line, message: 'Failed to allocate property slug' }),
+        )
+        continue
+      }
       const { data: created, error } = await ctx.supabase
         .from('properties')
         .insert({
@@ -564,6 +579,7 @@ async function importProperties(ctx: Ctx, records: Record<string, string>[]): Pr
           owner_id: first.owner_email ? people.get(normKey(first.owner_email))!.id : null,
           management_fee_type: first.management_fee_type ? first.management_fee_type.toLowerCase() : null,
           management_fee_value: parseManagementFeeValue(first.management_fee_value),
+          slug: propertySlug,
         })
         .select('id')
         .single()

@@ -235,6 +235,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
   const [localOwnerBlocks, setLocalOwnerBlocks] = useState<CanaryOwnerOccupiedBlock[]>([])
   const [propFilter, setPropFilter] = useState('')
   const [garageFilter, setGarageFilter] = useState(false)
+  const [noPhotosFilter, setNoPhotosFilter] = useState(false)
   const [peopleRole, setPeopleRole] = useState('')
   const [projFilter, setProjFilter] = useState('')
   const [taskFilter, setTaskFilter] = useState('Open')
@@ -875,11 +876,14 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
 
   const timelineProps = useMemo(() => {
     // Always active (non-archived) units — independent of properties-page propFilter.
-    // Garage pill also narrows leasing/timeline property pick for tenant matching.
-    const base = activeProps.filter(matchProp).filter((p) => !garageFilter || p.hasGarage)
+    // Garage / No photos pills also narrow leasing/timeline property pick for tenant matching.
+    const base = activeProps
+      .filter(matchProp)
+      .filter((p) => !garageFilter || p.hasGarage)
+      .filter((p) => !noPhotosFilter || !p.listingPhotoPaths?.length)
     if (!tlVacancyOnly) return base
     return base.filter((p) => isVacantProperty(p, scoped.leases))
-  }, [activeProps, q, garageFilter, tlVacancyOnly, scoped.leases])
+  }, [activeProps, q, garageFilter, noPhotosFilter, tlVacancyOnly, scoped.leases])
   const timelineAddressFor = useCallback(
     (address: string) => resolveToCanaryAddress(address, activeProps) ?? address,
     [activeProps]
@@ -1119,6 +1123,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
       strOnly: !p,
       rowBadge: p ? null : externalBadge,
       status: p?.status ?? '',
+      missingPhotos: Boolean(p && !p.listingPhotoPaths?.length),
     }
   }
 
@@ -1191,6 +1196,7 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
     : ['var(--elev)', 'var(--dim)']
   const filteredProps = props.filter(matchProp).filter((p) => {
     if (garageFilter && !p.hasGarage) return false
+    if (noPhotosFilter && p.listingPhotoPaths?.length) return false
     if (!propFilter) return true
     if (propFilter === 'Archived') return true
     if (propFilter === 'STR' || propFilter === 'Airbnb') return p.status === 'STR' || p.status === 'Airbnb'
@@ -2303,6 +2309,16 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                       {String(activeProps.filter((p) => p.hasGarage).length)}
                     </span>
                   </button>
+                  <button
+                    type="button"
+                    className={`cy-pill${noPhotosFilter ? ' cy-pill--active' : ''}`}
+                    onClick={() => setNoPhotosFilter((v) => !v)}
+                  >
+                    No photos{' '}
+                    <span style={{ opacity: 0.6, fontFamily: MONO, fontSize: 11 }}>
+                      {String(activeProps.filter((p) => !p.listingPhotoPaths?.length).length)}
+                    </span>
+                  </button>
                   <span className="cy-toolbar-count">
                     {filteredProps.length + ' of ' + props.length}
                     {!viewingArchived && archivedProps.length ? ` · ${archivedProps.length} archived` : ''}
@@ -2734,12 +2750,21 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                         <div key={r.id} style={{ display: 'grid', gridTemplateColumns: 'clamp(150px,20vw,250px) 1fr', borderBottom: '1px solid var(--border)', minHeight: r.rowHeight }}>
                           <div className="cy-hov" onClick={() => { if (!r.strOnly) setDrawer({ kind: 'property', id: r.id }) }} style={{ padding: '6px 14px', cursor: r.strOnly ? 'default' : 'pointer', borderRight: '1px solid var(--border)', minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ fontWeight: 650, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {r.short}
+                              <div style={{ fontWeight: 650, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.short}</span>
+                                {r.missingPhotos ? (
+                                  <span
+                                    title="No listing photos"
+                                    aria-label="No listing photos"
+                                    style={{ flex: 'none', display: 'inline-flex', color: 'var(--faint)', opacity: 0.85 }}
+                                  >
+                                    <ImageOff size={14} strokeWidth={2} aria-hidden="true" />
+                                  </span>
+                                ) : null}
                                 {r.rowBadge === 'STR' ? (
-                                  <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--blue)', letterSpacing: '.04em' }}>STR</span>
+                                  <span style={{ flex: 'none', fontSize: 10, fontWeight: 700, color: 'var(--blue)', letterSpacing: '.04em' }}>STR</span>
                                 ) : r.rowBadge === 'TASK' ? (
-                                  <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--purple)', letterSpacing: '.04em' }}>TASK</span>
+                                  <span style={{ flex: 'none', fontSize: 10, fontWeight: 700, color: 'var(--purple)', letterSpacing: '.04em' }}>TASK</span>
                                 ) : null}
                               </div>
                             </div>
@@ -3452,6 +3477,10 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
             onOpenProject={(id) => {
               setCalView(null)
               setDrawer({ kind: 'project', id })
+            }}
+            onOpenProperty={(id) => {
+              setCalView(null)
+              setDrawer({ kind: 'property', id })
             }}
           />
         )

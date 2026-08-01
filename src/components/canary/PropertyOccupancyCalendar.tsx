@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { ImageOff } from 'lucide-react'
 import { updatePropertyDetails, type PropertyDetailsInput } from '@/app/actions/entity-updates'
 import type {
   CanaryDraft,
@@ -150,6 +151,8 @@ interface PropertyOccupancyCalendarProps {
   money: (n: number | null | undefined) => string
   onClose: () => void
   onOpenProject?: (id: string) => void
+  /** Opens the property drawer (photo section lives there). */
+  onOpenProperty?: (id: string) => void
 }
 
 function PropertyQuickEdit({
@@ -597,6 +600,7 @@ export default function PropertyOccupancyCalendar({
   money,
   onClose,
   onOpenProject,
+  onOpenProperty,
 }: PropertyOccupancyCalendarProps) {
   const router = useRouter()
   const [, startTransition] = useTransition()
@@ -605,6 +609,7 @@ export default function PropertyOccupancyCalendar({
   const [mobilePane, setMobilePane] = useState<MobilePane>('calendar')
   const scrollRef = useRef<HTMLDivElement>(null)
   const currentMonthRef = useRef<HTMLElement | null>(null)
+  const missingListingPhotos = !property.listingPhotoPaths?.length
 
   const months = useMemo(() => {
     const base = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -718,6 +723,24 @@ export default function PropertyOccupancyCalendar({
             <div className="cy-eyebrow" style={{ marginBottom: 2 }}>Property calendar</div>
             <div className="cy-cal-title">{shortLabel}</div>
             <div className="cy-cal-sub">{address}</div>
+            {missingListingPhotos ? (
+              onOpenProperty ? (
+                <button
+                  type="button"
+                  className="cy-cal-no-photos"
+                  onClick={() => onOpenProperty(property.id)}
+                  title="Open property to add listing photos"
+                >
+                  <ImageOff size={13} strokeWidth={2} aria-hidden="true" />
+                  No listing photos
+                </button>
+              ) : (
+                <span className="cy-cal-no-photos" aria-label="No listing photos">
+                  <ImageOff size={13} strokeWidth={2} aria-hidden="true" />
+                  No listing photos
+                </span>
+              )
+            ) : null}
           </div>
 
           <div className="cy-cal-header-controls">

@@ -28,12 +28,37 @@ const FOLDER_MIME = 'application/vnd.google-apps.folder'
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-function createOAuth2Client() {
-  return new google.auth.OAuth2(
-    process.env.GMAIL_CLIENT_ID,
-    process.env.GMAIL_CLIENT_SECRET,
-    process.env.DRIVE_REDIRECT_URI,
+/**
+ * Resolve the Drive OAuth redirect URI.
+ * Prefer DRIVE_REDIRECT_URI; otherwise derive from GMAIL_REDIRECT_URI
+ * (…/api/gmail/callback → …/api/drive/callback) so production works when
+ * only the Gmail redirect env is set.
+ */
+export function resolveDriveRedirectUri(): string {
+  const explicit = process.env.DRIVE_REDIRECT_URI?.trim()
+  if (explicit) return explicit
+
+  const gmail = process.env.GMAIL_REDIRECT_URI?.trim()
+  if (gmail) {
+    const derived = gmail.replace(/\/api\/gmail\/callback\/?$/i, '/api/drive/callback')
+    if (derived !== gmail) return derived
+  }
+
+  throw new Error(
+    'DRIVE_REDIRECT_URI is not set. Add it in Vercel (e.g. https://canarypm.ca/api/drive/callback) and register the same URI on the Google OAuth client.',
   )
+}
+
+function createOAuth2Client() {
+  const clientId = process.env.GMAIL_CLIENT_ID?.trim()
+  const clientSecret = process.env.GMAIL_CLIENT_SECRET?.trim()
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      'GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET must be set for Google Drive OAuth.',
+    )
+  }
+
+  return new google.auth.OAuth2(clientId, clientSecret, resolveDriveRedirectUri())
 }
 
 export function createDriveClient(accessToken: string): drive_v3.Drive {

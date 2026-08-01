@@ -146,7 +146,11 @@ export async function getDriveConnectUrl(): Promise<UpdateOrgResult & { url?: st
     return { success: true, url }
   } catch (err) {
     console.error('[getDriveConnectUrl] failed:', err)
-    return { success: false, error: 'Failed to generate Drive authorization URL.' }
+    const message =
+      err instanceof Error && err.message
+        ? err.message
+        : 'Failed to generate Drive authorization URL.'
+    return { success: false, error: message }
   }
 }
 

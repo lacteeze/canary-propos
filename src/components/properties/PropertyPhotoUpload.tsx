@@ -952,11 +952,6 @@ export function PropertyPhotoUpload({
               </button>
             )}
           </div>
-          <div style={hintStyle}>
-            Shown on the landing page and public listing when this property has a live listing.
-            The first photo is the hero. Click to select · Shift or Ctrl/Cmd+click for multi-select ·
-            drag to reorder (selected photos move together).
-          </div>
           {driveConnected && (
             <div
               style={{

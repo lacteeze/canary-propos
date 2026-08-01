@@ -235,13 +235,21 @@ export function PropertyPublicView({
             </section>
           )}
 
-          <InterestForm
-            orgId={orgId}
-            listingId={linkedListingId}
-            propertyId={property.id}
-            propertyLabel={fullAddress}
-            propertySlug={property.slug}
-          />
+          <div
+            style={{
+              display: 'grid',
+              gap: 24,
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
+            }}
+          >
+            <InterestForm
+              orgId={orgId}
+              listingId={linkedListingId}
+              propertyId={property.id}
+              propertyLabel={fullAddress}
+              propertySlug={property.slug}
+            />
+          </div>
 
           <SimilarListingsSection groups={carouselGroups} copy={listingCardCopy} />
         </div>

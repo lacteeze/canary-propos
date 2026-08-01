@@ -49,7 +49,7 @@ export function InterestForm({
 
   if (success) {
     return (
-      <div id="interest-form" className="cpub-form-card">
+      <div id="interest-form" className="cpub-form-card cpub-form-card--column">
         <div
           style={{
             display: 'flex',
@@ -84,7 +84,7 @@ export function InterestForm({
   }
 
   return (
-    <div id="interest-form" className="cpub-form-card">
+    <div id="interest-form" className="cpub-form-card cpub-form-card--column">
       <h2>Tell us what you&apos;re looking for</h2>
       <p className="cpub-form-sub">
         Get on our list — share your must-haves and we&apos;ll match you with upcoming homes.
@@ -111,13 +111,7 @@ export function InterestForm({
           <input id="int-phone" name="phone" type="tel" placeholder="+1 709 555 0100" />
         </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gap: 16,
-            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-          }}
-        >
+        <div className="cpub-form-row">
           <div className="cpub-field">
             <label htmlFor="int-beds">
               Bedrooms <span style={{ fontWeight: 400, color: 'var(--faint)' }}>(optional)</span>
@@ -148,13 +142,7 @@ export function InterestForm({
           <input id="int-move-in" name="move_in_date" type="date" />
         </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gap: 16,
-            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-          }}
-        >
+        <div className="cpub-form-row">
           <div className="cpub-field">
             <label htmlFor="int-pets">
               Pets <span style={{ fontWeight: 400, color: 'var(--faint)' }}>(optional)</span>

@@ -367,14 +367,13 @@ export function ListingDetailView({
           >
             <InquiryForm listingId={listing.id} orgId={listing.org_id} />
             <ApplicationForm listingId={listing.id} orgId={listing.org_id} />
+            <InterestForm
+              orgId={listing.org_id}
+              listingId={listing.id}
+              propertyId={property?.id ?? null}
+              propertyLabel={fullAddress}
+            />
           </div>
-
-          <InterestForm
-            orgId={listing.org_id}
-            listingId={listing.id}
-            propertyId={property?.id ?? null}
-            propertyLabel={fullAddress}
-          />
 
           <SimilarListingsSection groups={carouselGroups} copy={listingCardCopy} />
         </div>

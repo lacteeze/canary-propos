@@ -55,7 +55,10 @@ export async function getFeaturedListings(
     const legacy = property?.photo_paths?.find((p) => p && !/^https?:\/\//i.test(p))
     return fromMedia || legacy || null
   })
-  const signedCovers = await signListingPhotoPaths(coverPaths.map((p) => p ?? ''))
+  const signedCovers = await signListingPhotoPaths(
+    coverPaths.map((p) => p ?? ''),
+    'preview'
+  )
   const orgQuery = orgSlug ? `?org=${orgSlug}` : ''
 
   return rows.map((listing, index) => {

@@ -3,6 +3,8 @@
 // - Public pages: anon may sign only …/properties/{id}/photos/… when the
 //   property has a published listing (storage_select_anon_listing_photos).
 // - Authenticated staff: may sign any org asset they can SELECT (storage_select_staff).
+// - variant 'preview': Image Transformations (width/quality) for cards/thumbs.
+// - variant 'full' (default): untransformed originals for gallery/lightbox.
 
 import { createPublicClient } from '@/lib/supabase/public'
 
@@ -11,29 +13,56 @@ const SIGNED_TTL_SECONDS = 60 * 60 // 1 hour
 // Reuse signed URLs for a window shorter than their TTL. These are listing
 // photos (no per-user data), so caching is safe. Two wins:
 //  1. Skips the Storage sign round-trip for recently-signed paths.
-//  2. Returns a *stable* URL string per path, so a cover shown on the landing
-//     card and the hero on the detail page resolve to the identical URL — the
-//     browser reuses the already-downloaded image (near-instant hero).
+//  2. Returns a *stable* URL string per path+variant, so repeat views reuse
+//     the same signed URL (browser cache) within the TTL window.
 const SIGNED_CACHE_TTL_MS = 50 * 60 * 1000 // 50 min (< 1h signed TTL)
 /** Drop cache entries this long before the JWT exp claim. */
 const SIGNED_EXPIRY_SKEW_MS = 60 * 1000
 const signedUrlCache = new Map<string, { url: string; expiresAt: number }>()
 
+const PREVIEW_TRANSFORM = {
+  width: 720,
+  quality: 70,
+  resize: 'contain' as const,
+}
+
+export type ListingPhotoVariant = 'preview' | 'full'
+
 type SignedUrlRow = { path: string | null; signedUrl: string | null; error?: string | null }
+
+type TransformOptions = {
+  width?: number
+  quality?: number
+  resize?: 'contain' | 'cover' | 'fill'
+}
+
+type OrgAssetsBucket = {
+  createSignedUrls: (
+    paths: string[],
+    expiresIn: number
+  ) => PromiseLike<{ data: SignedUrlRow[] | null; error: { message: string } | null }>
+  createSignedUrl: (
+    path: string,
+    expiresIn: number,
+    options?: { transform?: TransformOptions }
+  ) => PromiseLike<{
+    data: { signedUrl: string } | null
+    error: { message: string } | null
+  }>
+}
 
 type OrgAssetsSigner = {
   storage: {
-    from: (bucket: string) => {
-      createSignedUrls: (
-        paths: string[],
-        expiresIn: number
-      ) => PromiseLike<{ data: SignedUrlRow[] | null; error: { message: string } | null }>
-    }
+    from: (bucket: string) => OrgAssetsBucket
   }
 }
 
 export function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value)
+}
+
+function cacheKey(path: string, variant: ListingPhotoVariant): string {
+  return `${variant}:${path}`
 }
 
 /** Read JWT `exp` (ms) from a Supabase storage signed URL, or null if unparseable. */
@@ -60,45 +89,43 @@ function cacheExpiryForSignedUrl(url: string, now: number): number {
   return Math.min(fromTtl, jwtExp - SIGNED_EXPIRY_SKEW_MS)
 }
 
+function readCache(path: string, variant: ListingPhotoVariant, now: number): string | null {
+  const key = cacheKey(path, variant)
+  const cached = signedUrlCache.get(key)
+  if (!cached) return null
+  const jwtExp = signedUrlExpiryMs(cached.url)
+  const jwtOk = jwtExp == null || jwtExp - SIGNED_EXPIRY_SKEW_MS > now
+  if (cached.expiresAt > now && jwtOk) return cached.url
+  signedUrlCache.delete(key)
+  return null
+}
+
+function writeCache(path: string, variant: ListingPhotoVariant, url: string, now: number): boolean {
+  const expiresAt = cacheExpiryForSignedUrl(url, now)
+  if (expiresAt <= now) return false
+  signedUrlCache.set(cacheKey(path, variant), { url, expiresAt })
+  return true
+}
+
 /**
- * Batch-sign org-assets storage paths with a caller-supplied Supabase client.
- * Preserves input length and order — empty/missing paths stay '' at the same index
- * so callers can map `signed[i]` back to listing `i` safely.
- * HTTP(S) URLs are not signed (legacy / external); only storage object paths are.
+ * Batch-sign full (untransformed) org-assets paths.
+ * Preserves createSignedUrls batch semantics and caches under variant 'full'.
  */
-export async function signOrgAssetPaths(
-  paths: Array<string | null | undefined>,
+async function signFullPaths(
+  uniquePaths: string[],
   supabase: OrgAssetsSigner,
-  logLabel = 'signOrgAssetPaths'
-): Promise<string[]> {
-  const normalized = paths.map((p) => (p ?? '').trim())
-  if (!normalized.some(Boolean)) return normalized.map(() => '')
-
-  const uniquePaths = [
-    ...new Set(normalized.filter((p) => p.length > 0 && !isHttpUrl(p))),
-  ]
-
+  logLabel: string,
+  now: number
+): Promise<Map<string, string>> {
   const byPath = new Map<string, string>()
-  const now = Date.now()
-
-  // Serve cached signatures first; only sign the paths we don't already have.
-  // Drop entries past local TTL *or* whose JWT exp has lapsed — Next.js may
-  // replay a cached createSignedUrls response into this Map with a fresh local
-  // TTL, which would otherwise keep serving dead tokens for ~50 minutes.
   const toSign: string[] = []
+
   for (const p of uniquePaths) {
-    const cached = signedUrlCache.get(p)
-    const jwtExp = cached ? signedUrlExpiryMs(cached.url) : null
-    const jwtOk = jwtExp == null || jwtExp - SIGNED_EXPIRY_SKEW_MS > now
-    if (cached && cached.expiresAt > now && jwtOk) {
-      byPath.set(p, cached.url)
-    } else {
-      if (cached) signedUrlCache.delete(p)
-      toSign.push(p)
-    }
+    const cached = readCache(p, 'full', now)
+    if (cached) byPath.set(p, cached)
+    else toSign.push(p)
   }
 
-  // Chunk to stay within Storage API batch limits on large portfolios.
   const CHUNK = 100
   for (let i = 0; i < toSign.length; i += CHUNK) {
     const chunk = toSign.slice(i, i + CHUNK)
@@ -112,16 +139,105 @@ export async function signOrgAssetPaths(
     }
     for (const row of data) {
       if (!row.path || !row.signedUrl) continue
-      const expiresAt = cacheExpiryForSignedUrl(row.signedUrl, now)
-      // Refuse to cache or return tokens that are already past usable life.
-      if (expiresAt <= now) {
+      if (!writeCache(row.path, 'full', row.signedUrl, now)) {
         console.error(`[${logLabel}] refusing expired signed URL for`, row.path)
         continue
       }
       byPath.set(row.path, row.signedUrl)
-      signedUrlCache.set(row.path, { url: row.signedUrl, expiresAt })
     }
   }
+
+  return byPath
+}
+
+/**
+ * Sign preview (transformed) URLs in parallel. On transform/sign failure for a
+ * path, fall back to the full signed URL so cards still render when Image
+ * Transformations are unavailable.
+ */
+async function signPreviewPaths(
+  uniquePaths: string[],
+  supabase: OrgAssetsSigner,
+  logLabel: string,
+  now: number
+): Promise<Map<string, string>> {
+  const byPath = new Map<string, string>()
+  const toSign: string[] = []
+
+  for (const p of uniquePaths) {
+    const cached = readCache(p, 'preview', now)
+    if (cached) byPath.set(p, cached)
+    else toSign.push(p)
+  }
+
+  if (!toSign.length) return byPath
+
+  const bucket = supabase.storage.from('org-assets')
+  const results = await Promise.all(
+    toSign.map(async (path) => {
+      const { data, error } = await bucket.createSignedUrl(path, SIGNED_TTL_SECONDS, {
+        transform: PREVIEW_TRANSFORM,
+      })
+      if (error || !data?.signedUrl) {
+        console.warn(
+          `[${logLabel}] preview transform failed for ${path}; falling back to full`,
+          error?.message
+        )
+        return { path, url: null as string | null }
+      }
+      return { path, url: data.signedUrl }
+    })
+  )
+
+  const fallbackPaths: string[] = []
+  for (const { path, url } of results) {
+    if (url && writeCache(path, 'preview', url, now)) {
+      byPath.set(path, url)
+    } else {
+      fallbackPaths.push(path)
+    }
+  }
+
+  if (fallbackPaths.length) {
+    const full = await signFullPaths(fallbackPaths, supabase, logLabel, now)
+    for (const path of fallbackPaths) {
+      const url = full.get(path)
+      if (!url) continue
+      // Cache under preview key so we don't thrash transform retries every request.
+      writeCache(path, 'preview', url, now)
+      byPath.set(path, url)
+    }
+  }
+
+  return byPath
+}
+
+/**
+ * Batch-sign org-assets storage paths with a caller-supplied Supabase client.
+ * Preserves input length and order — empty/missing paths stay '' at the same index
+ * so callers can map `signed[i]` back to listing `i` safely.
+ * HTTP(S) URLs are not signed (legacy / external); only storage object paths are.
+ *
+ * @param variant 'preview' for card/thumb transforms; 'full' (default) for originals.
+ */
+export async function signOrgAssetPaths(
+  paths: Array<string | null | undefined>,
+  supabase: OrgAssetsSigner,
+  logLabel = 'signOrgAssetPaths',
+  variant: ListingPhotoVariant = 'full'
+): Promise<string[]> {
+  const normalized = paths.map((p) => (p ?? '').trim())
+  if (!normalized.some(Boolean)) return normalized.map(() => '')
+
+  const uniquePaths = [
+    ...new Set(normalized.filter((p) => p.length > 0 && !isHttpUrl(p))),
+  ]
+
+  const now = Date.now()
+  const byPath =
+    variant === 'preview'
+      ? await signPreviewPaths(uniquePaths, supabase, logLabel, now)
+      : await signFullPaths(uniquePaths, supabase, logLabel, now)
 
   return normalized.map((path) => {
     if (!path) return ''
@@ -135,9 +251,10 @@ export async function signOrgAssetPaths(
  * Batch-sign storage paths for public pages (anon client).
  */
 export async function signListingPhotoPaths(
-  paths: Array<string | null | undefined>
+  paths: Array<string | null | undefined>,
+  variant: ListingPhotoVariant = 'full'
 ): Promise<string[]> {
-  return signOrgAssetPaths(paths, createPublicClient(), 'signListingPhotoPaths')
+  return signOrgAssetPaths(paths, createPublicClient(), 'signListingPhotoPaths', variant)
 }
 
 export async function resolveListingCoverPhoto(
@@ -145,7 +262,7 @@ export async function resolveListingCoverPhoto(
 ): Promise<string | null> {
   if (!path?.trim()) return null
   if (isHttpUrl(path)) return null
-  const [signed] = await signListingPhotoPaths([path])
+  const [signed] = await signListingPhotoPaths([path], 'full')
   return signed || null
 }
 
@@ -155,7 +272,7 @@ export async function resolveListingGalleryPhotos(
   if (!paths.length) {
     return { hero: null, gallery: [], all: [] }
   }
-  const signed = (await signListingPhotoPaths(paths)).filter(Boolean)
+  const signed = (await signListingPhotoPaths(paths, 'full')).filter(Boolean)
   if (!signed.length) {
     return { hero: null, gallery: [], all: [] }
   }

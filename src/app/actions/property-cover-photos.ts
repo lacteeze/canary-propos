@@ -16,5 +16,5 @@ export async function signPropertyCoverPaths(
   } = await supabase.auth.getUser()
   if (!user) return paths.map(() => '')
 
-  return signOrgAssetPaths(paths, supabase, 'signPropertyCoverPaths')
+  return signOrgAssetPaths(paths, supabase, 'signPropertyCoverPaths', 'preview')
 }

@@ -45,7 +45,7 @@ export async function getPublishedListings(
 
   // Sign only covers on initial load — remaining gallery URLs load on first carousel click.
   const coverPaths = pathLists.map((paths) => paths[0] ?? '')
-  const signedCovers = await signListingPhotoPaths(coverPaths)
+  const signedCovers = await signListingPhotoPaths(coverPaths, 'preview')
 
   const orgQuery = orgSlug ? `?org=${orgSlug}` : ''
 

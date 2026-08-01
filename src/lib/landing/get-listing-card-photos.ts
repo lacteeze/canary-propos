@@ -40,5 +40,5 @@ export async function getListingCardPhotos(listingId: string): Promise<string[]>
   const paths = fromMedia.length ? fromMedia : fromLegacy
   if (!paths.length) return []
 
-  return (await signListingPhotoPaths(paths)).filter(Boolean)
+  return (await signListingPhotoPaths(paths, 'preview')).filter(Boolean)
 }

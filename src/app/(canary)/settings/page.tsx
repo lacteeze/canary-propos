@@ -36,6 +36,14 @@ export default async function SettingsPage() {
 
   if (!org) redirect('/login')
 
+  let initialLogoUrl: string | null = null
+  if (org.logo_path && !org.logo_path.startsWith('pending/')) {
+    const { data: signed } = await supabase.storage
+      .from('org-assets')
+      .createSignedUrl(org.logo_path, 3600)
+    initialLogoUrl = signed?.signedUrl ?? null
+  }
+
   return (
     <CanarySettingsShell>
       <div className="cy-settings-page">
@@ -52,6 +60,7 @@ export default async function SettingsPage() {
           initialName={org.name}
           initialProvince={org.province}
           initialLogoPath={org.logo_path}
+          initialLogoUrl={initialLogoUrl}
         />
 
         <Suspense fallback={null}>

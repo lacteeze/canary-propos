@@ -302,6 +302,13 @@
   letter-spacing: 0.02em;
   color: var(--accent);
   line-height: 1;
+  overflow: hidden;
+}
+.cnry .cy-profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .cnry .cy-search {
@@ -2512,6 +2519,16 @@
   font-weight: 600;
   padding: 8px;
   line-height: 1.25;
+  cursor: pointer;
+  font-family: inherit;
+}
+.cnry .cy-settings-logo-stub:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.cnry .cy-settings-logo-stub:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .cnry .cy-settings-soon {
   margin-left: 8px;

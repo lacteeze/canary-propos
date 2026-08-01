@@ -76,6 +76,8 @@ export async function updateOrgProfile(formData: {
     return { success: false, error: 'Failed to save changes. Please try again.' }
   }
 
+  revalidatePath('/settings')
+  revalidatePath('/api/org-icon')
   return { success: true }
 }
 

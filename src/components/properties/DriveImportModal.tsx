@@ -29,6 +29,10 @@ type Crumb = { id: string; name: string }
 
 const SEARCH_DEBOUNCE_MS = 350
 
+function driveThumbnailSrc(fileId: string): string {
+  return `/api/drive/thumbnail/${encodeURIComponent(fileId)}`
+}
+
 export function DriveImportModal({
   open,
   onClose,
@@ -47,6 +51,9 @@ export function DriveImportModal({
   const [searchInput, setSearchInput] = useState('')
   const [activeSearch, setActiveSearch] = useState('')
   const [searching, setSearching] = useState(false)
+  const [unsupportedFileCount, setUnsupportedFileCount] = useState(0)
+  const [totalChildCount, setTotalChildCount] = useState(0)
+  const [brokenThumbs, setBrokenThumbs] = useState<Set<string>>(() => new Set())
   const [isPending, startTransition] = useTransition()
   const searchSeqRef = useRef(0)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -60,6 +67,9 @@ export function DriveImportModal({
     setError(null)
     setSearchInput('')
     setActiveSearch('')
+    setUnsupportedFileCount(0)
+    setTotalChildCount(0)
+    setBrokenThumbs(new Set())
     setCrumbs([{ id: 'root', name: 'My Drive' }])
     void loadFolder('root')
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -93,14 +103,19 @@ export function DriveImportModal({
   async function loadFolder(folderId: string) {
     setLoading(true)
     setError(null)
+    setBrokenThumbs(new Set())
     const result = await listDriveFolderItems(folderId === 'root' ? null : folderId)
     setLoading(false)
     if (!result.success) {
       setError(result.error)
       setItems([])
+      setUnsupportedFileCount(0)
+      setTotalChildCount(0)
       return
     }
     setItems(result.items)
+    setUnsupportedFileCount(result.unsupportedFileCount)
+    setTotalChildCount(result.totalChildCount)
   }
 
   async function runSearch(query: string) {
@@ -109,6 +124,7 @@ export function DriveImportModal({
     setLoading(true)
     setError(null)
     setActiveSearch(query)
+    setBrokenThumbs(new Set())
 
     const result = await searchDriveFolderItems({
       query,
@@ -122,9 +138,13 @@ export function DriveImportModal({
     if (!result.success) {
       setError(result.error)
       setItems([])
+      setUnsupportedFileCount(0)
+      setTotalChildCount(0)
       return
     }
     setItems(result.items)
+    setUnsupportedFileCount(0)
+    setTotalChildCount(result.items.length)
   }
 
   function clearSearch() {
@@ -221,11 +241,18 @@ export function DriveImportModal({
   const images = items.filter((i) => !i.isFolder)
   const busy = loading || isPending
   const emptyBrowse =
-    !loading &&
-    !isSearchMode &&
-    folders.length === 0 &&
-    (mode === 'link' || images.length === 0)
+    !loading && !isSearchMode && folders.length === 0 && images.length === 0
   const emptySearch = !loading && isSearchMode && items.length === 0
+
+  function emptyBrowseMessage(): string {
+    if (totalChildCount === 0) {
+      return 'This folder has no files or subfolders.'
+    }
+    if (unsupportedFileCount > 0) {
+      return `This folder has ${unsupportedFileCount} file${unsupportedFileCount === 1 ? '' : 's'} but no supported images (JPEG, PNG, WebP, GIF, HEIC/HEIF, or shortcuts to those).`
+    }
+    return 'No supported images found in this folder.'
+  }
 
   const overlay: React.CSSProperties = {
     position: 'fixed',
@@ -347,7 +374,7 @@ export function DriveImportModal({
               }}
             >
               {mode === 'link'
-                ? 'Search or navigate into a folder, then link it for non-recursive photo sync.'
+                ? 'Search or navigate into a folder, then link it. Sync imports images here and in subfolders (up to 2 levels).'
                 : `Search or multi-select images to add as ${visibility} photos.`}
             </div>
           </div>
@@ -444,7 +471,7 @@ export function DriveImportModal({
             </p>
           ) : emptyBrowse ? (
             <p style={{ padding: 12, fontSize: 13, opacity: 0.7 }}>
-              This folder is empty.
+              {emptyBrowseMessage()}
             </p>
           ) : (
             <>
@@ -485,109 +512,128 @@ export function DriveImportModal({
                 </div>
               )}
 
-              {mode === 'import' && (
-                <div>
+              <div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: '.06em',
+                    textTransform: 'uppercase',
+                    opacity: 0.55,
+                    marginBottom: 8,
+                  }}
+                >
+                  Images{images.length > 0 ? ` (${images.length})` : ''}
+                  {mode === 'link' ? ' — preview' : ''}
+                </div>
+                {images.length === 0 ? (
+                  <p style={{ fontSize: 13, opacity: 0.65 }}>
+                    {isSearchMode
+                      ? 'No matching images.'
+                      : unsupportedFileCount > 0
+                        ? `${unsupportedFileCount} other file${unsupportedFileCount === 1 ? '' : 's'} here, but none are supported images.`
+                        : 'No images in this folder.'}
+                  </p>
+                ) : (
                   <div
                     style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: '.06em',
-                      textTransform: 'uppercase',
-                      opacity: 0.55,
-                      marginBottom: 8,
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+                      gap: 8,
                     }}
                   >
-                    Images
-                  </div>
-                  {images.length === 0 ? (
-                    <p style={{ fontSize: 13, opacity: 0.65 }}>
-                      {isSearchMode
-                        ? 'No matching images.'
-                        : 'No images in this folder.'}
-                    </p>
-                  ) : (
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
-                        gap: 8,
-                      }}
-                    >
-                      {images.map((img) => {
-                        const isSelected = selected.has(img.id)
-                        return (
-                          <button
-                            key={img.id}
-                            type="button"
-                            disabled={busy}
-                            onClick={() => toggleSelect(img.id)}
-                            style={{
-                              border: isSelected
+                    {images.map((img) => {
+                      const isSelected = selected.has(img.id)
+                      const selectable = mode === 'import'
+                      const showThumb = !brokenThumbs.has(img.id)
+                      return (
+                        <button
+                          key={img.id}
+                          type="button"
+                          disabled={busy || !selectable}
+                          onClick={() => {
+                            if (selectable) toggleSelect(img.id)
+                          }}
+                          style={{
+                            border:
+                              selectable && isSelected
                                 ? themed
                                   ? '1.5px solid var(--accent)'
                                   : '1.5px solid #d97706'
                                 : themed
                                   ? '1px solid var(--border)'
                                   : '1px solid #e7e5e4',
-                              borderRadius: 10,
-                              padding: 8,
-                              background: themed ? 'var(--bg)' : '#fafaf9',
-                              cursor: 'pointer',
-                              textAlign: 'left',
+                            borderRadius: 10,
+                            padding: 8,
+                            background: themed ? 'var(--bg)' : '#fafaf9',
+                            cursor: selectable ? 'pointer' : 'default',
+                            textAlign: 'left',
+                            opacity: selectable ? 1 : 0.92,
+                          }}
+                        >
+                          <div
+                            style={{
+                              aspectRatio: '4/3',
+                              borderRadius: 6,
+                              background: themed ? 'var(--elev)' : '#e7e5e4',
+                              marginBottom: 6,
+                              overflow: 'hidden',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 22,
                             }}
                           >
-                            <div
-                              style={{
-                                aspectRatio: '4/3',
-                                borderRadius: 6,
-                                background: themed ? 'var(--elev)' : '#e7e5e4',
-                                marginBottom: 6,
-                                overflow: 'hidden',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: 22,
-                              }}
-                            >
-                              {img.thumbnailLink ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={img.thumbnailLink}
-                                  alt=""
-                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                  referrerPolicy="no-referrer"
-                                />
-                              ) : (
-                                '🖼'
-                              )}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: 11.5,
-                                fontWeight: 600,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
-                              title={img.name}
-                            >
-                              {isSelected ? '✓ ' : ''}
-                              {img.name}
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
+                            {showThumb ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={driveThumbnailSrc(img.id)}
+                                alt=""
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'cover',
+                                }}
+                                onError={() => {
+                                  setBrokenThumbs((prev) => {
+                                    const next = new Set(prev)
+                                    next.add(img.id)
+                                    return next
+                                  })
+                                }}
+                              />
+                            ) : (
+                              '🖼'
+                            )}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 11.5,
+                              fontWeight: 600,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                            title={img.name}
+                          >
+                            {selectable && isSelected ? '✓ ' : ''}
+                            {img.name}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
 
               {mode === 'link' && !isSearchMode && (
-                <p style={{ fontSize: 13, opacity: 0.7, lineHeight: 1.4 }}>
+                <p style={{ fontSize: 13, opacity: 0.7, lineHeight: 1.4, marginTop: 12 }}>
                   Current folder: <strong>{crumbs[crumbs.length - 1]?.name}</strong>
                   {currentFolderId === 'root'
                     ? ' — open a specific folder to link it.'
-                    : ' — only image files directly in this folder will sync (not subfolders).'}
+                    : images.length > 0
+                      ? ` — ${images.length} image${images.length === 1 ? '' : 's'} here will sync (plus images in subfolders up to 2 levels).`
+                      : ' — sync will also look for images in subfolders (up to 2 levels).'}
                 </p>
               )}
 

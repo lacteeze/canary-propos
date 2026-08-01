@@ -17,6 +17,8 @@ export type DriveSyncStats = {
   replaced: number
   skipped: number
   missingOnDrive: number
+  /** Images discovered on Drive (after mime/shortcut/recursive filters). */
+  foundOnDrive: number
   errors: string[]
 }
 
@@ -188,11 +190,13 @@ export async function syncPropertyDriveFolder(opts: {
     replaced: 0,
     skipped: 0,
     missingOnDrive: 0,
+    foundOnDrive: 0,
     errors: [],
   }
 
   const accessToken = await refreshDriveTokenIfNeeded(orgId, supabase)
   const driveImages = await listDriveImagesInFolder(accessToken, folderId)
+  stats.foundOnDrive = driveImages.length
   const driveIds = new Set(driveImages.map((f) => f.id))
 
   const { data: linkedMedia } = await supabase
@@ -253,6 +257,7 @@ export async function syncAllLinkedDriveFolders(): Promise<{
     replaced: 0,
     skipped: 0,
     missingOnDrive: 0,
+    foundOnDrive: 0,
     errors: [],
   }
   const errors: string[] = []
@@ -279,6 +284,7 @@ export async function syncAllLinkedDriveFolders(): Promise<{
       aggregate.replaced += stats.replaced
       aggregate.skipped += stats.skipped
       aggregate.missingOnDrive += stats.missingOnDrive
+      aggregate.foundOnDrive += stats.foundOnDrive
       for (const e of stats.errors) {
         aggregate.errors.push(`${property.street_address}: ${e}`)
       }

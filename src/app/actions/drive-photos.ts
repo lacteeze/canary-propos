@@ -5,11 +5,11 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import {
   getDriveFileMetadata,
-  listDriveChildren,
+  listDriveFolderListing,
   refreshDriveTokenIfNeeded,
   searchDriveItems,
 } from '@/lib/google-drive'
-import type { DriveListItem } from '@/lib/google-drive-types'
+import type { DriveFolderListing, DriveListItem } from '@/lib/google-drive-types'
 import {
   importDriveFileToProperty,
   syncPropertyDriveFolder,
@@ -65,7 +65,7 @@ export async function getDriveConnectionStatus(): Promise<
 export async function listDriveFolderItems(
   folderId?: string | null,
 ): Promise<
-  | { success: true; items: DriveListItem[]; folderId: string }
+  | ({ success: true } & DriveFolderListing)
   | { success: false; error: string }
 > {
   const ctx = await getCallerContext()
@@ -80,8 +80,8 @@ export async function listDriveFolderItems(
       ctx.supabase,
     )
     const parent = folderId && folderId.length > 0 ? folderId : 'root'
-    const items = await listDriveChildren(accessToken, parent)
-    return { success: true, items, folderId: parent }
+    const listing = await listDriveFolderListing(accessToken, parent)
+    return { success: true, ...listing }
   } catch (err) {
     console.error('[listDriveFolderItems]', err)
     const message =
@@ -379,6 +379,20 @@ export async function syncPropertyDrivePhotos(
     revalidatePath('/app')
     revalidatePath('/')
     revalidatePath('/listings')
+
+    if (
+      stats.foundOnDrive === 0 &&
+      stats.imported === 0 &&
+      stats.replaced === 0 &&
+      stats.skipped === 0
+    ) {
+      return {
+        success: false,
+        error:
+          'No supported images found in the linked folder (including one level of subfolders). Supported: JPEG, PNG, WebP, GIF, HEIC/HEIF, and shortcuts to those types.',
+        stats,
+      }
+    }
 
     return { success: true, stats }
   } catch (err) {

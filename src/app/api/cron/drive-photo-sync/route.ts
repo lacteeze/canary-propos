@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
       replaced: result.stats.replaced,
       skipped: result.stats.skipped,
       missingOnDrive: result.stats.missingOnDrive,
+      foundOnDrive: result.stats.foundOnDrive,
       errors: [...result.errors, ...result.stats.errors].slice(0, 50),
     })
   } catch (err) {

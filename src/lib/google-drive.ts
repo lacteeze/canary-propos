@@ -9,9 +9,9 @@
 
 import { google, type drive_v3 } from 'googleapis'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { DriveListItem } from '@/lib/google-drive-types'
+import type { DriveFolderListing, DriveListItem } from '@/lib/google-drive-types'
 
-export type { DriveListItem } from '@/lib/google-drive-types'
+export type { DriveFolderListing, DriveListItem } from '@/lib/google-drive-types'
 
 export const DRIVE_READONLY_SCOPE = 'https://www.googleapis.com/auth/drive.readonly'
 
@@ -20,9 +20,22 @@ export const DRIVE_IMAGE_MIME_TYPES = new Set([
   'image/jpg',
   'image/png',
   'image/webp',
+  'image/gif',
+  'image/heic',
+  'image/heif',
 ])
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
+const SHORTCUT_MIME = 'application/vnd.google-apps.shortcut'
+
+/** Max folder depth below the linked root when collecting images for sync (0 = root only). */
+export const DRIVE_IMAGE_SYNC_MAX_DEPTH = 2
+
+const LIST_FIELDS =
+  'nextPageToken, files(id, name, mimeType, modifiedTime, md5Checksum, size, thumbnailLink, shortcutDetails(targetId, targetMimeType))'
+
+const FILE_FIELDS =
+  'id, name, mimeType, modifiedTime, md5Checksum, size, thumbnailLink, shortcutDetails(targetId, targetMimeType)'
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -166,7 +179,15 @@ function escapeDriveQueryValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
 }
 
-function mapDriveFile(file: drive_v3.Schema$File): DriveListItem | null {
+export function isDriveImageMime(mimeType: string | null | undefined): boolean {
+  if (!mimeType) return false
+  return DRIVE_IMAGE_MIME_TYPES.has(mimeType.toLowerCase())
+}
+
+function mapDriveFile(
+  file: drive_v3.Schema$File,
+  opts?: { resolvedFromShortcut?: boolean },
+): DriveListItem | null {
   if (!file.id || !file.name || !file.mimeType) return null
   return {
     id: file.id,
@@ -177,25 +198,21 @@ function mapDriveFile(file: drive_v3.Schema$File): DriveListItem | null {
     md5Checksum: file.md5Checksum ?? null,
     size: file.size ? Number(file.size) : null,
     thumbnailLink: file.thumbnailLink ?? null,
+    resolvedFromShortcut: opts?.resolvedFromShortcut,
   }
 }
 
-const DRIVE_BROWSE_MIME_FILTER = `(mimeType = '${FOLDER_MIME}' or mimeType = 'image/jpeg' or mimeType = 'image/png' or mimeType = 'image/webp' or mimeType = 'image/jpg')`
-
-export async function listDriveChildren(
-  accessToken: string,
-  parentId: string | null = 'root',
-): Promise<DriveListItem[]> {
-  const drive = createDriveClient(accessToken)
+async function listRawChildren(
+  drive: drive_v3.Drive,
+  parentId: string,
+): Promise<drive_v3.Schema$File[]> {
   const parent = parentId && parentId.length > 0 ? parentId : 'root'
-
   const q = [
     `'${escapeDriveQueryValue(parent)}' in parents`,
     'trashed = false',
-    DRIVE_BROWSE_MIME_FILTER,
   ].join(' and ')
 
-  const items: DriveListItem[] = []
+  const files: drive_v3.Schema$File[] = []
   let pageToken: string | undefined
 
   do {
@@ -203,22 +220,163 @@ export async function listDriveChildren(
       q,
       pageSize: 100,
       pageToken,
-      fields:
-        'nextPageToken, files(id, name, mimeType, modifiedTime, md5Checksum, size, thumbnailLink)',
+      fields: LIST_FIELDS,
       orderBy: 'folder,name_natural',
       supportsAllDrives: true,
       includeItemsFromAllDrives: true,
     })
 
     for (const file of res.data.files ?? []) {
-      const mapped = mapDriveFile(file)
-      if (mapped) items.push(mapped)
+      files.push(file)
     }
 
     pageToken = res.data.nextPageToken ?? undefined
   } while (pageToken)
 
-  return items
+  return files
+}
+
+/**
+ * Resolve a shortcut file to its image target when possible.
+ * Returns null when the target is missing or not a supported image.
+ */
+async function resolveShortcutToImage(
+  drive: drive_v3.Drive,
+  shortcut: drive_v3.Schema$File,
+): Promise<DriveListItem | null> {
+  const targetId = shortcut.shortcutDetails?.targetId
+  const targetMime = shortcut.shortcutDetails?.targetMimeType ?? null
+  if (!targetId) return null
+
+  // Fast path: API already told us the target mime type
+  if (targetMime && !isDriveImageMime(targetMime) && targetMime !== FOLDER_MIME) {
+    return null
+  }
+  if (targetMime === FOLDER_MIME) return null
+
+  try {
+    const res = await drive.files.get({
+      fileId: targetId,
+      fields: FILE_FIELDS,
+      supportsAllDrives: true,
+    })
+    const mapped = mapDriveFile(res.data, { resolvedFromShortcut: true })
+    if (!mapped || mapped.isFolder || !isDriveImageMime(mapped.mimeType)) {
+      return null
+    }
+    // Keep the shortcut's display name when present
+    if (shortcut.name) mapped.name = shortcut.name
+    return mapped
+  } catch {
+    return null
+  }
+}
+
+type ClassifiedChildren = {
+  folders: DriveListItem[]
+  images: DriveListItem[]
+  unsupportedFileCount: number
+  totalChildCount: number
+}
+
+async function classifyChildren(
+  drive: drive_v3.Drive,
+  raw: drive_v3.Schema$File[],
+): Promise<ClassifiedChildren> {
+  const folders: DriveListItem[] = []
+  const images: DriveListItem[] = []
+  let unsupportedFileCount = 0
+  const seenImageIds = new Set<string>()
+
+  const shortcuts: drive_v3.Schema$File[] = []
+
+  for (const file of raw) {
+    if (!file.id || !file.mimeType) {
+      unsupportedFileCount += 1
+      continue
+    }
+
+    if (file.mimeType === FOLDER_MIME) {
+      const mapped = mapDriveFile(file)
+      if (mapped) folders.push(mapped)
+      continue
+    }
+
+    if (file.mimeType === SHORTCUT_MIME) {
+      shortcuts.push(file)
+      continue
+    }
+
+    if (isDriveImageMime(file.mimeType)) {
+      const mapped = mapDriveFile(file)
+      if (mapped && !seenImageIds.has(mapped.id)) {
+        seenImageIds.add(mapped.id)
+        images.push(mapped)
+      }
+      continue
+    }
+
+    unsupportedFileCount += 1
+  }
+
+  // Resolve shortcuts in small parallel batches
+  const BATCH = 8
+  for (let i = 0; i < shortcuts.length; i += BATCH) {
+    const batch = shortcuts.slice(i, i + BATCH)
+    const resolved = await Promise.all(
+      batch.map((s) => resolveShortcutToImage(drive, s)),
+    )
+    for (let j = 0; j < resolved.length; j++) {
+      const item = resolved[j]
+      if (item && !seenImageIds.has(item.id)) {
+        seenImageIds.add(item.id)
+        images.push(item)
+      } else if (!item) {
+        unsupportedFileCount += 1
+      }
+    }
+  }
+
+  return {
+    folders,
+    images,
+    unsupportedFileCount,
+    totalChildCount: raw.length,
+  }
+}
+
+/**
+ * List folders + supported images in a Drive folder (direct children only).
+ * Resolves image shortcuts. Does not mime-filter the Drive query so HEIC and
+ * other types are visible to classification (empty-state diagnostics).
+ */
+export async function listDriveChildren(
+  accessToken: string,
+  parentId: string | null = 'root',
+): Promise<DriveListItem[]> {
+  const listing = await listDriveFolderListing(accessToken, parentId)
+  return listing.items
+}
+
+/** Full browse payload with empty-state counters. */
+export async function listDriveFolderListing(
+  accessToken: string,
+  parentId: string | null = 'root',
+): Promise<DriveFolderListing> {
+  const drive = createDriveClient(accessToken)
+  const parent = parentId && parentId.length > 0 ? parentId : 'root'
+  const raw = await listRawChildren(drive, parent)
+  const classified = await classifyChildren(drive, raw)
+  const items = [...classified.folders, ...classified.images]
+
+  return {
+    items,
+    folderId: parent,
+    totalChildCount: classified.totalChildCount,
+    unsupportedFileCount: classified.unsupportedFileCount,
+    imageCount: classified.images.length,
+    folderCount: classified.folders.length,
+  }
 }
 
 /**
@@ -236,9 +394,12 @@ export async function searchDriveItems(
   const drive = createDriveClient(accessToken)
   const foldersOnly = options?.foldersOnly ?? false
   const maxResults = options?.maxResults ?? 50
+
+  // Broader query: folders, common images, HEIC/HEIF/GIF, and shortcuts.
+  // Classification drops non-image shortcuts after resolve.
   const mimeFilter = foldersOnly
     ? `mimeType = '${FOLDER_MIME}'`
-    : DRIVE_BROWSE_MIME_FILTER
+    : `(mimeType = '${FOLDER_MIME}' or mimeType contains 'image/' or mimeType = '${SHORTCUT_MIME}')`
 
   const q = [
     mimeFilter,
@@ -246,47 +407,87 @@ export async function searchDriveItems(
     'trashed = false',
   ].join(' and ')
 
-  const items: DriveListItem[] = []
+  const raw: drive_v3.Schema$File[] = []
   let pageToken: string | undefined
 
   do {
-    const pageSize = Math.min(100, maxResults - items.length)
-    if (pageSize <= 0) break
+    const pageSize = Math.min(100, Math.max(maxResults * 2 - raw.length, 10))
+    if (raw.length >= maxResults * 2) break
 
     const res = await drive.files.list({
       q,
       pageSize,
       pageToken,
-      fields:
-        'nextPageToken, files(id, name, mimeType, modifiedTime, md5Checksum, size, thumbnailLink)',
+      fields: LIST_FIELDS,
       orderBy: 'folder,name_natural',
       supportsAllDrives: true,
       includeItemsFromAllDrives: true,
     })
 
     for (const file of res.data.files ?? []) {
-      const mapped = mapDriveFile(file)
-      if (mapped) items.push(mapped)
-      if (items.length >= maxResults) break
+      raw.push(file)
     }
 
-    pageToken =
-      items.length >= maxResults
-        ? undefined
-        : (res.data.nextPageToken ?? undefined)
+    pageToken = res.data.nextPageToken ?? undefined
   } while (pageToken)
 
-  return items
+  if (foldersOnly) {
+    const folders: DriveListItem[] = []
+    for (const file of raw) {
+      const mapped = mapDriveFile(file)
+      if (mapped?.isFolder) folders.push(mapped)
+      if (folders.length >= maxResults) break
+    }
+    return folders
+  }
+
+  const classified = await classifyChildren(drive, raw)
+  return [...classified.folders, ...classified.images].slice(0, maxResults)
 }
 
+/**
+ * Collect supported images under a folder, including nested folders up to
+ * `maxDepth` levels below the root (default 2 — covers typical Photos/ subfolders).
+ */
 export async function listDriveImagesInFolder(
   accessToken: string,
   folderId: string,
+  options?: { maxDepth?: number },
 ): Promise<DriveListItem[]> {
-  const children = await listDriveChildren(accessToken, folderId)
-  return children.filter(
-    (item) => !item.isFolder && DRIVE_IMAGE_MIME_TYPES.has(item.mimeType),
-  )
+  const maxDepth = options?.maxDepth ?? DRIVE_IMAGE_SYNC_MAX_DEPTH
+  const drive = createDriveClient(accessToken)
+  const images: DriveListItem[] = []
+  const seenImageIds = new Set<string>()
+
+  type QueueItem = { id: string; depth: number }
+  const queue: QueueItem[] = [{ id: folderId, depth: 0 }]
+  const visitedFolders = new Set<string>()
+
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (!current || visitedFolders.has(current.id)) continue
+    visitedFolders.add(current.id)
+
+    const raw = await listRawChildren(drive, current.id)
+    const classified = await classifyChildren(drive, raw)
+
+    for (const img of classified.images) {
+      if (!seenImageIds.has(img.id)) {
+        seenImageIds.add(img.id)
+        images.push(img)
+      }
+    }
+
+    if (current.depth < maxDepth) {
+      for (const folder of classified.folders) {
+        if (!visitedFolders.has(folder.id)) {
+          queue.push({ id: folder.id, depth: current.depth + 1 })
+        }
+      }
+    }
+  }
+
+  return images
 }
 
 export async function getDriveFileMetadata(
@@ -296,11 +497,18 @@ export async function getDriveFileMetadata(
   const drive = createDriveClient(accessToken)
   const res = await drive.files.get({
     fileId,
-    fields: 'id, name, mimeType, modifiedTime, md5Checksum, size, thumbnailLink',
+    fields: FILE_FIELDS,
     supportsAllDrives: true,
   })
 
-  return mapDriveFile(res.data)
+  if (res.data.mimeType === SHORTCUT_MIME) {
+    return resolveShortcutToImage(drive, res.data)
+  }
+
+  const mapped = mapDriveFile(res.data)
+  if (!mapped) return null
+  if (!mapped.isFolder && !isDriveImageMime(mapped.mimeType)) return null
+  return mapped
 }
 
 export async function downloadDriveFile(
@@ -310,19 +518,30 @@ export async function downloadDriveFile(
   const drive = createDriveClient(accessToken)
   const meta = await drive.files.get({
     fileId,
-    fields: 'id, name, mimeType',
+    fields: 'id, name, mimeType, shortcutDetails(targetId, targetMimeType)',
     supportsAllDrives: true,
   })
 
-  const mimeType = meta.data.mimeType ?? 'application/octet-stream'
-  const name = meta.data.name ?? fileId
+  let targetId = fileId
+  let mimeType = meta.data.mimeType ?? 'application/octet-stream'
+  let name = meta.data.name ?? fileId
 
-  if (!DRIVE_IMAGE_MIME_TYPES.has(mimeType)) {
+  if (mimeType === SHORTCUT_MIME) {
+    const resolved = await resolveShortcutToImage(drive, meta.data)
+    if (!resolved) {
+      throw new Error('Drive shortcut does not point to a supported image.')
+    }
+    targetId = resolved.id
+    mimeType = resolved.mimeType
+    name = resolved.name
+  }
+
+  if (!isDriveImageMime(mimeType)) {
     throw new Error(`Unsupported Drive file type: ${mimeType}`)
   }
 
   const res = await drive.files.get(
-    { fileId, alt: 'media', supportsAllDrives: true },
+    { fileId: targetId, alt: 'media', supportsAllDrives: true },
     { responseType: 'arraybuffer' },
   )
 
@@ -330,8 +549,57 @@ export async function downloadDriveFile(
   return { buffer, mimeType, name }
 }
 
+/** Fetch a Drive thumbnail bytes for the authenticated proxy. */
+export async function fetchDriveThumbnail(
+  accessToken: string,
+  fileId: string,
+): Promise<{ buffer: Buffer; contentType: string } | null> {
+  const drive = createDriveClient(accessToken)
+  const meta = await drive.files.get({
+    fileId,
+    fields: 'id, mimeType, thumbnailLink, shortcutDetails(targetId, targetMimeType)',
+    supportsAllDrives: true,
+  })
+
+  let targetId = fileId
+  if (meta.data.mimeType === SHORTCUT_MIME) {
+    const target = meta.data.shortcutDetails?.targetId
+    if (!target) return null
+    targetId = target
+  }
+
+  const thumbMeta =
+    targetId === fileId
+      ? meta
+      : await drive.files.get({
+          fileId: targetId,
+          fields: 'thumbnailLink',
+          supportsAllDrives: true,
+        })
+
+  const thumbnailLink = thumbMeta.data.thumbnailLink
+  if (!thumbnailLink) return null
+
+  // thumbnailLink is often usable with the OAuth token; try with auth first.
+  const headers: HeadersInit = { Authorization: `Bearer ${accessToken}` }
+  let res = await fetch(thumbnailLink, { headers })
+  if (!res.ok) {
+    // Some googleusercontent URLs reject Authorization — retry without.
+    res = await fetch(thumbnailLink)
+  }
+  if (!res.ok) return null
+
+  const contentType = res.headers.get('content-type') ?? 'image/jpeg'
+  const buffer = Buffer.from(await res.arrayBuffer())
+  return { buffer, contentType }
+}
+
 export function extensionForMime(mimeType: string): string {
-  if (mimeType === 'image/png') return 'png'
-  if (mimeType === 'image/webp') return 'webp'
+  const normalized = mimeType.toLowerCase()
+  if (normalized === 'image/png') return 'png'
+  if (normalized === 'image/webp') return 'webp'
+  if (normalized === 'image/gif') return 'gif'
+  if (normalized === 'image/heic') return 'heic'
+  if (normalized === 'image/heif') return 'heif'
   return 'jpg'
 }

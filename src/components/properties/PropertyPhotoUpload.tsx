@@ -13,6 +13,12 @@ import {
   type PropertyMediaItem,
   type PropertyMediaVisibility,
 } from '@/app/actions/property-media'
+import {
+  getPropertyDriveLink,
+  syncPropertyDrivePhotos,
+  unlinkPropertyDriveFolder,
+} from '@/app/actions/drive-photos'
+import { DriveImportModal } from '@/components/properties/DriveImportModal'
 
 const MEDIA_DND_TYPE = 'application/x-canary-media-id'
 
@@ -97,6 +103,16 @@ export function PropertyPhotoUpload({
   const [reordering, setReordering] = useState(false)
   const [deletingAllListing, setDeletingAllListing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [driveConnected, setDriveConnected] = useState(false)
+  const [driveFolderId, setDriveFolderId] = useState<string | null>(null)
+  const [driveFolderName, setDriveFolderName] = useState<string | null>(null)
+  const [driveLastSyncedAt, setDriveLastSyncedAt] = useState<string | null>(null)
+  const [driveModal, setDriveModal] = useState<{
+    open: boolean
+    mode: 'import' | 'link'
+    visibility: PropertyMediaVisibility
+  }>({ open: false, mode: 'import', visibility: 'listing' })
+  const [syncingDrive, setSyncingDrive] = useState(false)
   const listingInputRef = useRef<HTMLInputElement>(null)
   const privateInputRef = useRef<HTMLInputElement>(null)
   const dragDepthRef = useRef<Record<PropertyMediaVisibility, number>>({
@@ -136,10 +152,61 @@ export function PropertyPhotoUpload({
     setItems(withUrls.filter((i) => i.url))
   }
 
+  async function refreshDriveLink() {
+    const result = await getPropertyDriveLink(propertyId)
+    if (!result.success) return
+    setDriveConnected(result.driveConnected)
+    setDriveFolderId(result.folderId)
+    setDriveFolderName(result.folderName)
+    setDriveLastSyncedAt(result.lastSyncedAt)
+  }
+
   useEffect(() => {
     void refresh()
+    void refreshDriveLink()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, visibility])
+
+  async function handleSyncDrive() {
+    if (syncingDrive) return
+    setSyncingDrive(true)
+    setError(null)
+    try {
+      const result = await syncPropertyDrivePhotos(propertyId)
+      if (!result.success) {
+        setError(result.error)
+        return
+      }
+      const stats = result.stats
+      if (stats && stats.errors.length && stats.imported + stats.replaced === 0) {
+        setError(stats.errors[0])
+      }
+      await refresh()
+      await refreshDriveLink()
+      onChanged?.()
+    } catch (err) {
+      console.error('[PropertyPhotoUpload:syncDrive]', err)
+      setError('Drive sync failed.')
+    } finally {
+      setSyncingDrive(false)
+    }
+  }
+
+  async function handleUnlinkDrive() {
+    if (!driveFolderId) return
+    const confirmed = window.confirm(
+      'Unlink this Drive folder? Existing photos stay in PropOS; sync will stop.',
+    )
+    if (!confirmed) return
+    const result = await unlinkPropertyDriveFolder(propertyId)
+    if (!result.success) {
+      setError(result.error)
+      return
+    }
+    setDriveFolderId(null)
+    setDriveFolderName(null)
+    setDriveLastSyncedAt(null)
+  }
 
   async function uploadOneFile(file: File, target: PropertyMediaVisibility) {
     const folder = target === 'listing' ? 'photos' : 'private-photos'
@@ -834,10 +901,24 @@ export function PropertyPhotoUpload({
                 : 'Upload photos'}
             </span>
           </label>
+          {driveConnected && (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() =>
+                setDriveModal({ open: true, mode: 'import', visibility: target })
+              }
+              style={{ ...btnStyle, opacity: disabled ? 0.55 : 1 }}
+            >
+              Import from Drive
+            </button>
+          )}
           <span style={{ ...hintStyle, marginBottom: 0 }}>
             {isDragTarget
               ? 'Drop to upload'
-              : 'Drag & drop or browse · JPEG, PNG, or WebP · max 20 MB · full resolution'}
+              : driveConnected
+                ? 'Drag & drop, browse, or import from Drive · JPEG, PNG, or WebP · max 20 MB'
+                : 'Drag & drop or browse · JPEG, PNG, or WebP · max 20 MB · full resolution'}
           </span>
         </div>
         {body}
@@ -876,6 +957,99 @@ export function PropertyPhotoUpload({
             The first photo is the hero. Click to select · Shift or Ctrl/Cmd+click for multi-select ·
             drag to reorder (selected photos move together).
           </div>
+          {driveConnected && (
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 8,
+                marginBottom: 10,
+                padding: themed ? '8px 10px' : '8px 10px',
+                borderRadius: themed ? 10 : 8,
+                border: themed ? '1px solid var(--border)' : '1px solid #e7e5e4',
+                background: themed
+                  ? 'color-mix(in srgb, var(--elev) 80%, transparent)'
+                  : '#fafaf9',
+              }}
+            >
+              <div style={{ flex: '1 1 180px', minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: themed ? 11 : 12,
+                    fontWeight: 700,
+                    letterSpacing: themed ? '.04em' : undefined,
+                    textTransform: themed ? 'uppercase' : undefined,
+                    color: themed ? 'var(--dim)' : '#57534e',
+                  }}
+                >
+                  Linked Drive folder
+                </div>
+                <div
+                  style={{
+                    fontSize: themed ? 12.5 : 13,
+                    color: themed ? 'var(--text)' : '#292524',
+                    marginTop: 2,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={driveFolderName ?? undefined}
+                >
+                  {driveFolderId
+                    ? driveFolderName ?? 'Linked folder'
+                    : 'None — link a folder to auto-sync listing photos'}
+                </div>
+                {driveLastSyncedAt && (
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: themed ? 'var(--faint)' : '#a8a29e',
+                      marginTop: 2,
+                    }}
+                  >
+                    Last synced{' '}
+                    {new Date(driveLastSyncedAt).toLocaleString('en-CA', {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    })}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <button
+                  type="button"
+                  disabled={!!uploading || syncingDrive}
+                  onClick={() =>
+                    setDriveModal({ open: true, mode: 'link', visibility: 'listing' })
+                  }
+                  style={btnStyle}
+                >
+                  {driveFolderId ? 'Change folder' : 'Link folder'}
+                </button>
+                {driveFolderId && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={!!uploading || syncingDrive}
+                      onClick={() => void handleSyncDrive()}
+                      style={btnStyle}
+                    >
+                      {syncingDrive ? 'Syncing…' : 'Sync now'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!!uploading || syncingDrive}
+                      onClick={() => void handleUnlinkDrive()}
+                      style={btnStyle}
+                    >
+                      Unlink
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
           {renderDropFrame(
             'listing',
             listingInputRef,
@@ -936,6 +1110,24 @@ export function PropertyPhotoUpload({
           {error}
         </p>
       )}
+
+      <DriveImportModal
+        open={driveModal.open}
+        mode={driveModal.mode}
+        visibility={driveModal.visibility}
+        propertyId={propertyId}
+        themed={themed}
+        onClose={() => setDriveModal((prev) => ({ ...prev, open: false }))}
+        onImported={() => {
+          void refresh()
+          onChanged?.()
+        }}
+        onLinked={(folder) => {
+          setDriveFolderId(folder.id)
+          setDriveFolderName(folder.name)
+          void handleSyncDrive()
+        }}
+      />
     </div>
   )
 }

@@ -101,6 +101,7 @@ const addSchema = z.object({
   storagePath: z.string().min(1),
   visibility: z.enum(['listing', 'private']),
   caption: z.string().max(200).optional().nullable(),
+  driveFileId: z.string().min(1).optional().nullable(),
 })
 
 export async function addPropertyMedia(input: {
@@ -108,6 +109,7 @@ export async function addPropertyMedia(input: {
   storagePath: string
   visibility: PropertyMediaVisibility
   caption?: string | null
+  driveFileId?: string | null
 }): Promise<ActionResult & { id?: string }> {
   const ctx = await getCallerContext()
   if (!ctx) return { success: false, error: 'You must be signed in.' }
@@ -141,6 +143,53 @@ export async function addPropertyMedia(input: {
 
   const nextOrder = (existing?.[0]?.sort_order ?? -1) + 1
 
+  // If the same Drive file is already linked in this org, replace storage path.
+  if (parsed.data.driveFileId) {
+    const { data: existingDrive } = await ctx.supabase
+      .from('property_media')
+      .select('id, storage_path, property_id, visibility')
+      .eq('org_id', ctx.person.org_id)
+      .eq('drive_file_id', parsed.data.driveFileId)
+      .maybeSingle()
+
+    if (existingDrive) {
+      const oldPath = existingDrive.storage_path
+      const { error: updateError } = await ctx.supabase
+        .from('property_media')
+        .update({
+          storage_path: parsed.data.storagePath,
+          caption: parsed.data.caption ?? null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingDrive.id)
+        .eq('org_id', ctx.person.org_id)
+
+      if (updateError) {
+        console.error('[addPropertyMedia:replace]', updateError)
+        return { success: false, error: 'Failed to replace Drive photo. Please try again.' }
+      }
+
+      if (oldPath && oldPath !== parsed.data.storagePath) {
+        await ctx.supabase.storage.from('org-assets').remove([oldPath])
+      }
+
+      if (
+        existingDrive.visibility === 'listing' ||
+        parsed.data.visibility === 'listing'
+      ) {
+        await syncLegacyPhotoPaths(
+          ctx.supabase,
+          existingDrive.property_id,
+          ctx.person.org_id,
+        )
+      }
+
+      revalidatePath('/properties/' + existingDrive.property_id)
+      revalidatePath('/app')
+      return { success: true, id: existingDrive.id }
+    }
+  }
+
   const { data: inserted, error } = await ctx.supabase
     .from('property_media')
     .insert({
@@ -150,6 +199,7 @@ export async function addPropertyMedia(input: {
       visibility: parsed.data.visibility,
       sort_order: nextOrder,
       caption: parsed.data.caption ?? null,
+      drive_file_id: parsed.data.driveFileId ?? null,
     })
     .select('id')
     .single()

@@ -26,7 +26,64 @@ const PREVIEW_TRANSFORM = {
   resize: 'contain' as const,
 }
 
+/**
+ * Process-level cache for whether `/render/image` signed URLs actually serve.
+ * createSignedUrl can succeed even when Image Transformations are off/broken;
+ * those render URLs then 404 in the browser. Probe once, then stick to full URLs.
+ * null = not probed yet.
+ */
+let previewTransformsUsable: boolean | null = null
+
 export type ListingPhotoVariant = 'preview' | 'full'
+
+function transformsOptedOut(): boolean {
+  const flag = process.env.SUPABASE_IMAGE_TRANSFORMS?.trim().toLowerCase()
+  return flag === '0' || flag === 'false' || flag === 'off'
+}
+
+function isStorageRenderUrl(url: string): boolean {
+  try {
+    return new URL(url).pathname.includes('/render/image/')
+  } catch {
+    return url.includes('/render/image/')
+  }
+}
+
+async function probeRenderUrl(url: string, logLabel: string): Promise<boolean> {
+  try {
+    const head = await fetch(url, { method: 'HEAD', redirect: 'follow' })
+    if (head.ok) return true
+    // Some edges reject HEAD; a 1-byte ranged GET is enough to verify render works.
+    if (head.status === 405 || head.status === 501) {
+      const ranged = await fetch(url, {
+        method: 'GET',
+        headers: { Range: 'bytes=0-0' },
+        redirect: 'follow',
+      })
+      if (ranged.ok || ranged.status === 206) return true
+      console.warn(
+        `[${logLabel}] preview render probe GET status=${ranged.status}; falling back to full URLs`
+      )
+      return false
+    }
+    console.warn(
+      `[${logLabel}] preview render probe HEAD status=${head.status}; falling back to full URLs`
+    )
+    return false
+  } catch (err) {
+    console.warn(`[${logLabel}] preview render probe error; falling back to full URLs`, err)
+    return false
+  }
+}
+
+async function ensurePreviewTransformsUsable(
+  sampleRenderUrl: string,
+  logLabel: string
+): Promise<boolean> {
+  if (previewTransformsUsable != null) return previewTransformsUsable
+  previewTransformsUsable = await probeRenderUrl(sampleRenderUrl, logLabel)
+  return previewTransformsUsable
+}
 
 type SignedUrlRow = { path: string | null; signedUrl: string | null; error?: string | null }
 
@@ -151,9 +208,9 @@ async function signFullPaths(
 }
 
 /**
- * Sign preview (transformed) URLs in parallel. On transform/sign failure for a
- * path, fall back to the full signed URL so cards still render when Image
- * Transformations are unavailable.
+ * Sign preview (transformed) URLs in parallel. On transform/sign failure, or when
+ * `/render/image` URLs 404 (Image Transformations disabled/broken), fall back to
+ * full signed URLs so listing cards still render.
  */
 async function signPreviewPaths(
   uniquePaths: string[],
@@ -171,6 +228,18 @@ async function signPreviewPaths(
   }
 
   if (!toSign.length) return byPath
+
+  // Opt-out / known-broken transforms: skip render signing entirely.
+  if (transformsOptedOut() || previewTransformsUsable === false) {
+    const full = await signFullPaths(toSign, supabase, logLabel, now)
+    for (const path of toSign) {
+      const url = full.get(path)
+      if (!url) continue
+      writeCache(path, 'preview', url, now)
+      byPath.set(path, url)
+    }
+    return byPath
+  }
 
   const bucket = supabase.storage.from('org-assets')
   const results = await Promise.all(
@@ -190,11 +259,32 @@ async function signPreviewPaths(
   )
 
   const fallbackPaths: string[] = []
+  const pendingRender: Array<{ path: string; url: string }> = []
+
   for (const { path, url } of results) {
-    if (url && writeCache(path, 'preview', url, now)) {
-      byPath.set(path, url)
-    } else {
+    if (!url) {
       fallbackPaths.push(path)
+      continue
+    }
+    // Server returns /object/sign when transforms are disabled — already safe.
+    if (!isStorageRenderUrl(url)) {
+      if (writeCache(path, 'preview', url, now)) byPath.set(path, url)
+      else fallbackPaths.push(path)
+      continue
+    }
+    pendingRender.push({ path, url })
+  }
+
+  if (pendingRender.length) {
+    const sample = pendingRender[0].url
+    const usable = await ensurePreviewTransformsUsable(sample, logLabel)
+    if (usable) {
+      for (const { path, url } of pendingRender) {
+        if (writeCache(path, 'preview', url, now)) byPath.set(path, url)
+        else fallbackPaths.push(path)
+      }
+    } else {
+      for (const { path } of pendingRender) fallbackPaths.push(path)
     }
   }
 

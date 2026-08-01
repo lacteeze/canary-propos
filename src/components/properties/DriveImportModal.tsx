@@ -2,11 +2,12 @@
 
 // Browse Google Drive folders/images and import (or link folder) for a property.
 
-import React, { useEffect, useState, useTransition } from 'react'
+import React, { useEffect, useRef, useState, useTransition } from 'react'
 import {
   importDriveFilesToProperty,
   linkPropertyDriveFolder,
   listDriveFolderItems,
+  searchDriveFolderItems,
 } from '@/app/actions/drive-photos'
 import type { DriveListItem } from '@/lib/google-drive-types'
 import type { PropertyMediaVisibility } from '@/app/actions/property-media'
@@ -26,6 +27,8 @@ interface DriveImportModalProps {
 
 type Crumb = { id: string; name: string }
 
+const SEARCH_DEBOUNCE_MS = 350
+
 export function DriveImportModal({
   open,
   onClose,
@@ -41,18 +44,51 @@ export function DriveImportModal({
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [searchInput, setSearchInput] = useState('')
+  const [activeSearch, setActiveSearch] = useState('')
+  const [searching, setSearching] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const searchSeqRef = useRef(0)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const currentFolderId = crumbs[crumbs.length - 1]?.id ?? 'root'
+  const isSearchMode = activeSearch.length > 0
 
   useEffect(() => {
     if (!open) return
     setSelected(new Set())
     setError(null)
+    setSearchInput('')
+    setActiveSearch('')
     setCrumbs([{ id: 'root', name: 'My Drive' }])
     void loadFolder('root')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  useEffect(() => {
+    if (!open) return
+
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+
+    const trimmed = searchInput.trim()
+    if (!trimmed) {
+      const wasSearching = activeSearch.length > 0
+      setActiveSearch('')
+      if (wasSearching) {
+        void loadFolder(currentFolderId)
+      }
+      return
+    }
+
+    debounceRef.current = setTimeout(() => {
+      void runSearch(trimmed)
+    }, SEARCH_DEBOUNCE_MS)
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput, open, mode])
 
   async function loadFolder(folderId: string) {
     setLoading(true)
@@ -67,14 +103,61 @@ export function DriveImportModal({
     setItems(result.items)
   }
 
+  async function runSearch(query: string) {
+    const seq = ++searchSeqRef.current
+    setSearching(true)
+    setLoading(true)
+    setError(null)
+    setActiveSearch(query)
+
+    const result = await searchDriveFolderItems({
+      query,
+      foldersOnly: mode === 'link',
+    })
+
+    if (seq !== searchSeqRef.current) return
+
+    setSearching(false)
+    setLoading(false)
+    if (!result.success) {
+      setError(result.error)
+      setItems([])
+      return
+    }
+    setItems(result.items)
+  }
+
+  function clearSearch() {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    searchSeqRef.current += 1
+    setSearchInput('')
+    setActiveSearch('')
+    setSearching(false)
+    void loadFolder(currentFolderId)
+  }
+
   function enterFolder(item: DriveListItem) {
     if (!item.isFolder) return
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    searchSeqRef.current += 1
+    setSearchInput('')
+    setActiveSearch('')
+    setSearching(false)
     setSelected(new Set())
-    setCrumbs((prev) => [...prev, { id: item.id, name: item.name }])
+    setCrumbs((prev) => {
+      // From search we may not know the full parent path — drop into folder under root.
+      if (isSearchMode) return [{ id: 'root', name: 'My Drive' }, { id: item.id, name: item.name }]
+      return [...prev, { id: item.id, name: item.name }]
+    })
     void loadFolder(item.id)
   }
 
   function goToCrumb(index: number) {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    searchSeqRef.current += 1
+    setSearchInput('')
+    setActiveSearch('')
+    setSearching(false)
     const next = crumbs.slice(0, index + 1)
     setCrumbs(next)
     setSelected(new Set())
@@ -137,6 +220,12 @@ export function DriveImportModal({
   const folders = items.filter((i) => i.isFolder)
   const images = items.filter((i) => !i.isFolder)
   const busy = loading || isPending
+  const emptyBrowse =
+    !loading &&
+    !isSearchMode &&
+    folders.length === 0 &&
+    (mode === 'link' || images.length === 0)
+  const emptySearch = !loading && isSearchMode && items.length === 0
 
   const overlay: React.CSSProperties = {
     position: 'fixed',
@@ -201,6 +290,30 @@ export function DriveImportModal({
     ? { ...btn, background: 'var(--accent)', color: 'var(--bg, #0c0c0c)', borderColor: 'transparent' }
     : { ...btn, background: '#d97706', color: '#fff', borderColor: '#d97706' }
 
+  const searchInputStyle: React.CSSProperties = themed
+    ? {
+        flex: 1,
+        minWidth: 0,
+        border: '1px solid var(--border)',
+        background: 'var(--bg)',
+        color: 'var(--text)',
+        borderRadius: 8,
+        padding: '8px 10px',
+        fontSize: 13,
+        outline: 'none',
+      }
+    : {
+        flex: 1,
+        minWidth: 0,
+        border: '1px solid #d6d3d1',
+        background: '#fff',
+        color: '#1c1917',
+        borderRadius: 6,
+        padding: '8px 10px',
+        fontSize: 13,
+        outline: 'none',
+      }
+
   return (
     <div
       style={overlay}
@@ -234,8 +347,8 @@ export function DriveImportModal({
               }}
             >
               {mode === 'link'
-                ? 'Navigate into a folder, then link it for non-recursive photo sync.'
-                : `Multi-select images to add as ${visibility} photos.`}
+                ? 'Search or navigate into a folder, then link it for non-recursive photo sync.'
+                : `Search or multi-select images to add as ${visibility} photos.`}
             </div>
           </div>
           <button type="button" onClick={onClose} disabled={busy} style={btn}>
@@ -258,26 +371,81 @@ export function DriveImportModal({
               {i > 0 && <span style={{ opacity: 0.5 }}>/</span>}
               <button
                 type="button"
-                disabled={busy || i === crumbs.length - 1}
+                disabled={busy || (!isSearchMode && i === crumbs.length - 1)}
                 onClick={() => goToCrumb(i)}
                 style={{
                   border: 'none',
                   background: 'transparent',
                   color: themed ? 'var(--accent)' : '#b45309',
-                  cursor: i === crumbs.length - 1 ? 'default' : 'pointer',
-                  fontWeight: i === crumbs.length - 1 ? 700 : 500,
+                  cursor:
+                    !isSearchMode && i === crumbs.length - 1 ? 'default' : 'pointer',
+                  fontWeight:
+                    !isSearchMode && i === crumbs.length - 1 ? 700 : 500,
                   padding: 0,
+                  opacity: isSearchMode ? 0.65 : 1,
                 }}
               >
                 {c.name}
               </button>
             </React.Fragment>
           ))}
+          {isSearchMode && (
+            <>
+              <span style={{ opacity: 0.5 }}>/</span>
+              <span style={{ fontWeight: 700 }}>
+                Search “{activeSearch}”
+              </span>
+            </>
+          )}
+        </div>
+
+        <div
+          style={{
+            padding: '10px 16px',
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            borderBottom: themed ? '1px solid var(--border)' : '1px solid #e7e5e4',
+          }}
+        >
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder={
+              mode === 'link'
+                ? 'Search folders by name…'
+                : 'Search folders and images…'
+            }
+            disabled={isPending}
+            aria-label={
+              mode === 'link'
+                ? 'Search Drive folders by name'
+                : 'Search Drive folders and images by name'
+            }
+            style={searchInputStyle}
+          />
+          {(searchInput || isSearchMode) && (
+            <button type="button" onClick={clearSearch} disabled={busy} style={btn}>
+              Clear
+            </button>
+          )}
         </div>
 
         <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
           {loading ? (
-            <p style={{ padding: 12, fontSize: 13, opacity: 0.7 }}>Loading…</p>
+            <p style={{ padding: 12, fontSize: 13, opacity: 0.7 }}>
+              {searching || isSearchMode ? 'Searching…' : 'Loading…'}
+            </p>
+          ) : emptySearch ? (
+            <p style={{ padding: 12, fontSize: 13, opacity: 0.7 }}>
+              No {mode === 'link' ? 'folders' : 'folders or images'} matching “
+              {activeSearch}”.
+            </p>
+          ) : emptyBrowse ? (
+            <p style={{ padding: 12, fontSize: 13, opacity: 0.7 }}>
+              This folder is empty.
+            </p>
           ) : (
             <>
               {folders.length > 0 && (
@@ -332,7 +500,11 @@ export function DriveImportModal({
                     Images
                   </div>
                   {images.length === 0 ? (
-                    <p style={{ fontSize: 13, opacity: 0.65 }}>No images in this folder.</p>
+                    <p style={{ fontSize: 13, opacity: 0.65 }}>
+                      {isSearchMode
+                        ? 'No matching images.'
+                        : 'No images in this folder.'}
+                    </p>
                   ) : (
                     <div
                       style={{
@@ -410,12 +582,18 @@ export function DriveImportModal({
                 </div>
               )}
 
-              {mode === 'link' && (
+              {mode === 'link' && !isSearchMode && (
                 <p style={{ fontSize: 13, opacity: 0.7, lineHeight: 1.4 }}>
                   Current folder: <strong>{crumbs[crumbs.length - 1]?.name}</strong>
                   {currentFolderId === 'root'
                     ? ' — open a specific folder to link it.'
                     : ' — only image files directly in this folder will sync (not subfolders).'}
+                </p>
+              )}
+
+              {mode === 'link' && isSearchMode && folders.length > 0 && (
+                <p style={{ fontSize: 13, opacity: 0.7, lineHeight: 1.4, marginTop: 8 }}>
+                  Open a folder from the results, then link it.
                 </p>
               )}
             </>
@@ -468,11 +646,11 @@ export function DriveImportModal({
           ) : (
             <button
               type="button"
-              disabled={busy || currentFolderId === 'root'}
+              disabled={busy || isSearchMode || currentFolderId === 'root'}
               onClick={handleLinkFolder}
               style={{
                 ...primaryBtn,
-                opacity: busy || currentFolderId === 'root' ? 0.55 : 1,
+                opacity: busy || isSearchMode || currentFolderId === 'root' ? 0.55 : 1,
               }}
             >
               {isPending ? 'Linking…' : 'Link this folder'}

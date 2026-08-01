@@ -161,6 +161,27 @@ export async function refreshDriveTokenIfNeeded(
 // Browse / download helpers
 // ---------------------------------------------------------------------------
 
+/** Escape a value for use inside a Drive `files.list` query string literal. */
+function escapeDriveQueryValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+}
+
+function mapDriveFile(file: drive_v3.Schema$File): DriveListItem | null {
+  if (!file.id || !file.name || !file.mimeType) return null
+  return {
+    id: file.id,
+    name: file.name,
+    mimeType: file.mimeType,
+    isFolder: file.mimeType === FOLDER_MIME,
+    modifiedTime: file.modifiedTime ?? null,
+    md5Checksum: file.md5Checksum ?? null,
+    size: file.size ? Number(file.size) : null,
+    thumbnailLink: file.thumbnailLink ?? null,
+  }
+}
+
+const DRIVE_BROWSE_MIME_FILTER = `(mimeType = '${FOLDER_MIME}' or mimeType = 'image/jpeg' or mimeType = 'image/png' or mimeType = 'image/webp' or mimeType = 'image/jpg')`
+
 export async function listDriveChildren(
   accessToken: string,
   parentId: string | null = 'root',
@@ -169,9 +190,9 @@ export async function listDriveChildren(
   const parent = parentId && parentId.length > 0 ? parentId : 'root'
 
   const q = [
-    `'${parent.replace(/'/g, "\\'")}' in parents`,
+    `'${escapeDriveQueryValue(parent)}' in parents`,
     'trashed = false',
-    `(mimeType = '${FOLDER_MIME}' or mimeType = 'image/jpeg' or mimeType = 'image/png' or mimeType = 'image/webp' or mimeType = 'image/jpg')`,
+    DRIVE_BROWSE_MIME_FILTER,
   ].join(' and ')
 
   const items: DriveListItem[] = []
@@ -190,20 +211,69 @@ export async function listDriveChildren(
     })
 
     for (const file of res.data.files ?? []) {
-      if (!file.id || !file.name || !file.mimeType) continue
-      items.push({
-        id: file.id,
-        name: file.name,
-        mimeType: file.mimeType,
-        isFolder: file.mimeType === FOLDER_MIME,
-        modifiedTime: file.modifiedTime ?? null,
-        md5Checksum: file.md5Checksum ?? null,
-        size: file.size ? Number(file.size) : null,
-        thumbnailLink: file.thumbnailLink ?? null,
-      })
+      const mapped = mapDriveFile(file)
+      if (mapped) items.push(mapped)
     }
 
     pageToken = res.data.nextPageToken ?? undefined
+  } while (pageToken)
+
+  return items
+}
+
+/**
+ * Search Drive by name (contains). Used by the import/link modal so managers
+ * can find folders (and images) without scrolling.
+ */
+export async function searchDriveItems(
+  accessToken: string,
+  query: string,
+  options?: { foldersOnly?: boolean; maxResults?: number },
+): Promise<DriveListItem[]> {
+  const trimmed = query.trim()
+  if (!trimmed) return []
+
+  const drive = createDriveClient(accessToken)
+  const foldersOnly = options?.foldersOnly ?? false
+  const maxResults = options?.maxResults ?? 50
+  const mimeFilter = foldersOnly
+    ? `mimeType = '${FOLDER_MIME}'`
+    : DRIVE_BROWSE_MIME_FILTER
+
+  const q = [
+    mimeFilter,
+    `name contains '${escapeDriveQueryValue(trimmed)}'`,
+    'trashed = false',
+  ].join(' and ')
+
+  const items: DriveListItem[] = []
+  let pageToken: string | undefined
+
+  do {
+    const pageSize = Math.min(100, maxResults - items.length)
+    if (pageSize <= 0) break
+
+    const res = await drive.files.list({
+      q,
+      pageSize,
+      pageToken,
+      fields:
+        'nextPageToken, files(id, name, mimeType, modifiedTime, md5Checksum, size, thumbnailLink)',
+      orderBy: 'folder,name_natural',
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    })
+
+    for (const file of res.data.files ?? []) {
+      const mapped = mapDriveFile(file)
+      if (mapped) items.push(mapped)
+      if (items.length >= maxResults) break
+    }
+
+    pageToken =
+      items.length >= maxResults
+        ? undefined
+        : (res.data.nextPageToken ?? undefined)
   } while (pageToken)
 
   return items
@@ -230,19 +300,7 @@ export async function getDriveFileMetadata(
     supportsAllDrives: true,
   })
 
-  const file = res.data
-  if (!file.id || !file.name || !file.mimeType) return null
-
-  return {
-    id: file.id,
-    name: file.name,
-    mimeType: file.mimeType,
-    isFolder: file.mimeType === FOLDER_MIME,
-    modifiedTime: file.modifiedTime ?? null,
-    md5Checksum: file.md5Checksum ?? null,
-    size: file.size ? Number(file.size) : null,
-    thumbnailLink: file.thumbnailLink ?? null,
-  }
+  return mapDriveFile(res.data)
 }
 
 export async function downloadDriveFile(

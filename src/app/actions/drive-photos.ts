@@ -7,6 +7,7 @@ import {
   getDriveFileMetadata,
   listDriveChildren,
   refreshDriveTokenIfNeeded,
+  searchDriveItems,
 } from '@/lib/google-drive'
 import type { DriveListItem } from '@/lib/google-drive-types'
 import {
@@ -85,6 +86,50 @@ export async function listDriveFolderItems(
     console.error('[listDriveFolderItems]', err)
     const message =
       err instanceof Error ? err.message : 'Failed to list Drive folder.'
+    return { success: false, error: message }
+  }
+}
+
+const searchSchema = z.object({
+  query: z.string().trim().min(1).max(200),
+  foldersOnly: z.boolean().optional(),
+})
+
+export async function searchDriveFolderItems(input: {
+  query: string
+  foldersOnly?: boolean
+}): Promise<
+  | { success: true; items: DriveListItem[]; query: string }
+  | { success: false; error: string }
+> {
+  const ctx = await getCallerContext()
+  if (!ctx) return { success: false, error: 'You must be signed in.' }
+  if (!isManager(ctx.person.role as unknown as string[])) {
+    return { success: false, error: 'Only managers can search Google Drive.' }
+  }
+
+  const parsed = searchSchema.safeParse(input)
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'Invalid search query.',
+    }
+  }
+
+  try {
+    const accessToken = await refreshDriveTokenIfNeeded(
+      ctx.person.org_id,
+      ctx.supabase,
+    )
+    const items = await searchDriveItems(accessToken, parsed.data.query, {
+      foldersOnly: parsed.data.foldersOnly ?? false,
+      maxResults: 50,
+    })
+    return { success: true, items, query: parsed.data.query }
+  } catch (err) {
+    console.error('[searchDriveFolderItems]', err)
+    const message =
+      err instanceof Error ? err.message : 'Failed to search Google Drive.'
     return { success: false, error: message }
   }
 }

@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { InquiryForm } from '@/components/listings/InquiryForm'
-import { ApplicationForm } from '@/components/listings/ApplicationForm'
 import { InterestForm } from '@/components/listings/InterestForm'
 import { ListingPhotoGallery } from '@/components/listings/ListingPhotoGallery'
 import { SimilarListingsSection } from '@/components/landing/SimilarListingsCarousel'
@@ -348,10 +347,7 @@ export function ListingDetailView({
                 )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20 }}>
                   <a href="#inquiry-form" className="cpub-btn-primary" style={{ textDecoration: 'none' }}>
-                    Request a showing
-                  </a>
-                  <a href="#apply-form" className="cpub-btn-outline">
-                    Apply for this unit
+                    Request a viewing
                   </a>
                 </div>
               </div>
@@ -360,7 +356,6 @@ export function ListingDetailView({
 
           <div className="cpub-forms-stack">
             <InquiryForm listingId={listing.id} orgId={listing.org_id} />
-            <ApplicationForm listingId={listing.id} orgId={listing.org_id} />
             <InterestForm
               orgId={listing.org_id}
               listingId={listing.id}

@@ -32,19 +32,19 @@ export function InquiryNotificationEmail({
     type === 'interest'
       ? 'general interest'
       : type === 'inquiry'
-        ? 'showing request'
+        ? 'viewing request'
         : 'application interest'
   const subtitle =
     type === 'interest'
       ? 'General Interest Submitted'
       : type === 'inquiry'
-        ? 'Showing Request'
+        ? 'Viewing Request'
         : 'Application Interest Submitted'
   const headingText =
     type === 'interest'
       ? `New general interest — ${listingTitle}`
       : type === 'inquiry'
-        ? `New showing request — ${listingTitle}`
+        ? `New viewing request — ${listingTitle}`
         : `New application interest — ${listingTitle}`
   const locationPhrase =
     type === 'interest'

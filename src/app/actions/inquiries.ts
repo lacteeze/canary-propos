@@ -87,7 +87,7 @@ async function sendManagerNotification(params: {
     params.type === 'interest'
       ? 'general interest'
       : params.type === 'inquiry'
-        ? 'showing request'
+        ? 'viewing request'
         : 'application'
 
   const result = await sendEmail({

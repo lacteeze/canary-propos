@@ -1,6 +1,6 @@
 'use client'
 // src/components/listings/InquiryForm.tsx
-// Showing request form — submitted by unauthenticated visitors on the public listing detail page.
+// Viewing request form — submitted by unauthenticated visitors on the public listing detail page.
 
 import { useState, useTransition } from 'react'
 import { submitInquiry } from '@/app/actions/inquiries'
@@ -40,7 +40,7 @@ export function InquiryForm({ listingId, orgId }: InquiryFormProps) {
           <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(109,152,102,.15)', display: 'grid', placeItems: 'center', fontSize: 22, color: 'var(--green)' }}>✓</div>
           <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Request sent!</h3>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--dim)' }}>
-            Your showing request has been sent. We&apos;ll be in touch soon.
+            Your viewing request has been sent. We&apos;ll be in touch soon.
           </p>
         </div>
       </div>
@@ -49,7 +49,7 @@ export function InquiryForm({ listingId, orgId }: InquiryFormProps) {
 
   return (
     <div id="inquiry-form" className="cpub-form-card">
-      <h2>Request a showing</h2>
+      <h2>Request a viewing</h2>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div className="cpub-field">
           <label htmlFor="inq-name">Full name <span style={{ color: 'var(--str-pill)' }}>*</span></label>
@@ -88,7 +88,7 @@ export function InquiryForm({ listingId, orgId }: InquiryFormProps) {
         )}
 
         <button type="submit" disabled={isPending} className="cpub-btn-primary">
-          {isPending ? 'Sending…' : 'Send request'}
+          {isPending ? 'Sending…' : 'Request a viewing'}
         </button>
       </form>
     </div>

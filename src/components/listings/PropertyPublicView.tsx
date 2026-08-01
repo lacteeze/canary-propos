@@ -193,8 +193,8 @@ export function PropertyPublicView({
             {availabilityLabel}
           </p>
           <p style={{ margin: '8px 0 0', color: 'var(--dim)', fontSize: 14.5, lineHeight: 1.5 }}>
-            This home isn&apos;t available to show or apply for right now. Tell us what you&apos;re
-            looking for below, or browse other available homes.
+            This home isn&apos;t available for viewing right now. Tell us what you&apos;re looking
+            for below, or browse other available homes.
           </p>
           <div style={{ marginTop: 14 }}>
             <a href="#interest-form" className="cpub-btn-primary" style={{ textDecoration: 'none' }}>

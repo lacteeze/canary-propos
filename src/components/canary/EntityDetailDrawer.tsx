@@ -12,6 +12,7 @@ import {
   updateProjectField,
   updatePropertyDetails,
   updatePropertyField,
+  updatePropertySlug,
   type PropertyDetailsInput,
 } from '@/app/actions/entity-updates'
 import { getOrCreatePropertyThread, getThreadMessages, sendChatMessage, type ChatMessage } from '@/app/actions/chat'
@@ -22,6 +23,7 @@ import { listingPublicHref, propertyPublicHref } from '@/lib/listings/listing-hr
 import AuditLogPanel from './AuditLogPanel'
 import { CopyPublicLinkButton } from './CopyPublicLinkButton'
 import DatePickerField, { formatDisplayDate } from './DatePickerField'
+import { PublicSlugField } from './PublicSlugField'
 import { PropertyPhotoUpload } from '@/components/properties/PropertyPhotoUpload'
 
 const MONO = "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif"
@@ -1018,9 +1020,20 @@ export default function EntityDetailDrawer({
               : []),
             { label: 'Pets', value: p.petFriendly || '—' },
             { label: 'Garage', value: p.hasGarage ? 'Yes' : 'No' },
-            ...(p.slug
-              ? [{ label: 'Public link', value: <CopyPublicLinkButton slug={p.slug} /> }]
-              : []),
+            {
+              label: 'Public URL slug',
+              value: p.propertyDbId ? (
+                <PublicSlugField
+                  slug={p.slug}
+                  disabled={!canEdit}
+                  onSave={wrapSave((v) => updatePropertySlug(p.propertyDbId, v))}
+                />
+              ) : p.slug ? (
+                <CopyPublicLinkButton slug={p.slug} />
+              ) : (
+                '—'
+              ),
+            },
             ...(p.archivedAt ? [{ label: 'Archived', value: new Date(p.archivedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) }] : []),
           ]}
         />,

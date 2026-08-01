@@ -196,6 +196,149 @@ export async function updatePropertyField(
   return { success: true }
 }
 
+/**
+ * Rename a property's public URL slug (`/{slug}`).
+ * Validates format/reserved paths, ensures uniqueness across properties + listings,
+ * and syncs published listing slugs on the same property so one URL stays canonical.
+ */
+export async function updatePropertySlug(
+  propertyId: string,
+  rawSlug: string,
+): Promise<ActionResult> {
+  const ctx = await getStaffContext()
+  if (!ctx) return { success: false, error: 'Only managers can edit properties.' }
+
+  const { isPublicSlugTaken, validatePublicSlug } = await import('@/lib/listings/slug-validation')
+  const validated = validatePublicSlug(rawSlug)
+  if (!validated.ok) return { success: false, error: validated.error }
+
+  const nextSlug = validated.slug
+
+  const { data: property, error: fetchError } = await ctx.supabase
+    .from('properties')
+    .select('id, slug')
+    .eq('id', propertyId)
+    .eq('org_id', ctx.person.org_id)
+    .single()
+
+  if (fetchError || !property) {
+    return { success: false, error: 'Property not found.' }
+  }
+
+  const oldSlug = property.slug ?? null
+  if (oldSlug === nextSlug) return { success: true }
+
+  const { data: units, error: unitsError } = await ctx.supabase
+    .from('units')
+    .select('id')
+    .eq('property_id', propertyId)
+    .eq('org_id', ctx.person.org_id)
+
+  if (unitsError) {
+    console.error('[updatePropertySlug:units]', unitsError)
+    return { success: false, error: 'Failed to update public URL slug.' }
+  }
+
+  const unitIds = (units ?? []).map((u) => u.id)
+  let syncListingIds: string[] = []
+
+  if (unitIds.length > 0) {
+    const { data: listings, error: listingsError } = await ctx.supabase
+      .from('listings')
+      .select('id, slug, status')
+      .eq('org_id', ctx.person.org_id)
+      .eq('status', 'published')
+      .in('unit_id', unitIds)
+
+    if (listingsError) {
+      console.error('[updatePropertySlug:listings]', listingsError)
+      return { success: false, error: 'Failed to update public URL slug.' }
+    }
+
+    const published = listings ?? []
+    if (published.length === 1) {
+      syncListingIds = [published[0]!.id]
+    } else {
+      syncListingIds = published
+        .filter((l) => !l.slug || l.slug === oldSlug)
+        .map((l) => l.id)
+    }
+  }
+
+  try {
+    const { taken, by } = await isPublicSlugTaken({
+      supabase: ctx.supabase,
+      orgId: ctx.person.org_id,
+      slug: nextSlug,
+      excludePropertyId: propertyId,
+      excludeListingIds: syncListingIds,
+    })
+    if (taken) {
+      const who = by === 'listing' ? 'another listing' : 'another property'
+      return {
+        success: false,
+        error: `That slug is already used by ${who}. Choose a different public URL.`,
+      }
+    }
+  } catch (err) {
+    console.error('[updatePropertySlug:taken]', err)
+    return { success: false, error: 'Failed to update public URL slug.' }
+  }
+
+  const now = new Date().toISOString()
+  const { error: propError } = await ctx.supabase
+    .from('properties')
+    .update({ slug: nextSlug, updated_at: now })
+    .eq('id', propertyId)
+    .eq('org_id', ctx.person.org_id)
+
+  if (propError) {
+    console.error('[updatePropertySlug:property]', propError)
+    if (propError.code === '23505') {
+      return {
+        success: false,
+        error: 'That slug is already used by another property. Choose a different public URL.',
+      }
+    }
+    return { success: false, error: 'Failed to update public URL slug.' }
+  }
+
+  if (syncListingIds.length > 0) {
+    const { error: syncError } = await ctx.supabase
+      .from('listings')
+      .update({ slug: nextSlug, updated_at: now })
+      .eq('org_id', ctx.person.org_id)
+      .in('id', syncListingIds)
+
+    if (syncError) {
+      console.error('[updatePropertySlug:sync]', syncError)
+      // Roll property slug back so public URLs stay consistent
+      await ctx.supabase
+        .from('properties')
+        .update({ slug: oldSlug, updated_at: new Date().toISOString() })
+        .eq('id', propertyId)
+        .eq('org_id', ctx.person.org_id)
+      if (syncError.code === '23505') {
+        return {
+          success: false,
+          error: 'That slug is already used by another listing. Choose a different public URL.',
+        }
+      }
+      return { success: false, error: 'Failed to sync listing public URL. Try again.' }
+    }
+  }
+
+  await writeAuditEntries(ctx.supabase, ctx.person.org_id, 'properties', propertyId, ctx.person.id, [
+    { field: 'slug', oldValue: oldSlug, newValue: nextSlug },
+  ])
+
+  revalidatePath('/app')
+  revalidatePath('/listings')
+  if (oldSlug) revalidatePath(`/${oldSlug}`)
+  revalidatePath(`/${nextSlug}`)
+  return { success: true }
+}
+
 const PET_LABELS = ['No pets', 'Pet friendly', 'Cat friendly', 'Dog friendly', 'By approval'] as const
 const PET_AMENITY_RE = /pet|cat|dog|approval/i
 const GARAGE_AMENITY_RE = /\bgarage\b/i

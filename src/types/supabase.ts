@@ -790,6 +790,10 @@ export type Database = {
       organizations: {
         Row: {
           created_at: string | null
+          drive_access_token: string | null
+          drive_connected_at: string | null
+          drive_refresh_token: string | null
+          drive_token_expiry: number | null
           gmail_access_token: string | null
           gmail_connected_at: string | null
           gmail_history_id: string | null
@@ -810,6 +814,10 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          drive_access_token?: string | null
+          drive_connected_at?: string | null
+          drive_refresh_token?: string | null
+          drive_token_expiry?: number | null
           gmail_access_token?: string | null
           gmail_connected_at?: string | null
           gmail_history_id?: string | null
@@ -830,6 +838,10 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          drive_access_token?: string | null
+          drive_connected_at?: string | null
+          drive_refresh_token?: string | null
+          drive_token_expiry?: number | null
           gmail_access_token?: string | null
           gmail_connected_at?: string | null
           gmail_history_id?: string | null
@@ -1100,6 +1112,7 @@ export type Database = {
           visibility: string
           sort_order: number
           caption: string | null
+          drive_file_id: string | null
           created_at: string
           updated_at: string
         }
@@ -1111,6 +1124,7 @@ export type Database = {
           visibility: string
           sort_order?: number
           caption?: string | null
+          drive_file_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1122,6 +1136,7 @@ export type Database = {
           visibility?: string
           sort_order?: number
           caption?: string | null
+          drive_file_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1188,6 +1203,9 @@ export type Database = {
         Row: {
           city: string
           created_at: string | null
+          drive_folder_id: string | null
+          drive_folder_name: string | null
+          drive_last_synced_at: string | null
           id: string
           management_fee_type: string | null
           management_fee_value: number | null
@@ -1204,6 +1222,9 @@ export type Database = {
         Insert: {
           city: string
           created_at?: string | null
+          drive_folder_id?: string | null
+          drive_folder_name?: string | null
+          drive_last_synced_at?: string | null
           id?: string
           management_fee_type?: string | null
           management_fee_value?: number | null
@@ -1220,6 +1241,9 @@ export type Database = {
         Update: {
           city?: string
           created_at?: string | null
+          drive_folder_id?: string | null
+          drive_folder_name?: string | null
+          drive_last_synced_at?: string | null
           id?: string
           management_fee_type?: string | null
           management_fee_value?: number | null

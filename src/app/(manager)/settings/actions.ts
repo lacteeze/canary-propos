@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { CANADIAN_PROVINCES } from '@/lib/constants/provinces'
 import { getGmailAuthUrl } from '@/lib/gmail'
+import { getDriveAuthUrl } from '@/lib/google-drive'
 
 const provinceCodes = CANADIAN_PROVINCES.map((p) => p.value) as [string, ...string[]]
 
@@ -123,6 +124,56 @@ export async function disconnectGmail(_orgId?: string): Promise<UpdateOrgResult>
   if (error) {
     console.error('[disconnectGmail] error:', error)
     return { success: false, error: 'Failed to disconnect Gmail.' }
+  }
+
+  revalidatePath('/settings')
+  return { success: true }
+}
+
+// --- getDriveConnectUrl: generates Google OAuth URL for Drive connection ---
+export async function getDriveConnectUrl(): Promise<UpdateOrgResult & { url?: string }> {
+  const ctx = await getCallerContext()
+  if (!ctx) {
+    return { success: false, error: 'You must be signed in.' }
+  }
+
+  if (!ctx.person.role?.includes('manager') && !ctx.person.role?.includes('admin')) {
+    return { success: false, error: 'Only managers can connect Google Drive.' }
+  }
+
+  try {
+    const url = getDriveAuthUrl(ctx.person.org_id)
+    return { success: true, url }
+  } catch (err) {
+    console.error('[getDriveConnectUrl] failed:', err)
+    return { success: false, error: 'Failed to generate Drive authorization URL.' }
+  }
+}
+
+// --- disconnectDrive: clears all drive_* token columns on the org row ---
+export async function disconnectDrive(_orgId?: string): Promise<UpdateOrgResult> {
+  const ctx = await getCallerContext()
+  if (!ctx) {
+    return { success: false, error: 'You must be signed in.' }
+  }
+
+  if (!ctx.person.role?.includes('manager') && !ctx.person.role?.includes('admin')) {
+    return { success: false, error: 'Only managers can disconnect Google Drive.' }
+  }
+
+  const { error } = await ctx.supabase
+    .from('organizations')
+    .update({
+      drive_access_token: null,
+      drive_refresh_token: null,
+      drive_token_expiry: null,
+      drive_connected_at: null,
+    })
+    .eq('id', ctx.person.org_id)
+
+  if (error) {
+    console.error('[disconnectDrive] error:', error)
+    return { success: false, error: 'Failed to disconnect Google Drive.' }
   }
 
   revalidatePath('/settings')

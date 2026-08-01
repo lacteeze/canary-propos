@@ -1,20 +1,23 @@
 'use client'
 
-// Gmail Integration section — Canary shell styling
+// Integrations section — Gmail + Google Drive (Canary shell styling)
 
 import { useState, useTransition, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { getGmailConnectUrl, disconnectGmail } from '@/app/(manager)/settings/actions'
+import { DriveIntegrationSection } from '@/components/settings/DriveIntegrationSection'
 
 interface GmailIntegrationSectionProps {
   orgId: string
   gmailConnectedAt: string | null
+  driveConnectedAt?: string | null
 }
 
 export function GmailIntegrationSection({
   orgId,
   gmailConnectedAt,
+  driveConnectedAt = null,
 }: GmailIntegrationSectionProps) {
   const searchParams = useSearchParams()
   const [isConnected, setIsConnected] = useState(gmailConnectedAt !== null)
@@ -113,6 +116,8 @@ export function GmailIntegrationSection({
           </button>
         )}
       </div>
+
+      <DriveIntegrationSection orgId={orgId} driveConnectedAt={driveConnectedAt} />
     </section>
   )
 }

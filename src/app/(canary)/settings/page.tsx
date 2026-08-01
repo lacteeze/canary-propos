@@ -28,10 +28,9 @@ export default async function SettingsPage() {
     redirect('/app')
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: org } = await (supabase as any)
+  const { data: org } = await supabase
     .from('organizations')
-    .select('id, name, province, logo_path, gmail_connected_at')
+    .select('id, name, province, logo_path, gmail_connected_at, drive_connected_at')
     .eq('id', person.org_id)
     .single()
 
@@ -59,6 +58,7 @@ export default async function SettingsPage() {
           <GmailIntegrationSection
             orgId={org.id}
             gmailConnectedAt={org.gmail_connected_at ?? null}
+            driveConnectedAt={org.drive_connected_at ?? null}
           />
         </Suspense>
       </div>

@@ -9,7 +9,7 @@ export interface InquiryNotificationEmailProps {
   visitorPhone?: string | null
   listingTitle: string
   propertyAddress: string
-  type: 'inquiry' | 'application'
+  type: 'inquiry' | 'application' | 'interest'
   moveInDate?: string | null
   budget?: number | null
   note?: string | null
@@ -28,22 +28,52 @@ export function InquiryNotificationEmail({
   note,
   dashboardUrl,
 }: InquiryNotificationEmailProps) {
-  const typeLabel = type === 'inquiry' ? 'showing request' : 'application interest'
-  const subtitle = type === 'inquiry' ? 'Showing Request' : 'Application Interest Submitted'
+  const typeLabel =
+    type === 'interest'
+      ? 'general interest'
+      : type === 'inquiry'
+        ? 'showing request'
+        : 'application interest'
+  const subtitle =
+    type === 'interest'
+      ? 'General Interest Submitted'
+      : type === 'inquiry'
+        ? 'Showing Request'
+        : 'Application Interest Submitted'
   const headingText =
-    type === 'inquiry'
-      ? `New showing request — ${listingTitle}`
-      : `New application interest — ${listingTitle}`
+    type === 'interest'
+      ? `New general interest — ${listingTitle}`
+      : type === 'inquiry'
+        ? `New showing request — ${listingTitle}`
+        : `New application interest — ${listingTitle}`
+  const locationPhrase =
+    type === 'interest'
+      ? propertyAddress
+        ? (
+            <>
+              related to <strong>{propertyAddress}</strong>
+            </>
+          )
+        : (
+            <>
+              for <strong>{listingTitle}</strong>
+            </>
+          )
+      : (
+          <>
+            from the listing at <strong>{propertyAddress}</strong>
+          </>
+        )
 
   return (
     <EmailLayout
       preview={`${visitorName} submitted a ${typeLabel} for ${listingTitle}`}
       subtitle={subtitle}
-      footerNote={`This notification was sent by Canary PM because a visitor submitted a ${typeLabel} on your public listings page.`}
+      footerNote={`This notification was sent by Canary PM because a visitor submitted a ${typeLabel} on your public site.`}
     >
       <Heading style={emailStyles.heading}>{headingText}</Heading>
       <Text style={emailStyles.bodyText}>
-        You have a new {typeLabel} from the listing at <strong>{propertyAddress}</strong>.
+        You have a new {typeLabel} {locationPhrase}.
       </Text>
 
       <Hr style={contentHrStyle} />

@@ -131,18 +131,34 @@ export async function renderPropertyPublicPage(opts: {
   const [unitsRes, leaseEndRes, fromMedia, allPublished] = await Promise.all([
     supabase
       .from('units')
-      .select('bedrooms, bathrooms, sq_footage, amenities, asking_rent, status')
+      .select('id, bedrooms, bathrooms, sq_footage, amenities, asking_rent, status')
       .eq('property_id', property.id)
       .eq('org_id', orgId)
-      .order('unit_number', { ascending: true })
-      .limit(1)
-      .maybeSingle(),
+      .order('unit_number', { ascending: true }),
     supabase.rpc('public_property_lease_end', { p_property_id: property.id }),
     getListingPhotoPathsForProperty(property.id),
     getPublishedListings(orgSlug),
   ])
 
-  const unit = (unitsRes.data as PropertyPublicUnit | null) ?? null
+  const unitRows = unitsRes.data ?? []
+  const unit = (unitRows[0] as PropertyPublicUnit | null) ?? null
+  const unitIds = unitRows.map((u) => u.id as string)
+
+  // Pass published listing id when visible; draft/unlisted resolved in submitGeneralInterest.
+  let linkedListingId: string | null = null
+  if (unitIds.length) {
+    const { data: publishedListing } = await supabase
+      .from('listings')
+      .select('id')
+      .eq('org_id', orgId)
+      .eq('status', 'published')
+      .in('unit_id', unitIds)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    linkedListingId = publishedListing?.id ?? null
+  }
+
   const leaseEnd =
     typeof leaseEndRes.data === 'string'
       ? leaseEndRes.data
@@ -181,6 +197,8 @@ export async function renderPropertyPublicPage(opts: {
       availabilityLabel={availabilityLabel}
       carouselGroups={carouselGroups}
       orgSlug={orgSlug}
+      orgId={orgId}
+      linkedListingId={linkedListingId}
       listingCardCopy={listingCardCopyFromLanding()}
     />
   )

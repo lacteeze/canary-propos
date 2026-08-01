@@ -71,7 +71,7 @@ async function sendManagerNotification(params: {
   visitorName: string
   visitorEmail: string
   visitorPhone?: string | null
-  type: 'inquiry' | 'application'
+  type: 'inquiry' | 'application' | 'interest'
   moveInDate?: string | null
   budget?: number | null
   note?: string | null
@@ -83,7 +83,12 @@ async function sendManagerNotification(params: {
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.canarypm.ca'
-  const typeLabel = params.type === 'inquiry' ? 'showing request' : 'application'
+  const typeLabel =
+    params.type === 'interest'
+      ? 'general interest'
+      : params.type === 'inquiry'
+        ? 'showing request'
+        : 'application'
 
   const result = await sendEmail({
     type: PINGRAM_EMAIL_TYPES.inquiryNotification,
@@ -186,6 +191,177 @@ const applicationSchema = z.object({
   listing_id: z.string().uuid('Invalid listing'),
   org_id: z.string().uuid('Invalid org'),
 })
+
+const emptyToUndef = (v: unknown) => {
+  if (v == null) return undefined
+  if (typeof v === 'string' && v.trim() === '') return undefined
+  return v
+}
+
+const generalInterestSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Please enter a valid email'),
+  phone: z.preprocess(emptyToUndef, z.string().optional()),
+  move_in_date: z.preprocess(emptyToUndef, z.string().optional()),
+  budget: z.preprocess(emptyToUndef, z.coerce.number().optional()),
+  beds: z.preprocess(emptyToUndef, z.string().optional()),
+  pets: z.preprocess(emptyToUndef, z.string().optional()),
+  garage: z.preprocess(emptyToUndef, z.string().optional()),
+  preferred_area: z.preprocess(emptyToUndef, z.string().optional()),
+  note: z.preprocess(emptyToUndef, z.string().optional()),
+  listing_id: z.preprocess(emptyToUndef, z.string().uuid('Invalid listing').optional()),
+  property_id: z.preprocess(emptyToUndef, z.string().uuid('Invalid property').optional()),
+  property_label: z.preprocess(emptyToUndef, z.string().optional()),
+  property_slug: z.preprocess(emptyToUndef, z.string().optional()),
+  org_id: z.string().uuid('Invalid org'),
+})
+
+/** Resolve listing + property context for general-interest submits (service role for draft/unlisted). */
+async function resolveInterestContext(params: {
+  orgId: string
+  listingId?: string
+  propertyId?: string
+  propertyLabel?: string
+  propertySlug?: string
+}): Promise<{
+  valid: boolean
+  listingId: string | null
+  propertyId: string | null
+  listingTitle: string
+  propertyAddress: string
+}> {
+  const empty = {
+    valid: false,
+    listingId: null as string | null,
+    propertyId: null as string | null,
+    listingTitle: '',
+    propertyAddress: '',
+  }
+
+  try {
+    // Prefer admin so draft/unlisted listings on leased homes can still be linked.
+    const client = process.env.SUPABASE_SERVICE_ROLE_KEY
+      ? createAdminClientInternal()
+      : createAnonClient()
+
+    let listingId = params.listingId ?? null
+    let propertyId = params.propertyId ?? null
+    let listingTitle = ''
+    let propertyAddress = params.propertyLabel?.trim() || ''
+
+    if (listingId) {
+      const { data: listing } = await client
+        .from('listings')
+        .select('id, org_id, listing_title, unit_id')
+        .eq('id', listingId)
+        .eq('org_id', params.orgId)
+        .maybeSingle()
+
+      if (!listing) return empty
+      listingTitle = listing.listing_title
+
+      if (listing.unit_id) {
+        const { data: unit } = await client
+          .from('units')
+          .select('property_id')
+          .eq('id', listing.unit_id)
+          .maybeSingle()
+        if (unit?.property_id) {
+          propertyId = propertyId ?? unit.property_id
+          const { data: property } = await client
+            .from('properties')
+            .select('street_address, city, province, slug')
+            .eq('id', unit.property_id)
+            .eq('org_id', params.orgId)
+            .maybeSingle()
+          if (property) {
+            propertyAddress =
+              `${property.street_address}, ${property.city}, ${property.province}`.trim()
+          }
+        }
+      }
+
+      return { valid: true, listingId, propertyId, listingTitle, propertyAddress }
+    }
+
+    if (propertyId) {
+      const { data: property } = await client
+        .from('properties')
+        .select('id, street_address, city, province, slug')
+        .eq('id', propertyId)
+        .eq('org_id', params.orgId)
+        .maybeSingle()
+
+      if (!property) return empty
+
+      propertyAddress =
+        propertyAddress ||
+        `${property.street_address}, ${property.city}, ${property.province}`.trim()
+      listingTitle =
+        property.street_address?.split(',')[0]?.trim() ||
+        property.slug ||
+        params.propertySlug ||
+        'Property interest'
+
+      const { data: units } = await client
+        .from('units')
+        .select('id')
+        .eq('property_id', propertyId)
+        .eq('org_id', params.orgId)
+
+      const unitIds = (units ?? []).map((u) => u.id)
+      if (unitIds.length) {
+        const { data: listing } = await client
+          .from('listings')
+          .select('id, listing_title')
+          .eq('org_id', params.orgId)
+          .in('unit_id', unitIds)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (listing) {
+          listingId = listing.id
+          listingTitle = listing.listing_title || listingTitle
+        }
+      }
+
+      return { valid: true, listingId, propertyId, listingTitle, propertyAddress }
+    }
+
+    return empty
+  } catch (err) {
+    console.warn('[inquiries] interest context resolution failed:', err)
+    return empty
+  }
+}
+
+function buildInterestNote(parts: {
+  beds?: string
+  pets?: string
+  garage?: string
+  preferredArea?: string
+  propertyLabel?: string
+  propertySlug?: string
+  note?: string
+}): string {
+  const lines = ['[General interest]']
+  if (parts.beds) lines.push(`Beds: ${parts.beds}+`)
+  if (parts.pets) lines.push(`Pets: ${parts.pets}`)
+  if (parts.garage) lines.push(`Garage/parking: ${parts.garage}`)
+  if (parts.preferredArea) lines.push(`Preferred area: ${parts.preferredArea}`)
+  if (parts.propertyLabel || parts.propertySlug) {
+    const ctx = [parts.propertyLabel, parts.propertySlug ? `slug:${parts.propertySlug}` : null]
+      .filter(Boolean)
+      .join(' · ')
+    lines.push(`Source property: ${ctx}`)
+  }
+  if (parts.note?.trim()) {
+    lines.push('')
+    lines.push(parts.note.trim())
+  }
+  return lines.join('\n')
+}
 
 // --- updateInquiryStatus (authenticated — manager only, T-03-17) ---
 
@@ -457,6 +633,98 @@ export async function submitApplication(formData: FormData): Promise<InquiryActi
     })
   } catch (err) {
     console.warn('[submitApplication] email notification failed (non-fatal):', err)
+  }
+
+  return { success: true }
+}
+
+// --- submitGeneralInterest (“what I’m looking for” / get on our list) ---
+export async function submitGeneralInterest(formData: FormData): Promise<InquiryActionResult> {
+  const raw = Object.fromEntries(formData.entries())
+
+  const parsed = generalInterestSchema.safeParse(raw)
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid form data' }
+  }
+
+  const {
+    name,
+    email,
+    phone,
+    move_in_date,
+    budget,
+    beds,
+    pets,
+    garage,
+    preferred_area,
+    note,
+    listing_id,
+    property_id,
+    property_label,
+    property_slug,
+    org_id,
+  } = parsed.data
+
+  if (!listing_id && !property_id) {
+    return { success: false, error: 'Missing listing or property context.' }
+  }
+
+  const ctx = await resolveInterestContext({
+    orgId: org_id,
+    listingId: listing_id,
+    propertyId: property_id,
+    propertyLabel: property_label,
+    propertySlug: property_slug,
+  })
+  if (!ctx.valid) {
+    return { success: false, error: 'Invalid listing or property.' }
+  }
+
+  const composedNote = buildInterestNote({
+    beds,
+    pets,
+    garage,
+    preferredArea: preferred_area,
+    propertyLabel: property_label || ctx.propertyAddress || undefined,
+    propertySlug: property_slug,
+    note,
+  })
+
+  const supabase = createAnonClient()
+  const { error: insertError } = await supabase.from('inquiries').insert({
+    org_id,
+    listing_id: ctx.listingId,
+    property_id: ctx.propertyId,
+    type: 'inquiry',
+    name,
+    email,
+    phone: phone || null,
+    move_in_date: move_in_date || null,
+    budget: budget ?? null,
+    note: composedNote,
+    status: 'new',
+  })
+
+  if (insertError) {
+    console.error('[submitGeneralInterest] insert error:', insertError)
+    return { success: false, error: 'Failed to submit your interest. Please try again.' }
+  }
+
+  try {
+    await sendManagerNotification({
+      orgId: org_id,
+      listingTitle: ctx.listingTitle || property_label || 'General interest',
+      propertyAddress: ctx.propertyAddress || property_label || '',
+      visitorName: name,
+      visitorEmail: email,
+      visitorPhone: phone,
+      type: 'interest',
+      moveInDate: move_in_date,
+      budget,
+      note: composedNote,
+    })
+  } catch (err) {
+    console.warn('[submitGeneralInterest] email notification failed (non-fatal):', err)
   }
 
   return { success: true }

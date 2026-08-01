@@ -18,6 +18,7 @@ import type {
   InquiryStatus,
   InquiryType,
 } from './types'
+import { isGeneralInterestNote } from './types'
 
 const EXPIRY_WINDOW_DAYS = 90
 
@@ -213,13 +214,14 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
       supabase
         .from('inquiries')
         .select(
-          `id, listing_id, type, name, email, phone, status, created_at, move_in_date, note,
+          `id, listing_id, property_id, type, name, email, phone, status, created_at, move_in_date, note,
            listings!listing_id(
              id,
              units!unit_id(
                properties!property_id(street_address, city)
              )
-           )`
+           ),
+           properties!property_id(street_address, city)`
         )
         .eq('org_id', orgId)
         .order('created_at', { ascending: false })
@@ -534,22 +536,30 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
     }))
 
   const inquiries: CanaryInquiry[] = inquiryRows
-    .filter((i) => i.listings?.units?.properties)
-    .map((i) => ({
-      id: i.id,
-      listingId: i.listing_id,
-      type: i.type as InquiryType,
-      name: i.name,
-      email: i.email,
-      phone: i.phone ?? '',
-      status: i.status as InquiryStatus,
-      submittedAt: String(i.created_at),
-      property: fullAddress(i.listings.units.properties.street_address, i.listings.units.properties.city),
-      moveIn: i.move_in_date ?? '',
-      note: i.note ?? '',
-      orgSlug,
-      latestNote: latestNoteByInquiry.get(i.id) ?? null,
-    }))
+    .map((i) => {
+      const fromListing = i.listings?.units?.properties
+      const fromProperty = i.properties
+      const prop = fromListing ?? fromProperty
+      if (!prop) return null
+      const note = i.note ?? ''
+      return {
+        id: i.id,
+        listingId: i.listing_id ?? null,
+        type: i.type as InquiryType,
+        name: i.name,
+        email: i.email,
+        phone: i.phone ?? '',
+        status: i.status as InquiryStatus,
+        submittedAt: String(i.created_at),
+        property: fullAddress(prop.street_address, prop.city),
+        moveIn: i.move_in_date ?? '',
+        note,
+        isGeneralInterest: isGeneralInterestNote(note),
+        orgSlug,
+        latestNote: latestNoteByInquiry.get(i.id) ?? null,
+      } satisfies CanaryInquiry
+    })
+    .filter((i): i is CanaryInquiry => i != null)
 
   const payments: CanaryPayment[] = [
     ...paymentRows

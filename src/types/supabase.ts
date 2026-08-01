@@ -407,12 +407,13 @@ export type Database = {
           created_at: string
           email: string
           id: string
-          listing_id: string
+          listing_id: string | null
           move_in_date: string | null
           name: string
           note: string | null
           org_id: string
           phone: string | null
+          property_id: string | null
           status: Database["public"]["Enums"]["inquiry_status"]
           type: Database["public"]["Enums"]["inquiry_type"]
           updated_at: string
@@ -422,12 +423,13 @@ export type Database = {
           created_at?: string
           email: string
           id?: string
-          listing_id: string
+          listing_id?: string | null
           move_in_date?: string | null
           name: string
           note?: string | null
           org_id: string
           phone?: string | null
+          property_id?: string | null
           status?: Database["public"]["Enums"]["inquiry_status"]
           type?: Database["public"]["Enums"]["inquiry_type"]
           updated_at?: string
@@ -437,12 +439,13 @@ export type Database = {
           created_at?: string
           email?: string
           id?: string
-          listing_id?: string
+          listing_id?: string | null
           move_in_date?: string | null
           name?: string
           note?: string | null
           org_id?: string
           phone?: string | null
+          property_id?: string | null
           status?: Database["public"]["Enums"]["inquiry_status"]
           type?: Database["public"]["Enums"]["inquiry_type"]
           updated_at?: string
@@ -460,6 +463,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inquiries_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
             referencedColumns: ["id"]
           },
         ]

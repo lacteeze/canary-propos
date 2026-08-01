@@ -56,7 +56,8 @@
 }
 
 .cpub-field input,
-.cpub-field textarea {
+.cpub-field textarea,
+.cpub-field select {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -67,8 +68,19 @@
   font-family: inherit;
 }
 
+.cpub-field select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--dim) 50%),
+    linear-gradient(135deg, var(--dim) 50%, transparent 50%);
+  background-position: calc(100% - 18px) calc(50% - 3px), calc(100% - 12px) calc(50% - 3px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 32px;
+}
+
 .cpub-field input:focus,
-.cpub-field textarea:focus {
+.cpub-field textarea:focus,
+.cpub-field select:focus {
   outline: none;
   border-color: var(--yellow);
   box-shadow: 0 0 0 3px rgba(240, 196, 69, 0.35);

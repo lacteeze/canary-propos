@@ -240,7 +240,7 @@ export interface CanaryInquiryNote {
 
 export interface CanaryInquiry {
   id: string
-  listingId: string
+  listingId: string | null
   type: InquiryType
   name: string
   email: string
@@ -251,9 +251,21 @@ export interface CanaryInquiry {
   moveIn: string
   /** Visitor message from the public form */
   note: string
+  /** True when note is a “what I’m looking for” general-interest submit */
+  isGeneralInterest: boolean
   /** Org slug for building public apply links */
   orgSlug: string
   latestNote: CanaryInquiryNote | null
+}
+
+export function isGeneralInterestNote(note: string | null | undefined): boolean {
+  return (note ?? '').trimStart().startsWith('[General interest]')
+}
+
+export function inquiryTypeLabel(inquiry: Pick<CanaryInquiry, 'type' | 'isGeneralInterest'>): string {
+  if (inquiry.isGeneralInterest) return 'Interest'
+  if (inquiry.type === 'application') return 'Application'
+  return 'Showing'
 }
 
 export function inquiryStatusBadge(status: InquiryStatus): { label: string; color: string } {

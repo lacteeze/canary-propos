@@ -10,6 +10,7 @@ import {
 import {
   INQUIRY_PIPELINE_LABELS,
   INQUIRY_PIPELINE_STAGES,
+  inquiryTypeLabel,
   nextInquiryStage,
   type CanaryInquiry,
   type CanaryInquiryNote,
@@ -223,10 +224,14 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
                     </div>
                     <span
                       className={`cy-pipeline-term${
-                        inquiry.type === 'application' ? ' is-app' : ''
+                        inquiry.type === 'application'
+                          ? ' is-app'
+                          : inquiry.isGeneralInterest
+                            ? ' is-interest'
+                            : ''
                       }`}
                     >
-                      {inquiry.type === 'application' ? 'Application' : 'Showing'}
+                      {inquiryTypeLabel(inquiry)}
                     </span>
                   </div>
 
@@ -344,7 +349,13 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
               </div>
               <div>
                 <dt>Inquiry type</dt>
-                <dd>{selected.type === 'application' ? 'Application interest' : 'Showing request'}</dd>
+                <dd>
+                  {selected.isGeneralInterest
+                    ? 'General interest'
+                    : selected.type === 'application'
+                      ? 'Application interest'
+                      : 'Showing request'}
+                </dd>
               </div>
               <div>
                 <dt>Wants</dt>

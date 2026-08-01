@@ -3147,6 +3147,11 @@
   background: color-mix(in srgb, var(--amber) 14%, var(--panel));
   border-color: color-mix(in srgb, var(--amber) 35%, var(--border));
 }
+.cnry .cy-pipeline-term.is-interest {
+  color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 14%, var(--panel));
+  border-color: color-mix(in srgb, var(--blue) 35%, var(--border));
+}
 .cnry .cy-pipeline-card-meta {
   display: inline-flex;
   align-items: center;

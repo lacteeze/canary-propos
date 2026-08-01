@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { InterestForm } from '@/components/listings/InterestForm'
 import { ListingPhotoGallery } from '@/components/listings/ListingPhotoGallery'
 import { SimilarListingsSection } from '@/components/landing/SimilarListingsCarousel'
 import { PublicHeader } from '@/components/public/PublicHeader'
@@ -31,6 +32,9 @@ export type PropertyPublicViewProps = {
   availabilityLabel: string
   carouselGroups: CityGroup[]
   orgSlug: string
+  orgId: string
+  /** Any listing for a unit on this property (incl. draft/unlisted), if one exists */
+  linkedListingId?: string | null
   listingCardCopy: {
     tBed: string
     tBath: string
@@ -55,6 +59,8 @@ export function PropertyPublicView({
   availabilityLabel,
   carouselGroups,
   orgSlug,
+  orgId,
+  linkedListingId,
   listingCardCopy,
 }: PropertyPublicViewProps) {
   const street = property.street_address?.trim() || ''
@@ -187,9 +193,14 @@ export function PropertyPublicView({
             {availabilityLabel}
           </p>
           <p style={{ margin: '8px 0 0', color: 'var(--dim)', fontSize: 14.5, lineHeight: 1.5 }}>
-            This home is not open for inquiries right now. Browse available homes below, or check
-            back later.
+            This home isn&apos;t available to show or apply for right now. Tell us what you&apos;re
+            looking for below, or browse other available homes.
           </p>
+          <div style={{ marginTop: 14 }}>
+            <a href="#interest-form" className="cpub-btn-primary" style={{ textDecoration: 'none' }}>
+              Get on our list
+            </a>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gap: 40 }}>
@@ -223,6 +234,14 @@ export function PropertyPublicView({
               </div>
             </section>
           )}
+
+          <InterestForm
+            orgId={orgId}
+            listingId={linkedListingId}
+            propertyId={property.id}
+            propertyLabel={fullAddress}
+            propertySlug={property.slug}
+          />
 
           <SimilarListingsSection groups={carouselGroups} copy={listingCardCopy} />
         </div>

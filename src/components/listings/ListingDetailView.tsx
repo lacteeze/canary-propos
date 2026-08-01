@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { InquiryForm } from '@/components/listings/InquiryForm'
 import { ApplicationForm } from '@/components/listings/ApplicationForm'
+import { InterestForm } from '@/components/listings/InterestForm'
 import { ListingPhotoGallery } from '@/components/listings/ListingPhotoGallery'
 import { SimilarListingsSection } from '@/components/landing/SimilarListingsCarousel'
 import { PublicHeader } from '@/components/public/PublicHeader'
@@ -367,6 +368,13 @@ export function ListingDetailView({
             <InquiryForm listingId={listing.id} orgId={listing.org_id} />
             <ApplicationForm listingId={listing.id} orgId={listing.org_id} />
           </div>
+
+          <InterestForm
+            orgId={listing.org_id}
+            listingId={listing.id}
+            propertyId={property?.id ?? null}
+            propertyLabel={fullAddress}
+          />
 
           <SimilarListingsSection groups={carouselGroups} copy={listingCardCopy} />
         </div>

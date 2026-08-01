@@ -49,7 +49,7 @@ export function InterestForm({
 
   if (success) {
     return (
-      <div id="interest-form" className="cpub-form-card cpub-form-card--column">
+      <div id="interest-form" className="cpub-form-card">
         <div
           style={{
             display: 'flex',
@@ -84,7 +84,7 @@ export function InterestForm({
   }
 
   return (
-    <div id="interest-form" className="cpub-form-card cpub-form-card--column">
+    <div id="interest-form" className="cpub-form-card">
       <h2>Tell us what you&apos;re looking for</h2>
       <p className="cpub-form-sub">
         Get on our list — share your must-haves and we&apos;ll match you with upcoming homes.

@@ -358,13 +358,7 @@ export function ListingDetailView({
             </aside>
           </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gap: 24,
-              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
-            }}
-          >
+          <div className="cpub-forms-stack">
             <InquiryForm listingId={listing.id} orgId={listing.org_id} />
             <ApplicationForm listingId={listing.id} orgId={listing.org_id} />
             <InterestForm

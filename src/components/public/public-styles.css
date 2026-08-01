@@ -37,9 +37,18 @@
   box-shadow: var(--shadow);
 }
 
-/* Match a single column in the listing forms grid (~half of 1180 content) */
-.cpub-form-card--column {
-  max-width: min(100%, 560px);
+/* Forms grid: share columns when multiple cards; solo card fills content width */
+.cpub-forms-stack {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  min-width: 0;
+}
+
+.cpub-forms-stack > .cpub-form-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 /* Paired fields: stack on mobile, 2-col from small screens up */

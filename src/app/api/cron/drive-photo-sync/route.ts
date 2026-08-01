@@ -1,7 +1,8 @@
 // GET /api/cron/drive-photo-sync
 // Syncs listing photos from linked Drive folders for all properties.
 // Secured with CRON_SECRET (Authorization: Bearer <secret>).
-// Schedule: vercel.json cron every 30 minutes (document if hosting elsewhere).
+// Schedule: vercel.json cron daily at 12:00 UTC (Hobby plan allows at most one run/day).
+// Upgrade to Vercel Pro to use */30 if near-real-time Drive sync is needed.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { syncAllLinkedDriveFolders } from '@/lib/drive-photo-sync'

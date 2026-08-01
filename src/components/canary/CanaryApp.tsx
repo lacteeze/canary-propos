@@ -3483,6 +3483,10 @@ export default function CanaryApp({
           setView('messages')
           setDrawer(null)
         }}
+        onOpenListing={(d) => {
+          setDrawer(null)
+          openDraft(d)
+        }}
       />
 
       <TaskDetailDrawer

@@ -16,8 +16,9 @@ import {
 } from '@/app/actions/entity-updates'
 import { getOrCreatePropertyThread, getThreadMessages, sendChatMessage, type ChatMessage } from '@/app/actions/chat'
 import { LEASE_TERM_LABELS } from '@/lib/canary/lease-term'
-import type { CanaryDb, CanaryLease, CanaryPerson, CanaryProperty } from '@/lib/canary/types'
-import { leaseDbStatusFromDisplay } from '@/lib/canary/types'
+import type { CanaryDb, CanaryDraft, CanaryLease, CanaryPerson, CanaryProperty } from '@/lib/canary/types'
+import { draftStatusBadge, leaseDbStatusFromDisplay } from '@/lib/canary/types'
+import { listingPublicHref, propertyPublicHref } from '@/lib/listings/listing-href'
 import AuditLogPanel from './AuditLogPanel'
 import { CopyPublicLinkButton } from './CopyPublicLinkButton'
 import DatePickerField, { formatDisplayDate } from './DatePickerField'
@@ -41,6 +42,8 @@ interface EntityDetailDrawerProps {
   short: (addr: string | null | undefined) => string
   money: (n: number | null | undefined) => string
   onOpenMessages?: (threadId: string) => void
+  /** Open the existing draft/listing composer for a listing row */
+  onOpenListing?: (draft: CanaryDraft) => void
 }
 
 const PROPERTY_STATUSES = ['Vacant', 'Leased', 'STR', 'Maintenance', 'Office']
@@ -679,6 +682,114 @@ function PropertyEditForm({
 
 type RowDef = { label: string; value: React.ReactNode; onClick?: () => void }
 
+function publishedListingPublicHref(
+  listing: CanaryDraft,
+  property: CanaryProperty,
+): string | null {
+  if (listing.slug) return listingPublicHref({ id: listing.id, slug: listing.slug }, '')
+  const propHref = propertyPublicHref({ slug: property.slug })
+  if (propHref) return propHref
+  return listingPublicHref({ id: listing.id, slug: null }, '')
+}
+
+function WebsiteListingsSection({
+  property,
+  listings,
+  short,
+  money,
+  onOpenListing,
+}: {
+  property: CanaryProperty
+  listings: CanaryDraft[]
+  short: (addr: string | null | undefined) => string
+  money: (n: number | null | undefined) => string
+  onOpenListing?: (draft: CanaryDraft) => void
+}) {
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div className="cy-drawer-section-title">Website listing</div>
+      {listings.length === 0 ? (
+        <div style={{ color: 'var(--dim)', fontSize: 13, padding: '4px 0 2px' }}>
+          No live website listing
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {listings.map((d) => {
+            const badge = draftStatusBadge(d.status)
+            const publicHref = publishedListingPublicHref(d, property)
+            const title = d.title?.trim() || short(d.address) || 'Published listing'
+            const meta = [
+              d.unitLabel ? `Unit ${d.unitLabel}` : null,
+              d.rent ? `${money(parseFloat(d.rent) || 0)}/mo` : null,
+            ].filter(Boolean).join(' · ')
+            return (
+              <div
+                key={d.id}
+                className={onOpenListing ? 'cy-hov' : undefined}
+                onClick={onOpenListing ? () => onOpenListing(d) : undefined}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                  padding: '10px 10px',
+                  borderRadius: 10,
+                  border: '1px solid var(--border)',
+                  background: 'var(--elev)',
+                  cursor: onOpenListing ? 'pointer' : 'default',
+                }}
+              >
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontWeight: 650, fontSize: 13.5, lineHeight: 1.3 }}>{title}</div>
+                  {meta ? (
+                    <div style={{ color: 'var(--dim)', fontSize: 12, marginTop: 3 }}>{meta}</div>
+                  ) : null}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7, flexWrap: 'wrap' }}>
+                    <span
+                      style={{
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        letterSpacing: '0.02em',
+                        padding: '2px 7px',
+                        borderRadius: 6,
+                        color: badge.color,
+                        border: '1px solid var(--border)',
+                        background: 'var(--panel)',
+                      }}
+                    >
+                      {badge.label === 'PUBLIC' ? 'Published' : badge.label}
+                    </span>
+                    {publicHref ? (
+                      <a
+                        href={publicHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: 'var(--blue, #2563eb)',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        Open public page ↗
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+                {onOpenListing ? (
+                  <span style={{ flex: 'none', color: 'var(--dim)', fontSize: 12, fontWeight: 600, marginTop: 2 }}>
+                    Edit
+                  </span>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Section({ title, rows }: { title: string; rows: RowDef[] }) {
   return (
     <div style={{ marginTop: 14 }}>
@@ -706,6 +817,7 @@ export default function EntityDetailDrawer({
   short,
   money,
   onOpenMessages,
+  onOpenListing,
 }: EntityDetailDrawerProps) {
   const router = useRouter()
   const [auditKey, setAuditKey] = useState(0)
@@ -913,6 +1025,24 @@ export default function EntityDetailDrawer({
           ]}
         />,
       ]
+      const siblingUnitIds = new Set(
+        db.properties
+          .filter((x) => x.propertyDbId && x.propertyDbId === p.propertyDbId)
+          .map((x) => x.id),
+      )
+      const publishedListings = db.drafts.filter(
+        (d) => d.status === 'published' && siblingUnitIds.has(d.propId || d.unitId),
+      )
+      sections.push(
+        <WebsiteListingsSection
+          key="website-listings"
+          property={p}
+          listings={publishedListings}
+          short={short}
+          money={money}
+          onOpenListing={onOpenListing}
+        />,
+      )
       if (canEdit && p.propertyDbId && db.orgId) {
         propertyPhotoSection = (
           <PropertyPhotoUpload

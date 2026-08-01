@@ -193,6 +193,12 @@ export interface CanaryDraft {
   propId: string
   unitId: string
   address: string
+  /** Public listing title (listings.listing_title) */
+  title: string
+  /** Public URL slug when set (listings.slug) — prefer over property slug for live pages */
+  slug: string | null
+  /** Unit number label for multi-unit buildings (e.g. "2B"); empty for single-unit */
+  unitLabel: string
   rent: string
   start: string
   end: string

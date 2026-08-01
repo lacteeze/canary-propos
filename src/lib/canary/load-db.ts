@@ -205,7 +205,7 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
       supabase
         .from('listings')
         .select(
-          `id, listing_title, listing_description, display_rent, status, available_from, updated_at,
+          `id, listing_title, listing_description, display_rent, status, available_from, updated_at, slug,
            units!unit_id(id, unit_number, bedrooms, bathrooms, amenities,
              properties!property_id(id, street_address, city))`
         )
@@ -514,14 +514,21 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
     .map((d) => {
       const prop = d.units.properties
       const street = unitDisplayStreet(prop.street_address, d.units.unit_number, prop.id, unitRows)
-      return { d, prop, street, address: fullAddress(street, prop.city) }
+      const multiUnit =
+        unitRows.filter((u) => u.properties?.id === prop.id).length > 1
+      const unitLabel =
+        multiUnit && d.units.unit_number ? String(d.units.unit_number) : ''
+      return { d, prop, street, address: fullAddress(street, prop.city), unitLabel }
     })
     .filter(({ address }) => !archivedAddresses.has(address))
-    .map(({ d, address }) => ({
+    .map(({ d, address, unitLabel }) => ({
       id: d.id,
       propId: d.units.id,
       unitId: d.units.id,
       address,
+      title: (d.listing_title as string | null)?.trim() || address,
+      slug: (d.slug as string | null) ?? null,
+      unitLabel,
       rent: d.display_rent != null ? String(Number(d.display_rent)) : '',
       start: d.available_from ?? '',
       end: '',

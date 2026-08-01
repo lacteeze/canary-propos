@@ -2,7 +2,7 @@
 
 // Integrations section — Gmail + Google Drive (Canary shell styling)
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { getGmailConnectUrl, disconnectGmail } from '@/app/(manager)/settings/actions'
@@ -22,7 +22,8 @@ export function GmailIntegrationSection({
   const searchParams = useSearchParams()
   const [isConnected, setIsConnected] = useState(gmailConnectedAt !== null)
   const [connectedAt] = useState(gmailConnectedAt)
-  const [isPending, startTransition] = useTransition()
+  const [busy, setBusy] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   useEffect(() => {
     const gmailParam = searchParams.get('gmail')
@@ -31,39 +32,68 @@ export function GmailIntegrationSection({
       setIsConnected(true)
     } else if (gmailParam === 'error') {
       const reason = searchParams.get('reason')
-      toast.error(
+      const message =
         reason === 'token_exchange'
           ? 'Gmail authorization failed. Please try again.'
-          : 'Failed to connect Gmail. Please try again.',
-      )
+          : 'Failed to connect Gmail. Please try again.'
+      toast.error(message)
+      setActionError(message)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function handleConnect() {
-    startTransition(async () => {
+  async function handleConnect() {
+    if (busy) return
+    setBusy(true)
+    setActionError(null)
+    try {
       const result = await getGmailConnectUrl()
       if (!result.success || !result.url) {
-        toast.error(
-          (!result.success ? (result as { error?: string }).error : undefined) ??
-            'Failed to start Gmail authorization.',
-        )
+        const message =
+          (!result.success ? result.error : undefined) ??
+          'Failed to start Gmail authorization.'
+        setActionError(message)
+        toast.error(message)
+        setBusy(false)
         return
       }
-      window.location.href = result.url
-    })
+      window.location.assign(result.url)
+    } catch (err) {
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : 'Failed to start Gmail authorization.'
+      setActionError(message)
+      toast.error(message)
+      setBusy(false)
+    }
   }
 
-  function handleDisconnect() {
-    startTransition(async () => {
+  async function handleDisconnect() {
+    if (busy) return
+    setBusy(true)
+    setActionError(null)
+    try {
       const result = await disconnectGmail(orgId)
       if (!result.success) {
-        toast.error(result.error ?? 'Failed to disconnect Gmail.')
+        const message = result.error ?? 'Failed to disconnect Gmail.'
+        setActionError(message)
+        toast.error(message)
+        setBusy(false)
         return
       }
       setIsConnected(false)
       toast.success('Gmail disconnected.')
-    })
+    } catch (err) {
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : 'Failed to disconnect Gmail.'
+      setActionError(message)
+      toast.error(message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -94,25 +124,30 @@ export function GmailIntegrationSection({
               payments.
             </p>
           )}
+          {actionError && (
+            <p className="cy-settings-error" role="alert" style={{ marginTop: 8 }}>
+              {actionError}
+            </p>
+          )}
         </div>
 
         {isConnected ? (
           <button
             type="button"
-            onClick={handleDisconnect}
-            disabled={isPending}
+            onClick={() => void handleDisconnect()}
+            disabled={busy}
             className="cy-btn"
           >
-            {isPending ? 'Disconnecting…' : 'Disconnect'}
+            {busy ? 'Disconnecting…' : 'Disconnect'}
           </button>
         ) : (
           <button
             type="button"
-            onClick={handleConnect}
-            disabled={isPending}
+            onClick={() => void handleConnect()}
+            disabled={busy}
             className="cy-btn cy-btn--active"
           >
-            {isPending ? 'Redirecting…' : 'Connect Gmail'}
+            {busy ? 'Redirecting…' : 'Connect Gmail'}
           </button>
         )}
       </div>

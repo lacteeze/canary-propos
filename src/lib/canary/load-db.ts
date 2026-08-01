@@ -26,6 +26,7 @@ type Caller = {
   orgId: string
   roles: string[]
   name: string
+  avatarPath: string | null
 }
 
 function fullAddress(street: string, city: string | null): string {
@@ -133,7 +134,7 @@ export async function getCaller(): Promise<Caller | 'no-user' | 'no-person'> {
 
   const { data: person } = await supabase
     .from('people')
-    .select('id, org_id, role, first_name, last_name, email')
+    .select('id, org_id, role, first_name, last_name, email, avatar_path')
     .eq('user_id', user.id)
     .eq('active', true)
     .single()
@@ -146,6 +147,7 @@ export async function getCaller(): Promise<Caller | 'no-user' | 'no-person'> {
     name:
       [person.first_name, person.last_name].filter(Boolean).join(' ') ||
       person.email,
+    avatarPath: person.avatar_path ?? null,
   }
 }
 

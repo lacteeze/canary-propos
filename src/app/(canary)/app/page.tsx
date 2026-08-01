@@ -7,6 +7,7 @@ import { getCaller, loadCanaryDb } from '@/lib/canary/load-db'
 import { loadHospitableCalendar } from '@/lib/canary/load-hospitable-calendar'
 import { loadHospitableTasks } from '@/lib/canary/load-hospitable-tasks'
 import { fetchAllProperties, isHospitableConfigured } from '@/lib/hospitable/client'
+import { createClient } from '@/lib/supabase/server'
 import type { CanaryRole } from '@/lib/canary/types'
 
 export const dynamic = 'force-dynamic'
@@ -49,6 +50,15 @@ export default async function CanaryAppPage() {
   const role = toCanaryRole(caller.roles)
   const canSwitchRoles = role === 'Admin' || role === 'Manager'
 
+  let userAvatarUrl: string | null = null
+  if (caller.avatarPath) {
+    const supabase = await createClient()
+    const { data } = await supabase.storage
+      .from('org-assets')
+      .createSignedUrl(caller.avatarPath, 3600)
+    userAvatarUrl = data?.signedUrl ?? null
+  }
+
   return (
     <CanaryApp
       db={db}
@@ -58,6 +68,8 @@ export default async function CanaryAppPage() {
       userPersonId={caller.personId}
       canSwitchRoles={canSwitchRoles}
       userName={caller.name}
+      userAvatarUrl={userAvatarUrl}
+      userOrgId={caller.orgId}
     />
   )
 }

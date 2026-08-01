@@ -4,10 +4,12 @@
 // Faithful React port of the CanaryApp.dc design prototype, wired to live
 // Supabase data (loaded server-side in src/app/(canary)/app/page.tsx).
 import React, { useCallback, useMemo, useRef, useState, useTransition } from 'react'
-import { Bell, CalendarIcon, ChevronDown, ImageOff, Mail, Menu, MessageSquare, Repeat2, Search, Settings, X } from 'lucide-react'
+import { Bell, CalendarIcon, ChevronDown, ImageOff, Mail, Menu, MessageSquare, Repeat2, Search, Settings, UserRound, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { activateDraftListing, deleteDraftListing, saveDraftListing, savePaymentEntry } from '@/app/actions/canary'
+import { updateOwnAvatarPath } from '@/app/actions/profile'
 import { archiveProperties, unarchiveProperties, deleteProperties, mergeProperties } from '@/app/actions/entity-updates'
 import {
   DropdownMenu,
@@ -186,6 +188,8 @@ interface CanaryAppProps {
   userPersonId: string
   canSwitchRoles: boolean
   userName: string
+  userAvatarUrl?: string | null
+  userOrgId?: string
 }
 
 // ---------- small render helpers ----------
@@ -204,7 +208,17 @@ function userInitials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, userRole, userPersonId, canSwitchRoles, userName }: CanaryAppProps) {
+export default function CanaryApp({
+  db,
+  hospitableCalendar,
+  hospitableTasks,
+  userRole,
+  userPersonId,
+  canSwitchRoles,
+  userName,
+  userAvatarUrl = null,
+  userOrgId = '',
+}: CanaryAppProps) {
   const router = useRouter()
   const [, startTransition] = useTransition()
 
@@ -212,6 +226,9 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
   const [theme, setTheme] = useState<'dark' | 'light'>('light')
   const [role, setRole] = useState<CanaryRole>(userRole)
   const [personaId, setPersonaId] = useState(canSwitchRoles ? '' : userPersonId)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(userAvatarUrl)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
   const [chat, setChat] = useState<ChatMsg[]>([])
   const [chatBusy, setChatBusy] = useState(false)
   const [search, setSearch] = useState('')
@@ -691,6 +708,49 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
     await supabase.auth.signOut()
     window.location.href = '/'
   }, [])
+
+  const uploadAvatar = useCallback(
+    async (file: File | undefined) => {
+      if (!file || !userOrgId || !userPersonId || avatarUploading) return
+      const accepted = new Set(['image/jpeg', 'image/png', 'image/webp'])
+      if (!accepted.has(file.type)) {
+        toast.error('Please upload a PNG, JPEG, or WebP image.')
+        return
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('Photo must be 2MB or smaller.')
+        return
+      }
+
+      setAvatarUploading(true)
+      try {
+        const supabase = createClient()
+        const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
+        const storagePath = `${userOrgId}/people/${userPersonId}/avatar/${Date.now()}.${ext}`
+        const { error: uploadError } = await supabase.storage
+          .from('org-assets')
+          .upload(storagePath, file, {
+            contentType: file.type,
+            upsert: true,
+            cacheControl: '3600',
+          })
+        if (uploadError) throw new Error(uploadError.message || 'Upload failed.')
+
+        const result = await updateOwnAvatarPath(storagePath)
+        if (!result.success) throw new Error(result.error)
+
+        setAvatarUrl(result.avatarUrl ?? URL.createObjectURL(file))
+        toast.success('Profile photo updated')
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to upload photo.')
+      } finally {
+        setAvatarUploading(false)
+        if (avatarInputRef.current) avatarInputRef.current.value = ''
+      }
+    },
+    [avatarUploading, router, userOrgId, userPersonId],
+  )
 
   // ---------- nav ----------
   const allNav: { key: string; label: string; privOnly?: boolean; hideFor?: CanaryRole[] }[] = [
@@ -2157,9 +2217,22 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                   aria-label="Account menu"
                 >
                   <span className="cy-profile-avatar" aria-hidden>
-                    {userInitials(userName || role)}
+                    {avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={avatarUrl} alt="" />
+                    ) : (
+                      userInitials(userName || role)
+                    )}
                   </span>
                 </DropdownMenuTrigger>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="sr-only"
+                  aria-label="Upload profile photo"
+                  onChange={(e) => void uploadAvatar(e.target.files?.[0])}
+                />
                 <DropdownMenuContent
                   align="end"
                   sideOffset={8}
@@ -2185,6 +2258,13 @@ export default function CanaryApp({ db, hospitableCalendar, hospitableTasks, use
                     </>
                   )}
                   <DropdownMenuGroup>
+                    <DropdownMenuItem
+                      disabled={avatarUploading || !userOrgId}
+                      onClick={() => avatarInputRef.current?.click()}
+                    >
+                      <UserRound size={15} aria-hidden />
+                      {avatarUploading ? 'Uploading photo…' : avatarUrl ? 'Change photo' : 'Upload photo'}
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => { window.location.href = '/settings' }}
                     >

@@ -70,7 +70,7 @@ export async function recordPayment(formData: RecordPaymentInput): Promise<Actio
     return { success: false, error: 'Lease not found in your organization.' }
   }
 
-  const { error: insertError } = await ctx.supabase
+  const { data: inserted, error: insertError } = await ctx.supabase
     .from('payments')
     .insert({
       org_id: ctx.person.org_id,
@@ -82,12 +82,30 @@ export async function recordPayment(formData: RecordPaymentInput): Promise<Actio
       notes: notes ?? null,
       created_at: payment_date,
     })
+    .select('id')
+    .single()
 
   if (insertError) {
     return { success: false, error: insertError.message }
   }
 
+  if (inserted?.id) {
+    try {
+      const { allocatePaymentToCharges } = await import('@/lib/billing/rent-charges')
+      await allocatePaymentToCharges(
+        ctx.supabase,
+        ctx.person.org_id,
+        inserted.id,
+        lease_id,
+        amount
+      )
+    } catch (err) {
+      console.warn('[recordPayment] allocate failed', err)
+    }
+  }
+
   revalidatePath('/payments')
+  revalidatePath('/billing')
   return { success: true }
 }
 

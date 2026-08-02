@@ -83,17 +83,18 @@ async function sendManagerNotification(params: {
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.canarypm.ca'
-  const typeLabel =
-    params.type === 'interest'
-      ? 'general interest'
-      : params.type === 'inquiry'
-        ? 'viewing request'
-        : 'application'
+  const shortLabel =
+    (params.propertyAddress || '').split(',')[0].trim() ||
+    (params.listingTitle || '').split(',')[0].trim() ||
+    params.listingTitle ||
+    'Property'
+  const subjectPrefix =
+    params.type === 'interest' ? 'Interest' : params.type === 'inquiry' ? 'Viewing' : 'Application'
 
   const result = await sendEmail({
     type: PINGRAM_EMAIL_TYPES.inquiryNotification,
     to: managerEmail,
-    subject: `New ${typeLabel}: ${params.listingTitle}`,
+    subject: `${subjectPrefix}: ${shortLabel}`,
     from: 'Canary PM <notifications@canarypm.ca>',
     template: React.createElement(InquiryNotificationEmail, {
       visitorName: params.visitorName,
@@ -106,6 +107,7 @@ async function sendManagerNotification(params: {
       budget: params.budget,
       note: params.note,
       dashboardUrl: `${appUrl}/app`,
+      shortLabel,
     }),
   })
   if (!result.success) {

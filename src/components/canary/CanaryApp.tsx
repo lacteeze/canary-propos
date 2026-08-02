@@ -3,7 +3,7 @@
 // CanaryApp — the authenticated Canary PM app shell.
 // Faithful React port of the CanaryApp.dc design prototype, wired to live
 // Supabase data (loaded server-side in src/app/(canary)/app/page.tsx).
-import React, { useCallback, useMemo, useRef, useState, useTransition } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { Bell, CalendarIcon, ChevronDown, ImageOff, Mail, Menu, MessageSquare, Repeat2, Search, Settings, UserRound, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -1782,6 +1782,7 @@ export default function CanaryApp({
       { key: 'properties', label: 'Properties', meta: 'Units & status' },
       { key: 'people', label: 'People', meta: 'Contacts & roles', privOnly: true },
       { key: 'payments', label: 'Payments', meta: 'Charges & credits', hideFor: ['Vendor'] },
+      { key: 'billing', label: 'Billing', meta: 'Balances & statements', privOnly: true, hideFor: ['Vendor', 'Tenant'] },
       { key: 'projects', label: 'Projects', meta: 'Maintenance & work' },
       { key: 'tasks', label: 'Tasks', meta: 'Hospitable housekeeping & ops', hideFor: ['Tenant', 'Vendor'] },
       { key: 'inbox', label: 'Email', meta: 'Gmail triage', privOnly: true },
@@ -1999,6 +2000,18 @@ export default function CanaryApp({
       setImportModalOpen(true)
     }
   }, [startDraftFor, emptyPayForm])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('import') === 'payments') {
+      setImportModalOpen(true)
+      setView('payments')
+      params.delete('import')
+      const next = params.toString()
+      window.history.replaceState({}, '', next ? `${window.location.pathname}?${next}` : window.location.pathname)
+    }
+  }, [])
 
   // ============================================================ render
   return (
@@ -3101,9 +3114,34 @@ export default function CanaryApp({
                   <option value="Debit">Debit</option>
                 </select>
                 <span style={{ color: 'var(--dim)', fontSize: 13 }}>{filteredPay.length + ' transactions'}</span>
+                <button type="button" className="cy-btn-ghost" onClick={() => setImportModalOpen(true)}>Import CSV</button>
+                <a href="/billing" className="cy-btn-ghost" style={{ textDecoration: 'none' }}>Billing dashboard →</a>
+                <a href="/payments" className="cy-btn-ghost" style={{ textDecoration: 'none' }}>Full table →</a>
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 16, alignItems: 'center' }}>
                   <span style={{ fontSize: 13, color: 'var(--dim)' }}>Net <b style={{ color: payNetN < 0 ? 'var(--red)' : 'var(--green)', fontSize: 15 }}>{money(Math.abs(payNetN)) || '$0'}</b></span>
                 </div>
+              </div>
+            </section>
+          )}
+
+          {view === 'billing' && (
+            <section>
+              <div
+                style={{
+                  background: 'var(--panel)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 14,
+                  padding: '28px 24px',
+                  maxWidth: 560,
+                }}
+              >
+                <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700 }}>Billing dashboard</h2>
+                <p style={{ margin: '0 0 16px', fontSize: 14, color: 'var(--dim)', lineHeight: 1.5 }}>
+                  Portfolio close-month, lease balances, Hospitable stays import, and PDF/CSV statements.
+                </p>
+                <a href="/billing" className="cy-btn-primary cy-accent-btn" style={{ textDecoration: 'none', display: 'inline-block' }}>
+                  Open billing →
+                </a>
               </div>
             </section>
           )}

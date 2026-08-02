@@ -25,6 +25,8 @@ import { CopyPublicLinkButton } from './CopyPublicLinkButton'
 import DatePickerField, { formatDisplayDate } from './DatePickerField'
 import { PublicSlugField } from './PublicSlugField'
 import { PropertyPhotoUpload } from '@/components/properties/PropertyPhotoUpload'
+import { PropertyListingAiPanel } from '@/components/properties/PropertyListingAiPanel'
+import { updateLeaseListingFields } from '@/app/actions/property-knowledge'
 
 const MONO = "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif"
 
@@ -927,6 +929,67 @@ export default function EntityDetailDrawer({
               value: <InlineField value={l.end} label="end date" type="date" confirm onSave={wrapSave((v) => updateLeaseField(l.id, 'end_date', v))} disabled={!canEdit} />,
             },
             { label: 'Months', value: l.months || '—' },
+            {
+              label: 'Utilities',
+              value: (
+                <InlineField
+                  value={l.utilitiesIncluded || l.utilities}
+                  label="utilities"
+                  confirm
+                  disabled={!canEdit}
+                  onSave={wrapSave(async (v) => {
+                    const res = await updateLeaseListingFields(l.id, {
+                      utilities_included: v || null,
+                      pets_policy: l.petsPolicy || null,
+                      parking_spots: l.parkingSpots ? parseInt(l.parkingSpots, 10) || null : null,
+                    })
+                    return res
+                  })}
+                />
+              ),
+            },
+            {
+              label: 'Pets policy',
+              value: (
+                <InlineField
+                  value={l.petsPolicy}
+                  label="pets policy"
+                  confirm
+                  disabled={!canEdit}
+                  onSave={wrapSave(async (v) => {
+                    const res = await updateLeaseListingFields(l.id, {
+                      utilities_included: l.utilitiesIncluded || null,
+                      pets_policy: v || null,
+                      parking_spots: l.parkingSpots ? parseInt(l.parkingSpots, 10) || null : null,
+                    })
+                    return res
+                  })}
+                />
+              ),
+            },
+            {
+              label: 'Parking spots',
+              value: (
+                <InlineField
+                  value={l.parkingSpots}
+                  label="parking spots"
+                  confirm
+                  disabled={!canEdit}
+                  onSave={wrapSave(async (v) => {
+                    const n = v.trim() === '' ? null : parseInt(v, 10)
+                    if (v.trim() && (n == null || Number.isNaN(n))) {
+                      return { success: false as const, error: 'Invalid parking spots.' }
+                    }
+                    const res = await updateLeaseListingFields(l.id, {
+                      utilities_included: l.utilitiesIncluded || null,
+                      pets_policy: l.petsPolicy || null,
+                      parking_spots: n,
+                    })
+                    return res
+                  })}
+                />
+              ),
+            },
           ]}
         />,
         <LeaseTenantSection
@@ -1056,6 +1119,21 @@ export default function EntityDetailDrawer({
           onOpenListing={onOpenListing}
         />,
       )
+      if (p.propertyDbId) {
+        const draftListing =
+          publishedListings[0] ||
+          db.drafts.find((d) => siblingUnitIds.has(d.propId || d.unitId))
+        sections.push(
+          <div key="listing-ai" className="cy-drawer-section">
+            <div className="cy-drawer-section-title">Listing inputs & knowledge</div>
+            <PropertyListingAiPanel
+              propertyId={p.propertyDbId}
+              listingId={draftListing?.id}
+              canEdit={canEdit}
+            />
+          </div>
+        )
+      }
       if (canEdit && p.propertyDbId && db.orgId) {
         propertyPhotoSection = (
           <PropertyPhotoUpload

@@ -14,6 +14,13 @@ export interface InquiryNotificationEmailProps {
   budget?: number | null
   note?: string | null
   dashboardUrl: string
+  /** Short street form for subject/heading (e.g. before first comma). */
+  shortLabel?: string
+}
+
+function shortAddress(addr: string | null | undefined, fallback = ''): string {
+  const s = (addr || '').split(',')[0].trim()
+  return s || fallback
 }
 
 export function InquiryNotificationEmail({
@@ -27,93 +34,81 @@ export function InquiryNotificationEmail({
   budget,
   note,
   dashboardUrl,
+  shortLabel,
 }: InquiryNotificationEmailProps) {
+  const short =
+    shortLabel ||
+    shortAddress(propertyAddress, shortAddress(listingTitle, listingTitle || 'Property'))
+
+  const headingPrefix =
+    type === 'interest' ? 'Interest' : type === 'inquiry' ? 'Viewing' : 'Application'
+  const headingText = `${headingPrefix}: ${short}`
+  const subtitle =
+    type === 'interest'
+      ? 'General Interest'
+      : type === 'inquiry'
+        ? 'Viewing Request'
+        : 'Application Interest'
   const typeLabel =
     type === 'interest'
       ? 'general interest'
       : type === 'inquiry'
         ? 'viewing request'
         : 'application interest'
-  const subtitle =
-    type === 'interest'
-      ? 'General Interest Submitted'
-      : type === 'inquiry'
-        ? 'Viewing Request'
-        : 'Application Interest Submitted'
-  const headingText =
-    type === 'interest'
-      ? `New general interest — ${listingTitle}`
-      : type === 'inquiry'
-        ? `New viewing request — ${listingTitle}`
-        : `New application interest — ${listingTitle}`
-  const locationPhrase =
-    type === 'interest'
-      ? propertyAddress
-        ? (
-            <>
-              related to <strong>{propertyAddress}</strong>
-            </>
-          )
-        : (
-            <>
-              for <strong>{listingTitle}</strong>
-            </>
-          )
-      : (
-          <>
-            from the listing at <strong>{propertyAddress}</strong>
-          </>
-        )
 
   return (
     <EmailLayout
-      preview={`${visitorName} submitted a ${typeLabel} for ${listingTitle}`}
+      preview={`${headingText} — ${visitorName}`}
       subtitle={subtitle}
-      footerNote={`This notification was sent by Canary PM because a visitor submitted a ${typeLabel} on your public site.`}
+      footerNote={`Canary PM notification: ${typeLabel} on your public site.`}
     >
-      <Heading style={emailStyles.heading}>{headingText}</Heading>
-      <Text style={emailStyles.bodyText}>
-        You have a new {typeLabel} {locationPhrase}.
-      </Text>
+      <Heading style={{ ...emailStyles.heading, marginBottom: '12px' }}>{headingText}</Heading>
 
-      <Hr style={contentHrStyle} />
-
-      <Text style={emailStyles.label}>Contact information</Text>
-      <Text style={emailStyles.bodyText}>
-        <strong>Name:</strong> {visitorName}
-        <br />
-        <strong>Email:</strong> {visitorEmail}
-        {visitorPhone ? (
-          <>
-            <br />
-            <strong>Phone:</strong> {visitorPhone}
-          </>
-        ) : null}
-      </Text>
-
-      {moveInDate || budget ? (
-        <>
-          <Text style={emailStyles.label}>Details</Text>
-          <Text style={emailStyles.bodyText}>
-            {moveInDate ? (
-              <>
-                <strong>Desired move-in:</strong> {moveInDate}
+      <table width="100%" cellPadding={0} cellSpacing={0} style={gridTableStyle}>
+        <tbody>
+          <tr>
+            <td style={colStyle} width="50%" valign="top">
+              <Text style={sectionLabelStyle}>Contact</Text>
+              <Text style={compactBodyStyle}>
+                <strong>{visitorName}</strong>
                 <br />
-              </>
-            ) : null}
-            {budget ? (
-              <>
-                <strong>Monthly budget:</strong> ${budget.toLocaleString()}
-              </>
-            ) : null}
-          </Text>
-        </>
-      ) : null}
+                {visitorEmail}
+                {visitorPhone ? (
+                  <>
+                    <br />
+                    {visitorPhone}
+                  </>
+                ) : null}
+              </Text>
+            </td>
+            <td style={colStyle} width="50%" valign="top">
+              <Text style={sectionLabelStyle}>Details</Text>
+              <Text style={compactBodyStyle}>
+                {propertyAddress || listingTitle ? (
+                  <>
+                    {propertyAddress || listingTitle}
+                    <br />
+                  </>
+                ) : null}
+                {moveInDate ? (
+                  <>
+                    Move-in: {moveInDate}
+                    <br />
+                  </>
+                ) : null}
+                {budget ? <>Budget: ${budget.toLocaleString()}/mo</> : null}
+                {!moveInDate && !budget && !propertyAddress && !listingTitle ? '—' : null}
+              </Text>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
       {note ? (
         <>
-          <Text style={emailStyles.label}>Message</Text>
-          <Text style={emailStyles.bodyText}>{note}</Text>
+          <Hr style={contentHrStyle} />
+          <Text style={sectionLabelStyle}>Message</Text>
+          <Text style={compactBodyStyle}>{note}</Text>
         </>
       ) : null}
 
@@ -130,5 +125,26 @@ export default InquiryNotificationEmail
 
 const contentHrStyle = {
   ...emailStyles.hr,
-  margin: '20px 0',
+  margin: '14px 0',
+}
+
+const gridTableStyle = {
+  width: '100%' as const,
+  borderCollapse: 'collapse' as const,
+}
+
+const colStyle = {
+  paddingRight: '12px',
+  paddingBottom: '4px',
+}
+
+const sectionLabelStyle = {
+  ...emailStyles.label,
+  margin: '0 0 4px 0',
+}
+
+const compactBodyStyle = {
+  ...emailStyles.bodyText,
+  margin: '0',
+  lineHeight: '1.45',
 }

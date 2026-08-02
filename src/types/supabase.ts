@@ -343,6 +343,63 @@ export type Database = {
           },
         ]
       }
+      charges: {
+        Row: {
+          amount: number
+          amount_paid: number
+          created_at: string
+          due_date: string
+          id: string
+          lease_id: string | null
+          notes: string | null
+          org_id: string
+          period_month: number
+          period_year: number
+          portfolio_id: string | null
+          project_id: string | null
+          property_id: string | null
+          status: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          amount_paid?: number
+          created_at?: string
+          due_date: string
+          id?: string
+          lease_id?: string | null
+          notes?: string | null
+          org_id: string
+          period_month: number
+          period_year: number
+          portfolio_id?: string | null
+          project_id?: string | null
+          property_id?: string | null
+          status?: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          amount_paid?: number
+          created_at?: string
+          due_date?: string
+          id?: string
+          lease_id?: string | null
+          notes?: string | null
+          org_id?: string
+          period_month?: number
+          period_year?: number
+          portfolio_id?: string | null
+          project_id?: string | null
+          property_id?: string | null
+          status?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       expenses: {
         Row: {
           billed_amount: number
@@ -354,6 +411,7 @@ export type Database = {
           org_id: string
           property_id: string
           vendor_cost: number
+          work_order_id: string | null
         }
         Insert: {
           billed_amount: number
@@ -365,6 +423,7 @@ export type Database = {
           org_id: string
           property_id: string
           vendor_cost: number
+          work_order_id?: string | null
         }
         Update: {
           billed_amount?: number
@@ -376,6 +435,7 @@ export type Database = {
           org_id?: string
           property_id?: string
           vendor_cost?: number
+          work_order_id?: string | null
         }
         Relationships: [
           {
@@ -939,6 +999,33 @@ export type Database = {
           },
         ]
       }
+      payment_allocations: {
+        Row: {
+          amount: number
+          charge_id: string
+          created_at: string
+          id: string
+          org_id: string
+          payment_id: string
+        }
+        Insert: {
+          amount: number
+          charge_id: string
+          created_at?: string
+          id?: string
+          org_id: string
+          payment_id: string
+        }
+        Update: {
+          amount?: number
+          charge_id?: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          payment_id?: string
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           amount: number
@@ -950,6 +1037,7 @@ export type Database = {
           method: string
           notes: string | null
           org_id: string
+          property_id: string | null
           recorded_by: string | null
           status: string
           stripe_payment_intent_id: string | null
@@ -964,6 +1052,7 @@ export type Database = {
           method: string
           notes?: string | null
           org_id: string
+          property_id?: string | null
           recorded_by?: string | null
           status?: string
           stripe_payment_intent_id?: string | null
@@ -978,6 +1067,7 @@ export type Database = {
           method?: string
           notes?: string | null
           org_id?: string
+          property_id?: string | null
           recorded_by?: string | null
           status?: string
           stripe_payment_intent_id?: string | null
@@ -1212,6 +1302,141 @@ export type Database = {
           },
         ]
       }
+      period_closings: {
+        Row: {
+          closed_at: string
+          closed_by: string | null
+          direction: string
+          id: string
+          net_amount: number
+          notes: string | null
+          org_id: string
+          period_month: number
+          period_year: number
+          portfolio_id: string
+          statement_pdf_path: string | null
+          status: string
+        }
+        Insert: {
+          closed_at?: string
+          closed_by?: string | null
+          direction: string
+          id?: string
+          net_amount?: number
+          notes?: string | null
+          org_id: string
+          period_month: number
+          period_year: number
+          portfolio_id: string
+          statement_pdf_path?: string | null
+          status?: string
+        }
+        Update: {
+          closed_at?: string
+          closed_by?: string | null
+          direction?: string
+          id?: string
+          net_amount?: number
+          notes?: string | null
+          org_id?: string
+          period_month?: number
+          period_year?: number
+          portfolio_id?: string
+          statement_pdf_path?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      property_knowledge_base: {
+        Row: {
+          created_at: string
+          id: string
+          markdown: string
+          org_id: string
+          property_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          markdown?: string
+          org_id: string
+          property_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          markdown?: string
+          org_id?: string
+          property_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      hospitable_stays: {
+        Row: {
+          check_in: string | null
+          check_out: string | null
+          cleaning_fee: number
+          created_at: string
+          guest_name: string | null
+          gross_amount: number
+          id: string
+          management_fee: number
+          net_to_owner: number
+          nights: number | null
+          org_id: string
+          period_month: number | null
+          period_year: number | null
+          portfolio_id: string | null
+          property_id: string | null
+          raw: Json | null
+          reservation_code: string
+        }
+        Insert: {
+          check_in?: string | null
+          check_out?: string | null
+          cleaning_fee?: number
+          created_at?: string
+          guest_name?: string | null
+          gross_amount?: number
+          id?: string
+          management_fee?: number
+          net_to_owner?: number
+          nights?: number | null
+          org_id: string
+          period_month?: number | null
+          period_year?: number | null
+          portfolio_id?: string | null
+          property_id?: string | null
+          raw?: Json | null
+          reservation_code: string
+        }
+        Update: {
+          check_in?: string | null
+          check_out?: string | null
+          cleaning_fee?: number
+          created_at?: string
+          guest_name?: string | null
+          gross_amount?: number
+          id?: string
+          management_fee?: number
+          net_to_owner?: number
+          nights?: number | null
+          org_id?: string
+          period_month?: number | null
+          period_year?: number | null
+          portfolio_id?: string | null
+          property_id?: string | null
+          raw?: Json | null
+          reservation_code?: string
+        }
+        Relationships: []
+      }
       properties: {
         Row: {
           city: string
@@ -1220,6 +1445,7 @@ export type Database = {
           drive_folder_name: string | null
           drive_last_synced_at: string | null
           id: string
+          listing_brief: Json
           management_fee_type: string | null
           management_fee_value: number | null
           org_id: string
@@ -1240,6 +1466,7 @@ export type Database = {
           drive_folder_name?: string | null
           drive_last_synced_at?: string | null
           id?: string
+          listing_brief?: Json
           management_fee_type?: string | null
           management_fee_value?: number | null
           org_id: string
@@ -1260,6 +1487,7 @@ export type Database = {
           drive_folder_name?: string | null
           drive_last_synced_at?: string | null
           id?: string
+          listing_brief?: Json
           management_fee_type?: string | null
           management_fee_value?: number | null
           org_id?: string

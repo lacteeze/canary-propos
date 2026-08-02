@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+// Payments table + import/billing entry points
 
 const METHOD_LABELS: Record<string, string> = {
   stripe: 'Online (Card)',
@@ -75,18 +76,32 @@ export default async function PaymentsPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-stone-900">Payments</h1>
           <p className="mt-1 text-sm text-stone-500">All recorded payments across your portfolio.</p>
         </div>
-        <a
-          href="/payments/export"
-          download
-          className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
-        >
-          Export CSV
-        </a>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/billing"
+            className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
+          >
+            Billing dashboard
+          </Link>
+          <Link
+            href="/app?import=payments"
+            className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
+          >
+            Import payments CSV
+          </Link>
+          <a
+            href="/payments/export"
+            download
+            className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
+          >
+            Export CSV
+          </a>
+        </div>
       </div>
 
       {(!payments || payments.length === 0) ? (
@@ -107,6 +122,7 @@ export default async function PaymentsPage() {
                   <th className="px-4 py-3">Amount</th>
                   <th className="px-4 py-3">Method</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Notes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -116,21 +132,25 @@ export default async function PaymentsPage() {
                   const unit = lease ? (Array.isArray(lease.units) ? lease.units[0] : lease.units) : null
                   const property = unit ? (Array.isArray(unit.properties) ? unit.properties[0] : unit.properties) : null
                   const tenantName = tenant ? `${tenant.first_name ?? ''} ${tenant.last_name ?? ''}`.trim() : '—'
+                  const shortProp = property?.street_address
+                    ? property.street_address.split(',')[0].trim()
+                    : '—'
                   const propertyDisplay = property
-                    ? `${property.street_address}${unit?.unit_number ? ` · Unit ${unit.unit_number}` : ''}`
+                    ? `${shortProp}${unit?.unit_number ? ` · ${unit.unit_number}` : ''}`
                     : '—'
                   return (
                     <tr key={payment.id} className="bg-white hover:bg-stone-50">
-                      <td className="px-4 py-3 text-stone-600">{formatDate(payment.created_at)}</td>
+                      <td className="px-4 py-3 text-stone-600 whitespace-nowrap">{formatDate(payment.created_at)}</td>
                       <td className="px-4 py-3 font-medium text-stone-900">{tenantName}</td>
                       <td className="px-4 py-3 text-stone-600">{propertyDisplay}</td>
-                      <td className="px-4 py-3 font-medium text-stone-900">{formatCurrency(Number(payment.amount))}</td>
+                      <td className="px-4 py-3 font-medium text-stone-900 whitespace-nowrap">{formatCurrency(Number(payment.amount))}</td>
                       <td className="px-4 py-3 text-stone-600">{METHOD_LABELS[payment.method] ?? payment.method}</td>
                       <td className="px-4 py-3">
                         <span className={statusBadgeClass(payment.status)}>
                           {STATUS_LABELS[payment.status] ?? payment.status}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-stone-500 max-w-[200px] truncate">{payment.notes || '—'}</td>
                     </tr>
                   )
                 })}

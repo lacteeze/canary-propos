@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   hasGarage,
+  hasUtilitiesIncluded,
   filterListings,
+  mapListingRow,
   parseBrowseFilters,
 } from './browse-utils'
 import type { BrowseListing } from './browse-types'
@@ -58,6 +60,65 @@ describe('hasGarage', () => {
 
   it('is case-insensitive', () => {
     expect(hasGarage(['GARAGE'], null)).toBe(true)
+  })
+})
+
+describe('hasUtilitiesIncluded', () => {
+  it('detects utilities included in description', () => {
+    expect(hasUtilitiesIncluded('Affordable living. Utilities included.')).toBe(true)
+  })
+
+  it('detects utilities and internet included', () => {
+    expect(hasUtilitiesIncluded('Unit with utilities and internet included.')).toBe(true)
+  })
+
+  it('detects amenity / highlight tags', () => {
+    expect(hasUtilitiesIncluded(null, ['Utilities included'], null)).toBe(true)
+    expect(hasUtilitiesIncluded(null, null, ['Utilities included'])).toBe(true)
+  })
+
+  it('returns false when sparse or not included', () => {
+    expect(hasUtilitiesIncluded(null)).toBe(false)
+    expect(hasUtilitiesIncluded('1 bed, 1 bath, parking.')).toBe(false)
+    expect(hasUtilitiesIncluded('Utilities not included.')).toBe(false)
+  })
+})
+
+describe('mapListingRow value tags', () => {
+  it('prioritizes utilities, garage, and pets on the card tags', () => {
+    const mapped = mapListingRow(
+      {
+        id: 'casey-75',
+        slug: '75-casey',
+        listing_title: '75 Casey St',
+        listing_description:
+          'Pet-Friendly apartment. Utilities included. Private garage access.',
+        display_rent: 1850,
+        highlights: ['1 bedroom'],
+        available_from: null,
+        created_at: '2026-01-01T00:00:00Z',
+        units: {
+          id: 'u1',
+          bedrooms: 1,
+          bathrooms: 1,
+          asking_rent: 1850,
+          amenities: ['Garage'],
+          properties: {
+            id: 'p1',
+            street_address: '75 Casey St, St. John\'s',
+            city: "St. John's",
+            province: 'NL',
+            photo_paths: null,
+          },
+        },
+      },
+      '',
+      ''
+    )
+    expect(mapped.rentSuffix).toBe('incl')
+    expect(mapped.hasGarage).toBe(true)
+    expect(mapped.petFriendly).toBe(true)
+    expect(mapped.tags).toEqual(['Utilities included', 'Garage', 'Pets OK'])
   })
 })
 

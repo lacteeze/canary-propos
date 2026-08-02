@@ -325,6 +325,22 @@ export function LandingListingCard({
             <b style={{ color: 'var(--text)' }}>{listing.parking}</b> {copy.tPark}
           </span>
         </div>
+        {listing.tags.length > 0 ? (
+          <div className="cl2-card-highlights" aria-label="Listing highlights">
+            {listing.tags.map((tag) => (
+              <span
+                key={tag}
+                className={
+                  tag === 'Utilities included'
+                    ? 'cl2-card-highlight cl2-card-highlight--value'
+                    : 'cl2-card-highlight'
+                }
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
     </Link>
   )

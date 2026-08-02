@@ -228,6 +228,36 @@ html:has(.cland2.cl2-dark) body {
   min-width: 0;
 }
 
+.cland2 .cl2-card-highlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+  min-width: 0;
+}
+
+.cland2 .cl2-card-highlight {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  color: var(--dim);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 9px;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cland2 .cl2-card-highlight--value {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+
 .cland2 .cl2-services-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

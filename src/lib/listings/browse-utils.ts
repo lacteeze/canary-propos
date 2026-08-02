@@ -43,25 +43,61 @@ function formatMoveIn(dateStr: string | null): string {
   return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function extractParking(description: string | null, highlights: string[] | null): string {
-  const text = [description, ...(highlights ?? [])].filter(Boolean).join(' ')
-  const match = text.match(/(\d+)\s+parking/i)
-  if (match) return match[1]
+function listingCorpus(
+  description?: string | null,
+  highlights?: string[] | null,
+  amenities?: string[] | null
+): string {
+  return [description, ...(highlights ?? []), ...(amenities ?? [])]
+    .filter((part): part is string => !!part && part.trim().length > 0)
+    .join(' ')
+}
+
+function extractParking(
+  description: string | null,
+  highlights: string[] | null,
+  amenities: string[] | null
+): string {
+  const text = listingCorpus(description, highlights, amenities)
+  const match = text.match(/(\d+)\s*parking|parking\s*[:\-]?\s*(\d+)/i)
+  if (match) return match[1] || match[2]
   if (/parking/i.test(text)) return '1'
   return '—'
 }
 
-function rentSuffix(description: string | null): 'incl' | 'POU' {
-  if (!description) return 'POU'
-  if (/utilities?\s+included/i.test(description) && !/not\s+included/i.test(description)) {
-    return 'incl'
-  }
-  return 'POU'
+/**
+ * True when listing copy / amenities clearly say utilities are included.
+ * Does not invent inclusion — sparse or "not included" text returns false.
+ */
+export function hasUtilitiesIncluded(
+  description?: string | null,
+  highlights?: string[] | null,
+  amenities?: string[] | null
+): boolean {
+  const text = listingCorpus(description, highlights, amenities)
+  if (!text) return false
+  // Explicit negation near utilities wins.
+  if (/\butilit(?:y|ies)\b[^.]{0,48}\bnot\s+included\b/i.test(text)) return false
+  if (/\b(?:no|not)\s+utilities?\b/i.test(text)) return false
+  // "utilities included", "utilities and internet included", amenity tag, etc.
+  return /\butilit(?:y|ies)\b[^.]{0,48}\bincluded\b/i.test(text)
 }
 
-function isPetFriendly(amenities: string[] | null, description: string | null): boolean {
-  const text = [...(amenities ?? []), description ?? ''].join(' ')
-  return /pet\s*friendly|pets?\s*(considered|by\s*approval|allowed|welcome)|dog\s*friendly|cat\s*friendly|\byes\b/i.test(
+function rentSuffix(
+  description: string | null,
+  highlights: string[] | null,
+  amenities: string[] | null
+): 'incl' | 'POU' {
+  return hasUtilitiesIncluded(description, highlights, amenities) ? 'incl' : 'POU'
+}
+
+function isPetFriendly(
+  amenities: string[] | null,
+  description: string | null,
+  highlights?: string[] | null
+): boolean {
+  const text = listingCorpus(description, highlights, amenities)
+  return /pet[\s-]*friendly|pets?\s*(considered|by\s*approval|allowed|welcome|negotiable|ok|okay)|dog[\s-]*friendly|cat[\s-]*friendly/i.test(
     text
   )
 }
@@ -69,18 +105,24 @@ function isPetFriendly(amenities: string[] | null, description: string | null): 
 /** True iff amenities (and optional description) contain a bare `garage` token. */
 export function hasGarage(
   amenities: string[] | null,
-  description?: string | null
+  description?: string | null,
+  highlights?: string[] | null
 ): boolean {
-  const text = [...(amenities ?? []), description ?? ''].join(' ')
+  const text = listingCorpus(description, highlights, amenities)
   return /\bgarage\b/i.test(text)
 }
 
-function petLabel(amenities: string[] | null, description: string | null): string | null {
-  if (!isPetFriendly(amenities, description)) return null
-  if (/by\s*approval|considered/i.test([...(amenities ?? []), description ?? ''].join(' '))) {
+function petLabel(
+  amenities: string[] | null,
+  description: string | null,
+  highlights?: string[] | null
+): string | null {
+  if (!isPetFriendly(amenities, description, highlights)) return null
+  const text = listingCorpus(description, highlights, amenities)
+  if (/by\s*approval|considered|negotiable/i.test(text)) {
     return 'Pets by approval'
   }
-  return 'Pet friendly'
+  return 'Pets OK'
 }
 
 function termDot(termType: BrowseListing['termType']): string {
@@ -126,16 +168,18 @@ export function mapListingRow(
   const termType = deriveTermTypeFromHighlights(listing.highlights)
   const termLabel =
     termType === 'mid' ? 'Mid-term' : 'Long-term'
-  const pet = isPetFriendly(unit?.amenities ?? null, listing.listing_description)
-  const garage = hasGarage(unit?.amenities ?? null, listing.listing_description)
-  const parking = extractParking(listing.listing_description, listing.highlights)
-  const suffix = rentSuffix(listing.listing_description)
-  const label = petLabel(unit?.amenities ?? null, listing.listing_description)
+  const amenities = unit?.amenities ?? null
+  const pet = isPetFriendly(amenities, listing.listing_description, listing.highlights)
+  const garage = hasGarage(amenities, listing.listing_description, listing.highlights)
+  const parking = extractParking(listing.listing_description, listing.highlights, amenities)
+  const suffix = rentSuffix(listing.listing_description, listing.highlights, amenities)
+  const label = petLabel(amenities, listing.listing_description, listing.highlights)
 
+  // Value-justifying signals for the card — prioritize rent justification.
   const tags: string[] = []
-  if (label) tags.push(`🐾 ${label}`)
   if (suffix === 'incl') tags.push('Utilities included')
-  else if (garage) tags.push('Garage')
+  if (garage) tags.push('Garage')
+  if (label) tags.push(label)
 
   const rawPaths = (property?.photo_paths ?? []).filter(
     (p): p is string => !!p && !/^https?:\/\//i.test(p)
@@ -163,7 +207,7 @@ export function mapListingRow(
     petFriendly: pet,
     petLabel: label,
     hasGarage: garage,
-    tags: tags.slice(0, 2),
+    tags: tags.slice(0, 3),
     photo,
     photos,
     photoCount: photos.length,

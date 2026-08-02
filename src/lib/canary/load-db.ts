@@ -162,7 +162,7 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         .from('units')
         .select(
           `id, unit_number, bedrooms, bathrooms, status, asking_rent, amenities, hospitable_property_id, archived_at,
-           properties!property_id(id, slug, street_address, city, province, property_type, portfolio_id, owner_id, management_fee_type, management_fee_value)`
+           properties!property_id(id, slug, street_address, city, province, property_type, portfolio_id, owner_id, management_fee_type, management_fee_value, listing_brief)`
         )
         .eq('org_id', orgId),
       supabase
@@ -341,7 +341,13 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         area: p.province ?? '',
         type: (p.property_type ?? '').replace(/_/g, ' '),
         availableDate: '',
-        petFriendly: petsLabel(u.amenities, null),
+        petFriendly: (() => {
+          const briefPets =
+            p.listing_brief && typeof p.listing_brief === 'object' && !Array.isArray(p.listing_brief)
+              ? String((p.listing_brief as { pets?: unknown }).pets ?? '').trim()
+              : ''
+          return briefPets || petsLabel(u.amenities, null)
+        })(),
         hasGarage: hasGarage(u.amenities, null),
         utilitiesIncluded: '',
         description: '',

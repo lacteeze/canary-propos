@@ -12,6 +12,73 @@ export const listingBriefSchema = z.object({
 })
 
 export type ListingBrief = z.infer<typeof listingBriefSchema>
+export type ListingBriefField = keyof ListingBrief
+
+export const LISTING_BRIEF_FIELD_KEYS = [
+  'pets',
+  'utilities',
+  'parking',
+  'laundry',
+  'furnished',
+  'neighborhood',
+  'features',
+] as const satisfies readonly ListingBriefField[]
+
+/** Seed defaults for quick-field dropdowns (org-learned values append on top). */
+export const DEFAULT_LISTING_BRIEF_OPTIONS: Record<ListingBriefField, string[]> = {
+  pets: [
+    'No pets',
+    'Cats OK',
+    'Dogs OK',
+    'Pets OK',
+    'Pets by approval',
+    // Legacy amenity labels (still synced from unit.amenities)
+    'Pet friendly',
+    'Cat friendly',
+    'Dog friendly',
+    'By approval',
+  ],
+  utilities: [
+    'Utilities included',
+    'Tenant pays utilities',
+    'Heat included',
+    'Heat & hot water included',
+    'Electricity included',
+  ],
+  parking: [
+    'No parking',
+    '1 driveway spot',
+    '1 garage',
+    'Street parking',
+    'Assigned parking',
+  ],
+  laundry: [
+    'In-unit washer/dryer',
+    'Shared laundry',
+    'Laundry in building',
+    'Hookups only',
+    'No laundry',
+  ],
+  furnished: ['Unfurnished', 'Furnished', 'Partially furnished'],
+  neighborhood: [
+    'Quiet residential street',
+    'Near downtown',
+    'Near university',
+    'Near bus route',
+    'Walkable to shops',
+  ],
+  features: [
+    'Hardwood floors',
+    'South-facing',
+    'Updated kitchen',
+    'Private entrance',
+    'Yard access',
+  ],
+}
+
+const listingBriefOptionsSchema = z.record(z.string(), z.array(z.string()))
+
+export type ListingBriefOptions = Record<ListingBriefField, string[]>
 
 export function parseListingBrief(raw: unknown): ListingBrief {
   const parsed = listingBriefSchema.safeParse(raw ?? {})
@@ -27,6 +94,73 @@ export function parseListingBrief(raw: unknown): ListingBrief {
   }
 }
 
+/** Merge seeded defaults with org-learned custom values (case-insensitive dedupe). */
+export function mergeListingBriefOptions(raw: unknown): ListingBriefOptions {
+  const parsed = listingBriefOptionsSchema.safeParse(raw ?? {})
+  const learned = parsed.success ? parsed.data : {}
+  const out = {} as ListingBriefOptions
+  for (const key of LISTING_BRIEF_FIELD_KEYS) {
+    const base = DEFAULT_LISTING_BRIEF_OPTIONS[key]
+    const extras = (learned[key] ?? [])
+      .map((v) => v.trim())
+      .filter(Boolean)
+    const seen = new Set(base.map((v) => v.toLowerCase()))
+    const merged = [...base]
+    for (const v of extras) {
+      const k = v.toLowerCase()
+      if (seen.has(k)) continue
+      seen.add(k)
+      merged.push(v)
+    }
+    out[key] = merged
+  }
+  return out
+}
+
+/** Collect values from a brief that are not already in the merged option lists. */
+export function collectNewListingBriefOptions(
+  brief: ListingBrief,
+  current: ListingBriefOptions
+): Partial<Record<ListingBriefField, string[]>> {
+  const additions: Partial<Record<ListingBriefField, string[]>> = {}
+  for (const key of LISTING_BRIEF_FIELD_KEYS) {
+    const value = brief[key]?.trim()
+    if (!value) continue
+    const exists = current[key].some((o) => o.toLowerCase() === value.toLowerCase())
+    if (!exists) {
+      additions[key] = [value]
+    }
+  }
+  return additions
+}
+
+/** Persist shape: defaults are not stored; only learned custom values. */
+export function appendLearnedListingBriefOptions(
+  existingRaw: unknown,
+  additions: Partial<Record<ListingBriefField, string[]>>
+): Record<string, string[]> {
+  const parsed = listingBriefOptionsSchema.safeParse(existingRaw ?? {})
+  const next: Record<string, string[]> = parsed.success ? { ...parsed.data } : {}
+  for (const key of LISTING_BRIEF_FIELD_KEYS) {
+    const add = additions[key]
+    if (!add?.length) continue
+    const list = [...(next[key] ?? [])]
+    const seen = new Set(list.map((v) => v.toLowerCase()))
+    // Also skip values that are already defaults
+    for (const d of DEFAULT_LISTING_BRIEF_OPTIONS[key]) seen.add(d.toLowerCase())
+    for (const v of add) {
+      const trimmed = v.trim()
+      if (!trimmed) continue
+      const k = trimmed.toLowerCase()
+      if (seen.has(k)) continue
+      seen.add(k)
+      list.push(trimmed)
+    }
+    if (list.length) next[key] = list
+  }
+  return next
+}
+
 export function listingBriefToPromptLines(brief: ListingBrief): string[] {
   const rows: [string, string][] = [
     ['Pets', brief.pets],
@@ -38,4 +172,26 @@ export function listingBriefToPromptLines(brief: ListingBrief): string[] {
     ['Standout features', brief.features],
   ]
   return rows.filter(([, v]) => v.trim()).map(([k, v]) => `${k}: ${v.trim()}`)
+}
+
+const PET_AMENITY_RE = /pet|cat|dog|approval/i
+
+/** Derive a pets label from unit amenities (legacy storage used by public cards). */
+export function petsLabelFromAmenities(amenities: string[] | null | undefined): string {
+  const pet = (amenities ?? []).find((a) => PET_AMENITY_RE.test(a))
+  return pet?.trim() || ''
+}
+
+/**
+ * Rewrite unit amenities so pets come from listing_brief.pets (single source of truth).
+ * "No pets" / empty clears pet amenity tags; other values become the pet amenity string.
+ */
+export function syncPetsIntoAmenities(
+  amenities: string[] | null | undefined,
+  pets: string
+): string[] {
+  const nonPet = (amenities ?? []).filter((a) => !PET_AMENITY_RE.test(a))
+  const trimmed = pets.trim()
+  if (!trimmed || /^no pets$/i.test(trimmed)) return nonPet
+  return [...nonPet, trimmed]
 }

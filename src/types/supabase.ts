@@ -1347,6 +1347,32 @@ export type Database = {
         }
         Relationships: []
       }
+      listing_brief_options: {
+        Row: {
+          options: Json
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          options?: Json
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          options?: Json
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_brief_options_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       property_knowledge_base: {
         Row: {
           created_at: string

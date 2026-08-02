@@ -339,8 +339,6 @@ export async function updatePropertySlug(
   return { success: true }
 }
 
-const PET_LABELS = ['No pets', 'Pet friendly', 'Cat friendly', 'Dog friendly', 'By approval'] as const
-const PET_AMENITY_RE = /pet|cat|dog|approval/i
 const GARAGE_AMENITY_RE = /\bgarage\b/i
 
 const propertyDetailsSchema = z.object({
@@ -348,7 +346,6 @@ const propertyDetailsSchema = z.object({
   bedrooms: z.number().int().min(0).max(50),
   bathrooms: z.number().min(0).max(50),
   askingRent: z.number().min(0).nullable(),
-  pets: z.enum(PET_LABELS),
   hasGarage: z.boolean(),
   propertyType: z.enum(['house', 'duplex', 'apartment_building', 'condo', 'townhouse', 'other']),
   city: z.string().trim().max(120),
@@ -424,17 +421,11 @@ export async function updatePropertyDetails(unitId: string, input: PropertyDetai
     changes.push({ field: 'asking_rent', oldValue: str(oldRent), newValue: str(form.askingRent) })
     unitPatch.asking_rent = form.askingRent
   }
+  // Pets are edited only via listing_brief quick fields (PropertyListingAiPanel).
+  // Garage still toggles the literal "Garage" amenity tag without touching pets.
   const amenities: string[] = (unit.amenities as string[] | null) ?? []
-  const nonPet = amenities.filter((a) => !PET_AMENITY_RE.test(a))
-  const oldPetLabel = amenities.length !== nonPet.length ? amenities.find((a) => PET_AMENITY_RE.test(a)) ?? 'No pets' : 'No pets'
-  if (form.pets !== oldPetLabel && !(form.pets === 'No pets' && amenities.length === nonPet.length)) {
-    changes.push({ field: 'pets', oldValue: oldPetLabel, newValue: form.pets })
-    unitPatch.amenities = form.pets === 'No pets' ? nonPet : [...nonPet, form.pets]
-  }
-  // Compose garage after pets rewrite so both can save in one request (literal "Garage" tag).
-  const currentAmenities: string[] = unitPatch.amenities ?? amenities
   const oldHasGarage = amenities.some((a) => GARAGE_AMENITY_RE.test(a))
-  const strippedGarage = currentAmenities.filter((a) => !GARAGE_AMENITY_RE.test(a))
+  const strippedGarage = amenities.filter((a) => !GARAGE_AMENITY_RE.test(a))
   const nextAmenities = form.hasGarage
     ? strippedGarage.includes('Garage')
       ? strippedGarage
@@ -447,9 +438,9 @@ export async function updatePropertyDetails(unitId: string, input: PropertyDetai
       newValue: form.hasGarage ? 'Yes' : 'No',
     })
     unitPatch.amenities = nextAmenities
-  } else if (!form.hasGarage && strippedGarage.length !== currentAmenities.length) {
+  } else if (!form.hasGarage && strippedGarage.length !== amenities.length) {
     unitPatch.amenities = strippedGarage
-  } else if (form.hasGarage && nextAmenities.join('\0') !== currentAmenities.join('\0')) {
+  } else if (form.hasGarage && nextAmenities.join('\0') !== amenities.join('\0')) {
     unitPatch.amenities = nextAmenities
   }
   const oldHospitableId = unit.hospitable_property_id?.trim() || null

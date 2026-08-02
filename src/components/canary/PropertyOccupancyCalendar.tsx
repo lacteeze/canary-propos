@@ -28,8 +28,6 @@ const MONTHS_AHEAD = 9
 
 const PROPERTY_STATUSES = ['Vacant', 'Leased', 'STR', 'Maintenance', 'Office'] as const
 const PROPERTY_TYPES = ['house', 'duplex', 'apartment_building', 'condo', 'townhouse', 'other'] as const
-const PET_OPTIONS = ['No pets', 'Pet friendly', 'Cat friendly', 'Dog friendly', 'By approval'] as const
-
 function propertyStatusOption(status: string | null | undefined): string {
   if (!status) return 'Vacant'
   if (status === 'Airbnb') return 'STR'
@@ -179,9 +177,6 @@ function PropertyQuickEdit({
   const [beds, setBeds] = useState(property.beds || '0')
   const [baths, setBaths] = useState(property.baths || '0')
   const [rent, setRent] = useState(property.rate != null ? String(property.rate) : '')
-  const [pets, setPets] = useState(
-    PET_OPTIONS.includes(property.petFriendly as (typeof PET_OPTIONS)[number]) ? property.petFriendly : 'No pets',
-  )
   const [hasGarage, setHasGarage] = useState(Boolean(property.hasGarage))
   const [portfolioId, setPortfolioId] = useState(property.portfolioId)
   const [ownerId, setOwnerId] = useState(property.ownerId)
@@ -200,7 +195,6 @@ function PropertyQuickEdit({
     setBeds(property.beds || '0')
     setBaths(property.baths || '0')
     setRent(property.rate != null ? String(property.rate) : '')
-    setPets(PET_OPTIONS.includes(property.petFriendly as (typeof PET_OPTIONS)[number]) ? property.petFriendly : 'No pets')
     setHasGarage(Boolean(property.hasGarage))
     setPortfolioId(property.portfolioId)
     setOwnerId(property.ownerId)
@@ -255,7 +249,6 @@ function PropertyQuickEdit({
       bedrooms: bedsN,
       bathrooms: bathsN,
       askingRent: rentN,
-      pets: pets as PropertyDetailsInput['pets'],
       hasGarage,
       propertyType: propertyType as PropertyDetailsInput['propertyType'],
       city: city.trim(),
@@ -305,11 +298,6 @@ function PropertyQuickEdit({
         </label>
         <label>{formLabel('Asking rent ($/mo)')}
           <input type="number" min={0} value={rent} onChange={(e) => setRent(e.target.value)} style={fieldStyle} />
-        </label>
-        <label>{formLabel('Pets')}
-          <select className="cy-select cy-select--field" value={pets} onChange={(e) => setPets(e.target.value)}>
-            {PET_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
         </label>
         <label>{formLabel('Garage')}
           <select

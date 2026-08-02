@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, useId, useState, useTransition } from 'react'
 import {
   getPropertyKnowledge,
   savePropertyKnowledge,
@@ -10,9 +10,19 @@ import {
   applyGeneratedListingCopy,
   generateListingDescription,
 } from '@/app/actions/listing-ai'
-import type { ListingBrief } from '@/lib/listings/listing-brief'
+import {
+  DEFAULT_LISTING_BRIEF_OPTIONS,
+  mergeListingBriefOptions,
+  type ListingBrief,
+  type ListingBriefField,
+  type ListingBriefOptions,
+} from '@/lib/listings/listing-brief'
 
-const BRIEF_FIELDS: { key: keyof ListingBrief; label: string; placeholder: string }[] = [
+const BRIEF_FIELDS: {
+  key: ListingBriefField
+  label: string
+  placeholder: string
+}[] = [
   { key: 'pets', label: 'Pets', placeholder: 'e.g. Cats OK with deposit' },
   { key: 'utilities', label: 'Utilities', placeholder: 'e.g. Heat included; tenant pays power' },
   { key: 'parking', label: 'Parking', placeholder: 'e.g. 1 driveway spot' },
@@ -21,6 +31,84 @@ const BRIEF_FIELDS: { key: keyof ListingBrief; label: string; placeholder: strin
   { key: 'neighborhood', label: 'Neighborhood', placeholder: 'Near downtown, quiet street…' },
   { key: 'features', label: 'Standout features', placeholder: 'Hardwood, south-facing…' },
 ]
+
+const fieldStyle: React.CSSProperties = {
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  padding: '6px 8px',
+  background: 'var(--elev)',
+  color: 'var(--text)',
+  width: '100%',
+  fontSize: 12.5,
+}
+
+function BriefCombobox({
+  fieldKey,
+  label,
+  placeholder,
+  value,
+  options,
+  onChange,
+}: {
+  fieldKey: ListingBriefField
+  label: string
+  placeholder: string
+  value: string
+  options: string[]
+  onChange: (v: string) => void
+}) {
+  const listId = useId()
+  const [customMode, setCustomMode] = useState(false)
+  const known = options.some((o) => o.toLowerCase() === value.trim().toLowerCase())
+  const showCustom = customMode || (!!value.trim() && !known)
+  const selectValue = known && !customMode ? value : showCustom ? '__custom__' : ''
+
+  return (
+    <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+      <span style={{ color: 'var(--dim)' }}>{label}</span>
+      <select
+        className="cy-select cy-select--field"
+        value={selectValue}
+        onChange={(e) => {
+          const v = e.target.value
+          if (v === '__custom__') {
+            setCustomMode(true)
+            return
+          }
+          setCustomMode(false)
+          onChange(v)
+        }}
+        aria-label={label}
+      >
+        <option value="">— Select —</option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+        <option value="__custom__">Custom…</option>
+      </select>
+      {showCustom && (
+        <input
+          list={`${listId}-${fieldKey}`}
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => {
+            setCustomMode(true)
+            onChange(e.target.value)
+          }}
+          style={fieldStyle}
+          aria-label={`${label} custom value`}
+        />
+      )}
+      <datalist id={`${listId}-${fieldKey}`}>
+        {options.map((o) => (
+          <option key={o} value={o} />
+        ))}
+      </datalist>
+    </label>
+  )
+}
 
 export function PropertyListingAiPanel({
   propertyId,
@@ -40,6 +128,9 @@ export function PropertyListingAiPanel({
     neighborhood: '',
     features: '',
   })
+  const [briefOptions, setBriefOptions] = useState<ListingBriefOptions>(() =>
+    mergeListingBriefOptions({})
+  )
   const [markdown, setMarkdown] = useState('')
   const [draftTitle, setDraftTitle] = useState('')
   const [draftDesc, setDraftDesc] = useState('')
@@ -54,6 +145,7 @@ export function PropertyListingAiPanel({
       const data = await getPropertyKnowledge(propertyId)
       if (cancelled) return
       setBrief(data.listingBrief)
+      setBriefOptions(data.briefOptions ?? mergeListingBriefOptions({}))
       setMarkdown(data.markdown)
     })()
     return () => {
@@ -75,23 +167,20 @@ export function PropertyListingAiPanel({
         <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Listing quick fields</div>
         <div style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 1fr' }}>
           {BRIEF_FIELDS.map((f) => (
-            <label key={f.key} style={{ display: 'grid', gap: 4, fontSize: 12 }}>
-              <span style={{ color: 'var(--dim)' }}>{f.label}</span>
-              <input
-                value={brief[f.key]}
-                placeholder={f.placeholder}
-                onChange={(e) => setBrief((b) => ({ ...b, [f.key]: e.target.value }))}
-                style={{
-                  border: '1px solid var(--border)',
-                  borderRadius: 8,
-                  padding: '6px 8px',
-                  background: 'var(--elev)',
-                  color: 'var(--text)',
-                }}
-              />
-            </label>
+            <BriefCombobox
+              key={f.key}
+              fieldKey={f.key}
+              label={f.label}
+              placeholder={f.placeholder}
+              value={brief[f.key]}
+              options={briefOptions[f.key] ?? DEFAULT_LISTING_BRIEF_OPTIONS[f.key]}
+              onChange={(v) => setBrief((b) => ({ ...b, [f.key]: v }))}
+            />
           ))}
         </div>
+        <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--dim)' }}>
+          Choose a preset or Custom… to type a new value — new values are remembered for next time.
+        </p>
         <button
           type="button"
           className="cy-btn-ghost"
@@ -103,7 +192,10 @@ export function PropertyListingAiPanel({
               setMsg('')
               const res = await savePropertyListingBrief(propertyId, brief)
               if (!res.success) setErr(res.error)
-              else setMsg('Listing fields saved.')
+              else {
+                if (res.briefOptions) setBriefOptions(res.briefOptions)
+                setMsg('Listing fields saved.')
+              }
             })
           }}
         >
@@ -184,34 +276,26 @@ export function PropertyListingAiPanel({
             <input
               value={draftTitle}
               onChange={(e) => setDraftTitle(e.target.value)}
-              style={{
-                border: '1px solid var(--border)',
-                borderRadius: 8,
-                padding: '6px 8px',
-                background: 'var(--elev)',
-              }}
+              style={fieldStyle}
             />
             <textarea
               value={draftDesc}
               onChange={(e) => setDraftDesc(e.target.value)}
               rows={6}
               style={{
+                width: '100%',
                 border: '1px solid var(--border)',
                 borderRadius: 8,
                 padding: 10,
                 background: 'var(--elev)',
+                color: 'var(--text)',
               }}
             />
             <input
               value={draftHighlights}
               onChange={(e) => setDraftHighlights(e.target.value)}
               placeholder="Highlights (comma-separated)"
-              style={{
-                border: '1px solid var(--border)',
-                borderRadius: 8,
-                padding: '6px 8px',
-                background: 'var(--elev)',
-              }}
+              style={fieldStyle}
             />
             {listingId ? (
               <button

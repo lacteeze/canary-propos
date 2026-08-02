@@ -9,7 +9,6 @@ export const listingBriefSchema = z.object({
   furnished: z.string().trim().max(120).optional().default(''),
   neighborhood: z.string().trim().max(500).optional().default(''),
   features: z.string().trim().max(800).optional().default(''),
-  targetTenant: z.string().trim().max(400).optional().default(''),
 })
 
 export type ListingBrief = z.infer<typeof listingBriefSchema>
@@ -25,7 +24,6 @@ export function parseListingBrief(raw: unknown): ListingBrief {
     furnished: '',
     neighborhood: '',
     features: '',
-    targetTenant: '',
   }
 }
 
@@ -38,7 +36,6 @@ export function listingBriefToPromptLines(brief: ListingBrief): string[] {
     ['Furnished', brief.furnished],
     ['Neighborhood', brief.neighborhood],
     ['Standout features', brief.features],
-    ['Target tenant', brief.targetTenant],
   ]
   return rows.filter(([, v]) => v.trim()).map(([k, v]) => `${k}: ${v.trim()}`)
 }

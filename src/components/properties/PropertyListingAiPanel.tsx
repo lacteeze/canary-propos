@@ -20,7 +20,6 @@ const BRIEF_FIELDS: { key: keyof ListingBrief; label: string; placeholder: strin
   { key: 'furnished', label: 'Furnished', placeholder: 'e.g. Unfurnished' },
   { key: 'neighborhood', label: 'Neighborhood', placeholder: 'Near downtown, quiet street…' },
   { key: 'features', label: 'Standout features', placeholder: 'Hardwood, south-facing…' },
-  { key: 'targetTenant', label: 'Target tenant', placeholder: 'Professionals, small family…' },
 ]
 
 export function PropertyListingAiPanel({
@@ -40,7 +39,6 @@ export function PropertyListingAiPanel({
     furnished: '',
     neighborhood: '',
     features: '',
-    targetTenant: '',
   })
   const [markdown, setMarkdown] = useState('')
   const [draftTitle, setDraftTitle] = useState('')

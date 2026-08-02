@@ -22,7 +22,7 @@ export async function getPublishedListings(
     .select(
       `id, slug, listing_title, listing_description, display_rent, highlights, available_from, status, created_at,
        units!unit_id(id, bedrooms, bathrooms, asking_rent, amenities,
-         properties!property_id(id, street_address, city, province, photo_paths))`
+         properties!property_id(id, street_address, city, province, photo_paths, listing_brief))`
     )
     .eq('status', 'published')
     .eq('org_id', org.id)

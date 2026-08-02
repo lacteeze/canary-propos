@@ -207,7 +207,7 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         .select(
           `id, listing_title, listing_description, display_rent, status, available_from, updated_at, slug,
            units!unit_id(id, unit_number, bedrooms, bathrooms, amenities,
-             properties!property_id(id, street_address, city))`
+             properties!property_id(id, street_address, city, listing_brief))`
         )
         .eq('org_id', orgId)
         .in('status', ['draft', 'published', 'renewal_sent']),
@@ -335,7 +335,13 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         status: unitStatusLabel(u.status),
         beds: u.bedrooms != null ? String(u.bedrooms) : '',
         baths: u.bathrooms != null ? String(u.bathrooms).replace(/\.0$/, '') : '',
-        parking: '',
+        parking: (() => {
+          const brief =
+            p.listing_brief && typeof p.listing_brief === 'object' && !Array.isArray(p.listing_brief)
+              ? (p.listing_brief as { parking?: unknown })
+              : null
+          return String(brief?.parking ?? '').trim()
+        })(),
         rate: u.asking_rent != null ? Number(u.asking_rent) : null,
         city: p.city ?? '',
         area: p.province ?? '',
@@ -540,7 +546,13 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
       end: '',
       beds: d.units.bedrooms != null ? String(d.units.bedrooms) : '',
       baths: d.units.bathrooms != null ? String(d.units.bathrooms).replace(/\.0$/, '') : '',
-      parking: '',
+      parking: (() => {
+        const brief = d.units.properties?.listing_brief
+        if (brief && typeof brief === 'object' && !Array.isArray(brief)) {
+          return String((brief as { parking?: unknown }).parking ?? '').trim()
+        }
+        return ''
+      })(),
       pets: petsLabel(d.units.amenities, d.listing_description),
       utilities: utilitiesLabel(d.listing_description),
       description: d.listing_description ?? '',

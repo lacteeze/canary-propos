@@ -5,6 +5,7 @@ import { SimilarListingsSection } from '@/components/landing/SimilarListingsCaro
 import { PublicHeader } from '@/components/public/PublicHeader'
 import { fontDisplay } from '@/lib/landing/typography'
 import type { CityGroup } from '@/lib/listings/browse-types'
+import { resolveParkingDisplay } from '@/lib/listings/browse-utils'
 
 export type PropertyPublicUnit = {
   bedrooms: number | null
@@ -23,6 +24,7 @@ export type PropertyPublicProperty = {
   province: string
   photo_paths: string[] | null
   property_type: string | null
+  listing_brief?: unknown
 }
 
 export type PropertyPublicViewProps = {
@@ -93,19 +95,17 @@ export function PropertyPublicView({
   const homesHref = orgSlug && orgSlug !== 'canary' ? `/?org=${orgSlug}#homes` : '/#homes'
   const rent = unit?.asking_rent
 
-  const parkingFromText = (() => {
-    const amenities = unit?.amenities ?? []
-    const amenityHit = amenities.find((a) => /\d+\s*parking|parking\s*[:\-]?\s*\d+/i.test(a))
-    if (amenityHit) {
-      const m = amenityHit.match(/(\d+)/)
-      if (m) return m[1]
-    }
-    const text = amenities.join(' ')
-    const match = text.match(/(\d+)\s*parking|parking\s*[:\-]?\s*(\d+)/i)
-    if (match) return match[1] || match[2]
-    if (/parking/i.test(text)) return '1'
-    return null
-  })()
+  const briefParking =
+    property.listing_brief &&
+    typeof property.listing_brief === 'object' &&
+    !Array.isArray(property.listing_brief)
+      ? String((property.listing_brief as { parking?: unknown }).parking ?? '')
+      : ''
+  const parkingResolved = resolveParkingDisplay({
+    briefParking,
+    amenities: unit?.amenities ?? null,
+  })
+  const parkingFromText = parkingResolved === '—' ? null : parkingResolved
 
   const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
   const mapsQuery = encodeURIComponent(fullAddress)

@@ -5,6 +5,7 @@ import {
   filterListings,
   mapListingRow,
   parseBrowseFilters,
+  resolveParkingDisplay,
 } from './browse-utils'
 import type { BrowseListing } from './browse-types'
 
@@ -84,6 +85,45 @@ describe('hasUtilitiesIncluded', () => {
   })
 })
 
+describe('resolveParkingDisplay', () => {
+  it('prefers listing_brief.parking numeric count', () => {
+    expect(
+      resolveParkingDisplay({
+        briefParking: '2 On-Street',
+        description: 'No mention of spots here.',
+        amenities: ['By approval'],
+      })
+    ).toBe('2')
+  })
+
+  it('treats No parking as em dash', () => {
+    expect(resolveParkingDisplay({ briefParking: 'No parking' })).toBe('—')
+  })
+
+  it('defaults non-numeric brief parking to 1', () => {
+    expect(resolveParkingDisplay({ briefParking: 'Street parking' })).toBe('1')
+  })
+
+  it('falls back to description when brief is empty', () => {
+    expect(
+      resolveParkingDisplay({
+        briefParking: '',
+        description: 'Unit includes 2 parking spaces.',
+      })
+    ).toBe('2')
+  })
+
+  it('returns em dash when nothing indicates parking', () => {
+    expect(
+      resolveParkingDisplay({
+        briefParking: '',
+        description: 'Cozy downtown apartment.',
+        amenities: ['By approval'],
+      })
+    ).toBe('—')
+  })
+})
+
 describe('mapListingRow value tags', () => {
   it('prioritizes utilities, garage, and pets on the card tags', () => {
     const mapped = mapListingRow(
@@ -119,6 +159,39 @@ describe('mapListingRow value tags', () => {
     expect(mapped.hasGarage).toBe(true)
     expect(mapped.petFriendly).toBe(true)
     expect(mapped.tags).toEqual(['Utilities included', 'Garage', 'Pets OK'])
+  })
+
+  it('reads parking from listing_brief on the property', () => {
+    const mapped = mapListingRow(
+      {
+        id: 'casey-75',
+        slug: '75-casey',
+        listing_title: '75 Casey St',
+        listing_description: 'Fully furnished downtown apartment. Utilities included.',
+        display_rent: 1850,
+        highlights: [],
+        available_from: null,
+        created_at: '2026-01-01T00:00:00Z',
+        units: {
+          id: 'u1',
+          bedrooms: 1,
+          bathrooms: 1,
+          asking_rent: 1850,
+          amenities: ['By approval'],
+          properties: {
+            id: 'p1',
+            street_address: "75 Casey St, St. John's",
+            city: "St. John's",
+            province: 'NL',
+            photo_paths: null,
+            listing_brief: { parking: '2 On-Street', pets: 'By Approval' },
+          },
+        },
+      },
+      '',
+      ''
+    )
+    expect(mapped.parking).toBe('2')
   })
 })
 

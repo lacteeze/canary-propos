@@ -203,6 +203,7 @@ export async function savePropertyListingBrief(
 
   revalidatePath('/app')
   revalidatePath('/listings')
+  revalidatePath('/')
   return { success: true, briefOptions }
 }
 

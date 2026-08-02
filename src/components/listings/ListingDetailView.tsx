@@ -6,6 +6,7 @@ import { SimilarListingsSection } from '@/components/landing/SimilarListingsCaro
 import { PublicHeader } from '@/components/public/PublicHeader'
 import { fontDisplay } from '@/lib/landing/typography'
 import type { CityGroup } from '@/lib/listings/browse-types'
+import { resolveParkingDisplay } from '@/lib/listings/browse-utils'
 
 function formatCAD(n: number) {
   return new Intl.NumberFormat('en-CA', {
@@ -37,6 +38,7 @@ export type ListingDetailListing = {
       city: string
       province: string
       photo_paths: string[] | null
+      listing_brief?: unknown
     } | null
   } | null
 }
@@ -76,7 +78,8 @@ export const LISTING_DETAIL_SELECT = `
       street_address,
       city,
       province,
-      photo_paths
+      photo_paths,
+      listing_brief
     )
   )
 `
@@ -131,22 +134,19 @@ export function ListingDetailView({
       })
     : null
 
-  const parkingFromText = (() => {
-    const amenities = (unit?.amenities as string[] | null) ?? []
-    const amenityHit = amenities.find((a) => /\d+\s*parking|parking\s*[:\-]?\s*\d+/i.test(a))
-    if (amenityHit) {
-      const m = amenityHit.match(/(\d+)/)
-      if (m) return m[1]
-    }
-    const text = [listing.listing_description, ...(listing.highlights ?? []), ...amenities]
-      .filter(Boolean)
-      .join(' ')
-    const match = text.match(/(\d+)\s*parking|parking\s*[:\-]?\s*(\d+)/i)
-    if (match) return match[1] || match[2]
-    if (/parking/i.test(text)) return '1'
-    return null
-  })()
-  const parkingLabel = parkingFromText
+  const briefParking =
+    property?.listing_brief &&
+    typeof property.listing_brief === 'object' &&
+    !Array.isArray(property.listing_brief)
+      ? String((property.listing_brief as { parking?: unknown }).parking ?? '')
+      : ''
+  const parkingResolved = resolveParkingDisplay({
+    briefParking,
+    description: listing.listing_description,
+    highlights: listing.highlights,
+    amenities: (unit?.amenities as string[] | null) ?? null,
+  })
+  const parkingLabel = parkingResolved === '—' ? null : parkingResolved
 
   const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
   const mapsQuery = encodeURIComponent(fullAddress)

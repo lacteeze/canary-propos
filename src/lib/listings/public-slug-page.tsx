@@ -24,7 +24,8 @@ const PROPERTY_PUBLIC_SELECT = `
   city,
   province,
   photo_paths,
-  property_type
+  property_type,
+  listing_brief
 `
 
 function listingCardCopyFromLanding() {

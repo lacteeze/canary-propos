@@ -53,14 +53,40 @@ function listingCorpus(
     .join(' ')
 }
 
-function extractParking(
-  description: string | null,
-  highlights: string[] | null,
-  amenities: string[] | null
-): string {
-  const text = listingCorpus(description, highlights, amenities)
+/**
+ * Public card / hero parking count.
+ * Prefers properties.listing_brief.parking (what staff edit), then
+ * description / highlights / amenities heuristics.
+ */
+export function resolveParkingDisplay(opts: {
+  briefParking?: string | null
+  description?: string | null
+  highlights?: string[] | null
+  amenities?: string[] | null
+}): string {
+  const brief = opts.briefParking?.trim()
+  if (brief) {
+    if (/^no\s+parking$/i.test(brief)) return '—'
+    const fromBrief = brief.match(/(\d+)/)
+    if (fromBrief?.[1]) return fromBrief[1]
+    // Non-numeric parking info ("Street parking", "Assigned parking", etc.)
+    return '1'
+  }
+
+  const amenities = opts.amenities ?? []
+  const amenityHit = amenities.find((a) =>
+    /\d+\s*parking|parking\s*[:\-]?\s*\d+|on[- ]?street|driveway/i.test(a)
+  )
+  if (amenityHit) {
+    const n = amenityHit.match(/(\d+)/)
+    if (n?.[1]) return n[1]
+    if (/parking|on[- ]?street|driveway/i.test(amenityHit)) return '1'
+  }
+
+  const text = listingCorpus(opts.description, opts.highlights, amenities)
+  if (/no\s+parking/i.test(text)) return '—'
   const match = text.match(/(\d+)\s*parking|parking\s*[:\-]?\s*(\d+)/i)
-  if (match) return match[1] || match[2]
+  if (match) return match[1] || match[2] || '—'
   if (/parking/i.test(text)) return '1'
   return '—'
 }
@@ -152,6 +178,7 @@ export type ListingRow = {
       city: string
       province: string
       photo_paths: string[] | null
+      listing_brief?: unknown
     } | null
   } | null
 }
@@ -169,9 +196,20 @@ export function mapListingRow(
   const termLabel =
     termType === 'mid' ? 'Mid-term' : 'Long-term'
   const amenities = unit?.amenities ?? null
+  const briefParking =
+    property?.listing_brief &&
+    typeof property.listing_brief === 'object' &&
+    !Array.isArray(property.listing_brief)
+      ? String((property.listing_brief as { parking?: unknown }).parking ?? '')
+      : ''
   const pet = isPetFriendly(amenities, listing.listing_description, listing.highlights)
   const garage = hasGarage(amenities, listing.listing_description, listing.highlights)
-  const parking = extractParking(listing.listing_description, listing.highlights, amenities)
+  const parking = resolveParkingDisplay({
+    briefParking,
+    description: listing.listing_description,
+    highlights: listing.highlights,
+    amenities,
+  })
   const suffix = rentSuffix(listing.listing_description, listing.highlights, amenities)
   const label = petLabel(amenities, listing.listing_description, listing.highlights)
 

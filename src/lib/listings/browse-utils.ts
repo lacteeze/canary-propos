@@ -91,37 +91,59 @@ export function resolveParkingDisplay(opts: {
   return '—'
 }
 
-/** Explicit "utilities … included" (not heat-only / partial phrases). */
+/** Common staff typo for "included". */
+function normalizeUtilitiesText(text: string): string {
+  return text.replace(/\binlcuded\b/gi, 'included')
+}
+
+/**
+ * Explicit utilities-included signals.
+ * Accepts "utilities included" and multi-utility staff packages like
+ * "Heat, Light & Internet Included" — not heat-only / single-item phrases.
+ */
 function textSaysUtilitiesIncluded(text: string): boolean {
   if (!text) return false
+  const t = normalizeUtilitiesText(text)
   // Explicit "not included" / "no utilities" beats a loose "included" nearby.
-  if (/\butilit(?:y|ies)\b[^.]{0,48}\bnot\s+included\b/i.test(text)) return false
-  if (/\b(?:no|not)\s+utilities?\b/i.test(text)) return false
+  if (/\butilit(?:y|ies)\b[^.]{0,48}\bnot\s+included\b/i.test(t)) return false
+  if (/\b(?:no|not)\s+utilities?\b/i.test(t)) return false
   // "utilities included", "utilities and internet included", amenity tag, etc.
-  return /\butilit(?:y|ies)\b[^.]{0,48}\bincluded\b/i.test(text)
+  if (/\butilit(?:y|ies)\b[^.]{0,48}\bincluded\b/i.test(t)) return true
+  // Staff package shorthand (2+ of heat / light-power / internet / water).
+  if (!/\bincluded\b/i.test(t)) return false
+  const signals = [
+    /\bheat\b/i.test(t),
+    /\b(?:light|lights|hydro|electricity|power)\b/i.test(t),
+    /\binternet\b/i.test(t),
+    /\b(?:hot\s+)?water\b/i.test(t),
+  ].filter(Boolean).length
+  return signals >= 2
 }
 
 /** Pay-own / not-included signals (POU, tenant pays, hydro extra, etc.). */
-function textSaysUtilitiesNotIncluded(text: string): boolean {
+function textSaysUtilitiesPayOwn(text: string): boolean {
   if (!text) return false
-  if (/\bPOU\b/i.test(text)) return true
-  if (/pay\s*own\s*utilit/i.test(text)) return true
-  if (/tenant\s+pays?\s+utilit/i.test(text)) return true
-  if (/tenant\s+responsible\s+for\s+utilit/i.test(text)) return true
-  if (/\butilit(?:y|ies)\b[^.]{0,48}\bnot\s+included\b/i.test(text)) return true
-  if (/\b(?:no|not)\s+utilities?\b/i.test(text)) return true
-  if (/\bhydro\s+extra\b/i.test(text)) return true
-  if (/\butilit(?:y|ies)\b[^.]{0,40}\b(?:extra|separate)\b/i.test(text)) return true
+  const t = normalizeUtilitiesText(text)
+  if (/\bPOU\b/i.test(t)) return true
+  if (/pay\s*own\s*utilit/i.test(t)) return true
+  if (/tenant\s+pays?\s+utilit/i.test(t)) return true
+  if (/tenant\s+responsible\s+for\s+utilit/i.test(t)) return true
+  if (/\butilit(?:y|ies)\b[^.]{0,48}\bnot\s+included\b/i.test(t)) return true
+  if (/\b(?:no|not)\s+utilities?\b/i.test(t)) return true
+  if (/\bhydro\s+extra\b/i.test(t)) return true
+  if (/\butilit(?:y|ies)\b[^.]{0,40}\b(?:extra|separate)\b/i.test(t)) return true
   return false
 }
 
-export type UtilitiesCardLabel = 'Utilities included' | 'POU' | 'Utilities not included'
+/** Public card utilities chip — only these two labels. */
+export type UtilitiesCardLabel = 'Utilities included' | 'POU'
 
 /**
  * Public card utilities chip.
  * Prefers properties.listing_brief.utilities (what staff edit), then
  * description / highlights / amenities heuristics.
  * Included wins over POU when both somehow match.
+ * Unrecognized brief values (e.g. "Heat included") fall through to copy.
  */
 export function resolveUtilitiesLabel(opts: {
   briefUtilities?: string | null
@@ -132,17 +154,14 @@ export function resolveUtilitiesLabel(opts: {
   const brief = opts.briefUtilities?.trim()
   if (brief) {
     if (textSaysUtilitiesIncluded(brief)) return 'Utilities included'
-    if (/\bPOU\b/i.test(brief)) return 'POU'
-    if (textSaysUtilitiesNotIncluded(brief)) return 'Utilities not included'
-    // Partial staff values like "Heat included" — no full utilities chip.
-    return null
+    if (textSaysUtilitiesPayOwn(brief)) return 'POU'
+    // Partial / unrecognized staff values — try listing copy next.
   }
 
   const text = listingCorpus(opts.description, opts.highlights, opts.amenities)
   if (!text) return null
   if (textSaysUtilitiesIncluded(text)) return 'Utilities included'
-  if (/\bPOU\b/i.test(text)) return 'POU'
-  if (textSaysUtilitiesNotIncluded(text)) return 'Utilities not included'
+  if (textSaysUtilitiesPayOwn(text)) return 'POU'
   return null
 }
 

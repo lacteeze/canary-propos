@@ -328,10 +328,8 @@ export function LandingListingCard({
         {listing.tags.length > 0 ? (
           <div className="cl2-card-highlights" aria-label="Listing highlights">
             {listing.tags.map((tag) => {
-              const isUtilitiesTag =
-                tag === 'Utilities included' ||
-                tag === 'POU' ||
-                tag === 'Utilities not included'
+              // Value accent for both utilities chips (included + POU).
+              const isUtilitiesTag = tag === 'Utilities included' || tag === 'POU'
               return (
                 <span
                   key={tag}

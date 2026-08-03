@@ -103,10 +103,9 @@ describe('resolveUtilitiesLabel', () => {
     expect(resolveUtilitiesLabel({ briefUtilities: 'POU — tenant responsibility' })).toBe('POU')
   })
 
-  it('labels tenant-pays brief as Utilities not included', () => {
-    expect(resolveUtilitiesLabel({ briefUtilities: 'Tenant pays utilities' })).toBe(
-      'Utilities not included'
-    )
+  it('labels tenant-pays / not-included briefs as POU', () => {
+    expect(resolveUtilitiesLabel({ briefUtilities: 'Tenant pays utilities' })).toBe('POU')
+    expect(resolveUtilitiesLabel({ briefUtilities: 'Utilities not included' })).toBe('POU')
   })
 
   it('labels utilities included brief', () => {
@@ -115,24 +114,37 @@ describe('resolveUtilitiesLabel', () => {
     )
   })
 
-  it('does not invent a chip for partial heat-included brief', () => {
+  it('labels heat/light/internet package briefs as Utilities included', () => {
+    expect(
+      resolveUtilitiesLabel({ briefUtilities: 'Heat, Light & Internet Included' })
+    ).toBe('Utilities included')
+    // Common staff typo
+    expect(
+      resolveUtilitiesLabel({ briefUtilities: 'Heat, Light & Internet Inlcuded' })
+    ).toBe('Utilities included')
+  })
+
+  it('does not invent a chip for partial heat-included brief alone', () => {
     expect(resolveUtilitiesLabel({ briefUtilities: 'Heat included' })).toBe(null)
+  })
+
+  it('falls through partial brief to description included copy', () => {
+    expect(
+      resolveUtilitiesLabel({
+        briefUtilities: 'Heat included',
+        description: 'Bright unit. Utilities included.',
+      })
+    ).toBe('Utilities included')
   })
 
   it('detects POU phrases in description / amenities', () => {
     expect(resolveUtilitiesLabel({ description: 'Bright unit. POU.' })).toBe('POU')
     expect(
       resolveUtilitiesLabel({ description: 'Tenant pays utilities. Parking on street.' })
-    ).toBe('Utilities not included')
-    expect(resolveUtilitiesLabel({ description: 'Hydro extra. Nice kitchen.' })).toBe(
-      'Utilities not included'
-    )
-    expect(resolveUtilitiesLabel({ amenities: ['Pay own utilities'] })).toBe(
-      'Utilities not included'
-    )
-    expect(resolveUtilitiesLabel({ highlights: ['Utilities not included'] })).toBe(
-      'Utilities not included'
-    )
+    ).toBe('POU')
+    expect(resolveUtilitiesLabel({ description: 'Hydro extra. Nice kitchen.' })).toBe('POU')
+    expect(resolveUtilitiesLabel({ amenities: ['Pay own utilities'] })).toBe('POU')
+    expect(resolveUtilitiesLabel({ highlights: ['Utilities not included'] })).toBe('POU')
   })
 
   it('included wins over POU when both match', () => {
@@ -156,6 +168,13 @@ describe('resolveUtilitiesLabel', () => {
         description: 'Utilities included in marketing copy.',
       })
     ).toBe('POU')
+  })
+
+  it('never returns Utilities not included label', () => {
+    expect(resolveUtilitiesLabel({ briefUtilities: 'Utilities not included' })).not.toBe(
+      'Utilities not included'
+    )
+    expect(resolveUtilitiesLabel({ description: 'Utilities not included.' })).toBe('POU')
   })
 })
 
@@ -379,7 +398,7 @@ describe('mapListingRow value tags', () => {
     expect(mapped.tags[0]).toBe('POU')
   })
 
-  it('shows Utilities not included chip from tenant-pays brief', () => {
+  it('shows POU chip from tenant-pays brief', () => {
     const mapped = mapListingRow(
       {
         id: 'tenant-pays',
@@ -409,7 +428,43 @@ describe('mapListingRow value tags', () => {
       '',
       ''
     )
-    expect(mapped.tags).toEqual(['Utilities not included'])
+    expect(mapped.tags).toEqual(['POU'])
+    expect(mapped.tags).not.toContain('Utilities not included')
+  })
+
+  it('shows Utilities included from heat/light/internet listing_brief', () => {
+    const mapped = mapListingRow(
+      {
+        id: 'casey-75-pkg',
+        slug: '75-casey',
+        listing_title: '75 Casey St',
+        listing_description: 'Fully furnished 1-bedroom. No utility wording here.',
+        display_rent: 1850,
+        highlights: [],
+        available_from: null,
+        created_at: '2026-01-01T00:00:00Z',
+        units: {
+          id: 'u1',
+          bedrooms: 1,
+          bathrooms: 1,
+          asking_rent: 1850,
+          amenities: [],
+          properties: {
+            id: 'p1',
+            street_address: "75 Casey St, St. John's",
+            city: "St. John's",
+            province: 'NL',
+            photo_paths: null,
+            listing_brief: { utilities: 'Heat, Light & Internet Inlcuded' },
+          },
+        },
+      },
+      '',
+      ''
+    )
+    expect(mapped.rentSuffix).toBe('incl')
+    expect(mapped.tags).toContain('Utilities included')
+    expect(mapped.tags[0]).toBe('Utilities included')
   })
 })
 

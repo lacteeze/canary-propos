@@ -223,9 +223,6 @@ export function BillingDashboard({
             ))}
           </select>
         </label>
-        <button type="button" className="cy-btn-primary cy-accent-btn" disabled={pending} onClick={() => load()}>
-          Refresh
-        </button>
         <button
           type="button"
           className="cy-btn-ghost"

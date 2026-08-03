@@ -517,7 +517,7 @@ function PropertyEditForm({
   onSaved: () => void
 }) {
   const [status, setStatus] = useState(propertyStatusOption(property.status))
-  const [propertyType, setPropertyType] = useState(property.type.replace(/ /g, '_') || 'house')
+  const [propertyType, setPropertyType] = useState(propertyTypeOption(property.type))
   const [city, setCity] = useState(property.city)
   const [province, setProvince] = useState(property.area)
   const [beds, setBeds] = useState(property.beds || '0')
@@ -1073,14 +1073,6 @@ export default function EntityDetailDrawer({
                   ) : (p.hospitablePropertyId || '—'),
                 }]
               : []),
-            {
-              label: 'Pets',
-              value: (
-                <span title="Edit in Listing quick fields">
-                  {p.petFriendly || '—'}
-                </span>
-              ),
-            },
             { label: 'Garage', value: p.hasGarage ? 'Yes' : 'No' },
             {
               label: 'Public URL slug',

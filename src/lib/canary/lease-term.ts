@@ -14,16 +14,25 @@ function parseIsoDate(s: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
-/** Latest allowed end date for a month-to-month lease (12 months from start). */
-export function maxMonthToMonthEndDate(startDate: string): string | null {
+function formatIsoDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** Add calendar months to a YYYY-MM-DD date (local), clamping day-of-month via Date.setMonth. */
+export function addMonthsToIsoDate(startDate: string, months: number): string | null {
   const start = parseIsoDate(startDate)
   if (!start) return null
   const end = new Date(start.getFullYear(), start.getMonth(), start.getDate())
-  end.setMonth(end.getMonth() + MAX_MONTH_TO_MONTH_MONTHS)
-  const y = end.getFullYear()
-  const m = String(end.getMonth() + 1).padStart(2, '0')
-  const d = String(end.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
+  end.setMonth(end.getMonth() + months)
+  return formatIsoDate(end)
+}
+
+/** Latest allowed end date for a month-to-month lease (12 months from start). */
+export function maxMonthToMonthEndDate(startDate: string): string | null {
+  return addMonthsToIsoDate(startDate, MAX_MONTH_TO_MONTH_MONTHS)
 }
 
 export function normalizeLeaseTermType(value: string | null | undefined): LeaseTermType {

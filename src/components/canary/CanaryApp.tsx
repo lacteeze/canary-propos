@@ -48,7 +48,7 @@ import type { CanaryDb, CanaryDraft, CanaryHospitableTask, CanaryInquiry, Canary
 import { deleteLocalOwnerOccupiedBlock, loadLocalOwnerOccupiedBlocks } from '@/lib/canary/owner-occupied-storage'
 import { isOpenHospitableTask } from '@/lib/hospitable/map-tasks'
 import { draftStatusBadge, draftTimelineMeta, inquiryStatusBadge } from '@/lib/canary/types'
-import { isMonthToMonthLease, validateLeaseDates } from '@/lib/canary/lease-term'
+import { addMonthsToIsoDate, isMonthToMonthLease, validateLeaseDates } from '@/lib/canary/lease-term'
 import type { LeaseTermType } from '@/lib/canary/lease-term'
 import { draftBarRange, leaseBarRangeForLease, ownerOccupiedBarRange, strBarRange, taskBarRange, tlRangesOverlap } from '@/lib/canary/timeline-times'
 import { resolveToCanaryAddress } from '@/lib/hospitable/property-label'
@@ -261,6 +261,8 @@ export default function CanaryApp({
   const [pageSort, setPageSort] = useState<Record<string, SortState>>({})
   const [draftOpen, setDraftOpen] = useState(false)
   const [draft, setDraft] = useState<DraftForm | null>(null)
+  /** When false, changing start auto-fills lease end to start + 12 months. */
+  const [draftEndDirty, setDraftEndDirty] = useState(false)
   const [draftError, setDraftError] = useState('')
   const [draftSaving, setDraftSaving] = useState(false)
   const [payFormOpen, setPayFormOpen] = useState(false)
@@ -571,16 +573,20 @@ export default function CanaryApp({
     const rent = (p.rent != null && p.rent !== '')
       ? p.rent
       : leaseRent || (prop && prop.rate ? String(prop.rate) : '')
+    const start = p.start || ''
+    const presetEnd = (p.end || '').trim()
+    const end = presetEnd || (start ? addMonthsToIsoDate(start, 12) || '' : '')
     setDrawer(null)
     setDraftError('')
+    setDraftEndDirty(Boolean(presetEnd))
     setDraft({
       id: null,
       propId: prop ? prop.id : '',
       tenantId: '',
       termType: 'fixed_term',
       rent,
-      start: p.start || '',
-      end: p.end || '',
+      start,
+      end,
       beds: prop ? prop.beds || '' : '',
       baths: prop ? prop.baths || '' : '',
       parking: prop ? prop.parking || '' : '',
@@ -595,6 +601,7 @@ export default function CanaryApp({
 
   const openDraft = useCallback((d: CanaryDraft) => {
     setDraftError('')
+    setDraftEndDirty(Boolean((d.end || '').trim()))
     setDraft({ ...d, tenantId: '', termType: 'fixed_term' })
     setDraftOpen(true)
   }, [])
@@ -621,6 +628,7 @@ export default function CanaryApp({
     if (!res.success) { setDraftError(res.error); return }
     setDraftOpen(false)
     setDraft(null)
+    setDraftEndDirty(false)
     setView('leases')
     startTransition(() => router.refresh())
   }, [draft, draftSaving, router])
@@ -633,6 +641,7 @@ export default function CanaryApp({
     if (!res.success) { setDraftError(res.error); return }
     setDraftOpen(false)
     setDraft(null)
+    setDraftEndDirty(false)
     startTransition(() => router.refresh())
   }, [draft, draftSaving, router])
 
@@ -658,6 +667,7 @@ export default function CanaryApp({
     if (!res.success) { setDraftError(res.error); return }
     setDraftOpen(false)
     setDraft(null)
+    setDraftEndDirty(false)
     setView('leases')
     startTransition(() => router.refresh())
   }, [draft, draftSaving, router])
@@ -3778,14 +3788,14 @@ export default function CanaryApp({
       {/* ============ DRAFT LEASE COMPOSER ============ */}
       {draftOpen && (
         <>
-          <div onClick={() => { setDraftOpen(false); setDraft(null) }} className="cy-modal-backdrop cy-glass-modal-backdrop" style={{ zIndex: 70 }} />
+          <div onClick={() => { setDraftOpen(false); setDraft(null); setDraftEndDirty(false) }} className="cy-modal-backdrop cy-glass-modal-backdrop" style={{ zIndex: 70 }} />
           <div className="cy-glass-modal" style={{ width: 'min(680px,94vw)', maxHeight: '92vh', padding: 18, zIndex: 71 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
               <div>
                 <div className="cy-eyebrow" style={{ marginBottom: 4 }}>Draft lease · listing</div>
                 <div style={{ fontWeight: 700, fontSize: 19 }}>{curDraft.id ? 'Edit draft — ' + short(curDraft.address || '') : 'New draft lease'}</div>
               </div>
-              <button className="cy-btn" onClick={() => { setDraftOpen(false); setDraft(null) }}>✕</button>
+              <button className="cy-btn" onClick={() => { setDraftOpen(false); setDraft(null); setDraftEndDirty(false) }}>✕</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
               <label style={{ gridColumn: '1/-1', display: 'block' }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Property</span>
@@ -3834,7 +3844,17 @@ export default function CanaryApp({
               </label>
               <label><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Available / start</span>
                 <div style={{ marginTop: 4 }}>
-                  <DatePickerField value={curDraft.start} onChange={(v) => setDraft({ ...curDraft, start: v })} placeholder="Pick start date" />
+                  <DatePickerField
+                    value={curDraft.start}
+                    onChange={(v) => {
+                      const next: DraftForm = { ...curDraft, start: v }
+                      if (!draftEndDirty) {
+                        next.end = v ? addMonthsToIsoDate(v, 12) || '' : ''
+                      }
+                      setDraft(next)
+                    }}
+                    placeholder="Pick start date"
+                  />
                 </div>
               </label>
               <label><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Term type</span>
@@ -3853,7 +3873,10 @@ export default function CanaryApp({
                 <div style={{ marginTop: 4 }}>
                   <DatePickerField
                     value={curDraft.end}
-                    onChange={(v) => setDraft({ ...curDraft, end: v })}
+                    onChange={(v) => {
+                      setDraftEndDirty(true)
+                      setDraft({ ...curDraft, end: v })
+                    }}
                     placeholder={curDraft.termType === 'month_to_month' ? 'Optional end date' : 'Pick end date'}
                   />
                 </div>

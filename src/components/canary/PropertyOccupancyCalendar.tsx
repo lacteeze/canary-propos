@@ -33,6 +33,10 @@ function propertyStatusOption(status: string | null | undefined): string {
   if (status === 'Airbnb') return 'STR'
   return (PROPERTY_STATUSES as readonly string[]).includes(status) ? status : 'Vacant'
 }
+function propertyTypeOption(type: string | null | undefined): string {
+  const normalized = (type || 'other').trim().replace(/ /g, '_')
+  return (PROPERTY_TYPES as readonly string[]).includes(normalized) ? normalized : 'other'
+}
 
 type CalMode = 'occupancy' | 'tasks'
 type MobilePane = 'calendar' | 'details'
@@ -171,7 +175,7 @@ function PropertyQuickEdit({
   onSaved: () => void
 }) {
   const [status, setStatus] = useState(propertyStatusOption(property.status))
-  const [propertyType, setPropertyType] = useState(property.type.replace(/ /g, '_') || 'house')
+  const [propertyType, setPropertyType] = useState(propertyTypeOption(property.type))
   const [city, setCity] = useState(property.city)
   const [province, setProvince] = useState(property.area)
   const [beds, setBeds] = useState(property.beds || '0')
@@ -189,7 +193,7 @@ function PropertyQuickEdit({
 
   useEffect(() => {
     setStatus(propertyStatusOption(property.status))
-    setPropertyType(property.type.replace(/ /g, '_') || 'house')
+    setPropertyType(propertyTypeOption(property.type))
     setCity(property.city)
     setProvince(property.area)
     setBeds(property.beds || '0')
@@ -215,7 +219,6 @@ function PropertyQuickEdit({
           <div><dt>Area</dt><dd>{[property.city, property.area].filter(Boolean).join(' · ') || '—'}</dd></div>
           <div><dt>Beds / Baths</dt><dd>{[property.beds || '—', property.baths || '—'].join(' / ')}</dd></div>
           <div><dt>Asking rate</dt><dd>{property.rate != null ? `${money(property.rate)}/mo` : '—'}</dd></div>
-          <div><dt>Pets</dt><dd>{property.petFriendly || '—'}</dd></div>
           <div><dt>Garage</dt><dd>{property.hasGarage ? 'Yes' : 'No'}</dd></div>
           {priv && (
             <>

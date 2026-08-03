@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { createLease } from '@/app/actions/leases'
-import { validateLeaseDates } from '@/lib/canary/lease-term'
+import { addMonthsToIsoDate, validateLeaseDates } from '@/lib/canary/lease-term'
 import type { LeaseTermType } from '@/lib/canary/lease-term'
 import {
   Dialog,
@@ -80,6 +80,8 @@ export function AddLeaseForm({ tenants, properties, buttonLabel = 'Add Lease' }:
   const [open, setOpen] = useState(false)
   const [units, setUnits] = useState<Unit[]>([])
   const [loadingUnits, setLoadingUnits] = useState(false)
+  /** When false, changing start auto-fills end to start + 12 months. */
+  const [endDirty, setEndDirty] = useState(false)
 
   const form = useForm<FormValues, unknown, FormValues>({
     resolver: zodResolver(formSchema) as any,
@@ -139,13 +141,28 @@ export function AddLeaseForm({ tenants, properties, buttonLabel = 'Add Lease' }:
 
     toast.success('Lease created successfully.')
     form.reset()
+    setEndDirty(false)
     setUnits([])
     setOpen(false)
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<span />} onClick={() => setOpen(true)}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) {
+          setEndDirty(false)
+        }
+      }}
+    >
+      <DialogTrigger
+        render={<span />}
+        onClick={() => {
+          setEndDirty(false)
+          setOpen(true)
+        }}
+      >
         <Button>{buttonLabel}</Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
@@ -276,7 +293,20 @@ export function AddLeaseForm({ tenants, properties, buttonLabel = 'Add Lease' }:
                   <FormItem>
                     <FormLabel>Start Date</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input
+                        type="date"
+                        {...field}
+                        onChange={(e) => {
+                          const start = e.target.value
+                          field.onChange(start)
+                          if (!endDirty) {
+                            form.setValue('end_date', start ? addMonthsToIsoDate(start, 12) || '' : '', {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+                          }
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -291,7 +321,14 @@ export function AddLeaseForm({ tenants, properties, buttonLabel = 'Add Lease' }:
                       End Date{form.watch('term_type') === 'month_to_month' ? ' (optional)' : ''}
                     </FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input
+                        type="date"
+                        {...field}
+                        onChange={(e) => {
+                          setEndDirty(true)
+                          field.onChange(e.target.value)
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

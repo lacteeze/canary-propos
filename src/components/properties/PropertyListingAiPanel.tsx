@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useState, useTransition } from 'react'
+import { useEffect, useId, useRef, useState, useTransition } from 'react'
 import {
   getPropertyKnowledge,
   removeListingBriefOrgOption,
@@ -21,6 +21,9 @@ import {
   type ListingBriefOptions,
   type ListingBriefScalarField,
 } from '@/lib/listings/listing-brief'
+
+const BRIEF_AUTOSAVE_MS = 500
+const FEATURES_AUTOSAVE_MS = 150
 
 const SCALAR_FIELDS: {
   key: ListingBriefScalarField
@@ -321,21 +324,75 @@ export function PropertyListingAiPanel({
   const [draftHighlights, setDraftHighlights] = useState('')
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
+  const [briefSaveStatus, setBriefSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(
+    'idle'
+  )
+  const [briefReady, setBriefReady] = useState(false)
   const [pending, startTransition] = useTransition()
+  const lastSavedBriefJson = useRef('')
+  const briefAutosaveMs = useRef(BRIEF_AUTOSAVE_MS)
+  const savedLabelTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     let cancelled = false
+    setBriefReady(false)
+    setBriefSaveStatus('idle')
     ;(async () => {
       const data = await getPropertyKnowledge(propertyId)
       if (cancelled) return
       setBrief(data.listingBrief)
+      lastSavedBriefJson.current = JSON.stringify(data.listingBrief)
       setBriefOptions(data.briefOptions ?? mergeListingBriefOptions({}))
       setMarkdown(data.markdown)
+      setBriefReady(true)
     })()
     return () => {
       cancelled = true
+      if (savedLabelTimer.current) clearTimeout(savedLabelTimer.current)
     }
   }, [propertyId])
+
+  useEffect(() => {
+    if (!canEdit || !briefReady) return
+    const json = JSON.stringify(brief)
+    if (json === lastSavedBriefJson.current) return
+
+    let cancelled = false
+    const delay = briefAutosaveMs.current
+    const t = setTimeout(async () => {
+      setBriefSaveStatus('saving')
+      setErr('')
+      const res = await savePropertyListingBrief(propertyId, brief)
+      if (cancelled) return
+      if (!res.success) {
+        setBriefSaveStatus('error')
+        setErr(res.error)
+        return
+      }
+      lastSavedBriefJson.current = JSON.stringify(brief)
+      if (res.briefOptions) setBriefOptions(res.briefOptions)
+      setBriefSaveStatus('saved')
+      if (savedLabelTimer.current) clearTimeout(savedLabelTimer.current)
+      savedLabelTimer.current = setTimeout(() => {
+        setBriefSaveStatus((s) => (s === 'saved' ? 'idle' : s))
+      }, 2000)
+    }, delay)
+
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [brief, propertyId, canEdit, briefReady])
+
+  function updateScalarField(key: ListingBriefScalarField, value: string) {
+    briefAutosaveMs.current = BRIEF_AUTOSAVE_MS
+    setBrief((b) => ({ ...b, [key]: value }))
+  }
+
+  function updateFeatures(features: string[]) {
+    briefAutosaveMs.current = FEATURES_AUTOSAVE_MS
+    setBrief((b) => ({ ...b, features }))
+  }
 
   if (!canEdit) {
     return (
@@ -348,7 +405,38 @@ export function PropertyListingAiPanel({
   return (
     <div style={{ display: 'grid', gap: 14 }}>
       <div>
-        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Listing quick fields</div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            gap: 8,
+            marginBottom: 8,
+          }}
+        >
+          <div style={{ fontWeight: 700, fontSize: 13 }}>Listing quick fields</div>
+          <span
+            aria-live="polite"
+            style={{
+              fontSize: 11,
+              color:
+                briefSaveStatus === 'error'
+                  ? 'var(--red)'
+                  : briefSaveStatus === 'saved'
+                    ? 'var(--green)'
+                    : 'var(--dim)',
+              minHeight: '1em',
+            }}
+          >
+            {briefSaveStatus === 'saving'
+              ? 'Saving…'
+              : briefSaveStatus === 'saved'
+                ? 'Saved'
+                : briefSaveStatus === 'error'
+                  ? 'Save failed'
+                  : ''}
+          </span>
+        </div>
         <div style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 1fr' }}>
           {SCALAR_FIELDS.map((f) => (
             <BriefCombobox
@@ -358,14 +446,14 @@ export function PropertyListingAiPanel({
               placeholder={f.placeholder}
               value={brief[f.key]}
               options={briefOptions[f.key] ?? DEFAULT_LISTING_BRIEF_OPTIONS[f.key]}
-              onChange={(v) => setBrief((b) => ({ ...b, [f.key]: v }))}
+              onChange={(v) => updateScalarField(f.key, v)}
             />
           ))}
           <FeaturesMultiSelect
             selected={brief.features}
             options={briefOptions.features ?? DEFAULT_LISTING_BRIEF_OPTIONS.features}
             pending={pending}
-            onChange={(features) => setBrief((b) => ({ ...b, features }))}
+            onChange={updateFeatures}
             onRemoveOrgOption={(value) => {
               startTransition(async () => {
                 setErr('')
@@ -383,28 +471,8 @@ export function PropertyListingAiPanel({
         </div>
         <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--dim)' }}>
           Choose presets or Custom… — new values are remembered for next time. Standout features
-          support multiple tags; hover × on a chip to clear it.
+          support multiple tags; hover × on a chip to clear it. Changes save automatically.
         </p>
-        <button
-          type="button"
-          className="cy-btn-ghost"
-          disabled={pending}
-          style={{ marginTop: 8 }}
-          onClick={() => {
-            startTransition(async () => {
-              setErr('')
-              setMsg('')
-              const res = await savePropertyListingBrief(propertyId, brief)
-              if (!res.success) setErr(res.error)
-              else {
-                if (res.briefOptions) setBriefOptions(res.briefOptions)
-                setMsg('Listing fields saved.')
-              }
-            })
-          }}
-        >
-          Save listing fields
-        </button>
       </div>
 
       <div>

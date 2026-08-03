@@ -1,5 +1,6 @@
 // Manager notification email when a visitor submits an inquiry or application.
 import { Button, Heading, Hr, Text } from '@react-email/components'
+import { shortPropertyAddress } from '@/lib/addresses/short-property-address'
 import { emailStyles } from '@/lib/email/brand'
 import { EmailLayout } from '@/lib/email/templates/EmailLayout'
 
@@ -14,13 +15,8 @@ export interface InquiryNotificationEmailProps {
   budget?: number | null
   note?: string | null
   dashboardUrl: string
-  /** Short street form for subject/heading (e.g. before first comma). */
+  /** Precomputed short label (street, city, province). */
   shortLabel?: string
-}
-
-function shortAddress(addr: string | null | undefined, fallback = ''): string {
-  const s = (addr || '').split(',')[0].trim()
-  return s || fallback
 }
 
 export function InquiryNotificationEmail({
@@ -37,32 +33,28 @@ export function InquiryNotificationEmail({
   shortLabel,
 }: InquiryNotificationEmailProps) {
   const short =
-    shortLabel ||
-    shortAddress(propertyAddress, shortAddress(listingTitle, listingTitle || 'Property'))
+    (shortLabel || '').trim() ||
+    shortPropertyAddress(propertyAddress) ||
+    shortPropertyAddress(listingTitle) ||
+    listingTitle ||
+    'Property'
 
   const headingPrefix =
     type === 'interest' ? 'Interest' : type === 'inquiry' ? 'Viewing' : 'Application'
   const headingText = `${headingPrefix}: ${short}`
-  const subtitle =
-    type === 'interest'
-      ? 'General Interest'
-      : type === 'inquiry'
-        ? 'Viewing Request'
-        : 'Application Interest'
-  const typeLabel =
-    type === 'interest'
-      ? 'general interest'
-      : type === 'inquiry'
-        ? 'viewing request'
-        : 'application interest'
+
+  const detailLines: string[] = []
+  if (short) detailLines.push(short)
+  if (moveInDate) detailLines.push(`Move-in: ${moveInDate}`)
+  if (budget) detailLines.push(`Budget: $${budget.toLocaleString()}/mo`)
 
   return (
     <EmailLayout
-      preview={`${headingText} — ${visitorName}`}
-      subtitle={subtitle}
-      footerNote={`Canary PM notification: ${typeLabel} on your public site.`}
+      variant="compact"
+      preview={`${visitorName} · ${headingText}`}
+      footerNote="Canary PM · public listing notification"
     >
-      <Heading style={{ ...emailStyles.heading, marginBottom: '12px' }}>{headingText}</Heading>
+      <Heading style={headingStyle}>{headingText}</Heading>
 
       <table width="100%" cellPadding={0} cellSpacing={0} style={gridTableStyle}>
         <tbody>
@@ -81,23 +73,17 @@ export function InquiryNotificationEmail({
                 ) : null}
               </Text>
             </td>
-            <td style={colStyle} width="50%" valign="top">
+            <td style={colRightStyle} width="50%" valign="top">
               <Text style={sectionLabelStyle}>Details</Text>
               <Text style={compactBodyStyle}>
-                {propertyAddress || listingTitle ? (
-                  <>
-                    {propertyAddress || listingTitle}
-                    <br />
-                  </>
-                ) : null}
-                {moveInDate ? (
-                  <>
-                    Move-in: {moveInDate}
-                    <br />
-                  </>
-                ) : null}
-                {budget ? <>Budget: ${budget.toLocaleString()}/mo</> : null}
-                {!moveInDate && !budget && !propertyAddress && !listingTitle ? '—' : null}
+                {detailLines.length > 0
+                  ? detailLines.map((line, i) => (
+                      <span key={`${i}-${line}`}>
+                        {i > 0 ? <br /> : null}
+                        {line}
+                      </span>
+                    ))
+                  : '—'}
               </Text>
             </td>
           </tr>
@@ -123,6 +109,12 @@ export function InquiryNotificationEmail({
 
 export default InquiryNotificationEmail
 
+const headingStyle = {
+  ...emailStyles.heading,
+  fontSize: '20px',
+  marginBottom: '16px',
+}
+
 const contentHrStyle = {
   ...emailStyles.hr,
   margin: '14px 0',
@@ -134,8 +126,15 @@ const gridTableStyle = {
 }
 
 const colStyle = {
-  paddingRight: '12px',
+  paddingRight: '16px',
   paddingBottom: '4px',
+  width: '50%',
+}
+
+const colRightStyle = {
+  paddingLeft: '8px',
+  paddingBottom: '4px',
+  width: '50%',
 }
 
 const sectionLabelStyle = {

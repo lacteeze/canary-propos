@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import { createClient as createClientJs } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import { shortPropertyAddress } from '@/lib/addresses/short-property-address'
 import { sendEmail } from '@/lib/email/send'
 import { PINGRAM_EMAIL_TYPES } from '@/lib/email/pingram-types'
 import { InquiryNotificationEmail } from '@/lib/email/templates/InquiryNotificationEmail'
@@ -83,9 +84,10 @@ async function sendManagerNotification(params: {
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.canarypm.ca'
+  // Prefer structured property address; listing_title is often a full Google-formatted string.
   const shortLabel =
-    (params.propertyAddress || '').split(',')[0].trim() ||
-    (params.listingTitle || '').split(',')[0].trim() ||
+    shortPropertyAddress(params.propertyAddress) ||
+    shortPropertyAddress(params.listingTitle) ||
     params.listingTitle ||
     'Property'
   const subjectPrefix =

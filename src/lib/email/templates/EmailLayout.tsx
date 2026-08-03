@@ -8,6 +8,21 @@ const headerWithAccent = {
   borderBottom: `3px solid ${emailColors.yellow}`,
 }
 
+const compactContainer = {
+  ...emailStyles.container,
+  maxWidth: '640px',
+}
+
+const compactContent = {
+  ...emailStyles.content,
+  padding: '24px 28px 20px',
+}
+
+const compactFooter = {
+  ...emailStyles.footerSection,
+  padding: '16px 28px 20px',
+}
+
 export interface EmailLayoutProps {
   preview: string
   children: ReactNode
@@ -15,8 +30,16 @@ export interface EmailLayoutProps {
   footerNote?: string
   /** Header wordmark — defaults to public sender brand. */
   brandName?: string
-  /** Purpose line under the wordmark (e.g. "Showing Request"). */
-  subtitle: string
+  /**
+   * Purpose line under the wordmark (e.g. "Showing Request").
+   * Required for the default (branded) variant; ignored when variant="compact".
+   */
+  subtitle?: string
+  /**
+   * default — dark brand header + subtitle.
+   * compact — no dark header; wider container for dense 2-column content.
+   */
+  variant?: 'default' | 'compact'
 }
 
 export function EmailLayout({
@@ -25,23 +48,28 @@ export function EmailLayout({
   footerNote,
   brandName = 'Canary PM',
   subtitle,
+  variant = 'default',
 }: EmailLayoutProps) {
+  const compact = variant === 'compact'
+
   return (
     <Html lang="en">
       <Head />
       <Preview>{preview}</Preview>
       <Body style={emailStyles.body}>
-        <Container style={emailStyles.container}>
-          <Section style={headerWithAccent}>
-            <Text style={emailStyles.wordmark}>{brandName}</Text>
-            <Text style={emailStyles.tagline}>{subtitle}</Text>
-          </Section>
+        <Container style={compact ? compactContainer : emailStyles.container}>
+          {!compact ? (
+            <Section style={headerWithAccent}>
+              <Text style={emailStyles.wordmark}>{brandName}</Text>
+              {subtitle ? <Text style={emailStyles.tagline}>{subtitle}</Text> : null}
+            </Section>
+          ) : null}
 
-          <Section style={emailStyles.content}>{children}</Section>
+          <Section style={compact ? compactContent : emailStyles.content}>{children}</Section>
 
           <Hr style={emailStyles.hr} />
 
-          <Section style={emailStyles.footerSection}>
+          <Section style={compact ? compactFooter : emailStyles.footerSection}>
             {footerNote ? <Text style={emailStyles.footerNote}>{footerNote}</Text> : null}
             <Text style={emailStyles.footerContact}>
               <a href={`mailto:${EMAIL_CONTACT.email}`} style={contactLinkStyle}>

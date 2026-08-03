@@ -91,30 +91,80 @@ export function resolveParkingDisplay(opts: {
   return '—'
 }
 
-/**
- * True when listing copy / amenities clearly say utilities are included.
- * Does not invent inclusion — sparse or "not included" text returns false.
- */
-export function hasUtilitiesIncluded(
-  description?: string | null,
-  highlights?: string[] | null,
-  amenities?: string[] | null
-): boolean {
-  const text = listingCorpus(description, highlights, amenities)
+/** Explicit "utilities … included" (not heat-only / partial phrases). */
+function textSaysUtilitiesIncluded(text: string): boolean {
   if (!text) return false
-  // Explicit negation near utilities wins.
+  // Explicit "not included" / "no utilities" beats a loose "included" nearby.
   if (/\butilit(?:y|ies)\b[^.]{0,48}\bnot\s+included\b/i.test(text)) return false
   if (/\b(?:no|not)\s+utilities?\b/i.test(text)) return false
   // "utilities included", "utilities and internet included", amenity tag, etc.
   return /\butilit(?:y|ies)\b[^.]{0,48}\bincluded\b/i.test(text)
 }
 
-function rentSuffix(
-  description: string | null,
-  highlights: string[] | null,
-  amenities: string[] | null
-): 'incl' | 'POU' {
-  return hasUtilitiesIncluded(description, highlights, amenities) ? 'incl' : 'POU'
+/** Pay-own / not-included signals (POU, tenant pays, hydro extra, etc.). */
+function textSaysUtilitiesNotIncluded(text: string): boolean {
+  if (!text) return false
+  if (/\bPOU\b/i.test(text)) return true
+  if (/pay\s*own\s*utilit/i.test(text)) return true
+  if (/tenant\s+pays?\s+utilit/i.test(text)) return true
+  if (/tenant\s+responsible\s+for\s+utilit/i.test(text)) return true
+  if (/\butilit(?:y|ies)\b[^.]{0,48}\bnot\s+included\b/i.test(text)) return true
+  if (/\b(?:no|not)\s+utilities?\b/i.test(text)) return true
+  if (/\bhydro\s+extra\b/i.test(text)) return true
+  if (/\butilit(?:y|ies)\b[^.]{0,40}\b(?:extra|separate)\b/i.test(text)) return true
+  return false
+}
+
+export type UtilitiesCardLabel = 'Utilities included' | 'POU' | 'Utilities not included'
+
+/**
+ * Public card utilities chip.
+ * Prefers properties.listing_brief.utilities (what staff edit), then
+ * description / highlights / amenities heuristics.
+ * Included wins over POU when both somehow match.
+ */
+export function resolveUtilitiesLabel(opts: {
+  briefUtilities?: string | null
+  description?: string | null
+  highlights?: string[] | null
+  amenities?: string[] | null
+}): UtilitiesCardLabel | null {
+  const brief = opts.briefUtilities?.trim()
+  if (brief) {
+    if (textSaysUtilitiesIncluded(brief)) return 'Utilities included'
+    if (/\bPOU\b/i.test(brief)) return 'POU'
+    if (textSaysUtilitiesNotIncluded(brief)) return 'Utilities not included'
+    // Partial staff values like "Heat included" — no full utilities chip.
+    return null
+  }
+
+  const text = listingCorpus(opts.description, opts.highlights, opts.amenities)
+  if (!text) return null
+  if (textSaysUtilitiesIncluded(text)) return 'Utilities included'
+  if (/\bPOU\b/i.test(text)) return 'POU'
+  if (textSaysUtilitiesNotIncluded(text)) return 'Utilities not included'
+  return null
+}
+
+/**
+ * True when listing copy / amenities clearly say utilities are included.
+ * Does not invent inclusion — sparse or "not included" text returns false.
+ * Prefers listing_brief.utilities when set.
+ */
+export function hasUtilitiesIncluded(
+  description?: string | null,
+  highlights?: string[] | null,
+  amenities?: string[] | null,
+  briefUtilities?: string | null
+): boolean {
+  return (
+    resolveUtilitiesLabel({
+      briefUtilities,
+      description,
+      highlights,
+      amenities,
+    }) === 'Utilities included'
+  )
 }
 
 /**
@@ -229,10 +279,11 @@ export function mapListingRow(
     property?.listing_brief &&
     typeof property.listing_brief === 'object' &&
     !Array.isArray(property.listing_brief)
-      ? (property.listing_brief as { parking?: unknown; pets?: unknown })
+      ? (property.listing_brief as { parking?: unknown; pets?: unknown; utilities?: unknown })
       : null
   const briefParking = brief ? String(brief.parking ?? '') : ''
   const briefPets = brief ? String(brief.pets ?? '').trim() : ''
+  const briefUtilities = brief ? String(brief.utilities ?? '').trim() : ''
   const briefPetsActive = Boolean(briefPets && !/^no pets$/i.test(briefPets))
   const label = resolvePetLabel({
     briefPets,
@@ -253,12 +304,19 @@ export function mapListingRow(
     highlights: listing.highlights,
     amenities,
   })
-  const suffix = rentSuffix(listing.listing_description, listing.highlights, amenities)
+  const utilitiesLabel = resolveUtilitiesLabel({
+    briefUtilities,
+    description: listing.listing_description,
+    highlights: listing.highlights,
+    amenities,
+  })
+  const suffix: BrowseListing['rentSuffix'] =
+    utilitiesLabel === 'Utilities included' ? 'incl' : 'POU'
 
   // Value-justifying signals for the card — prioritize rent justification.
   // When staff set listing_brief.pets, always reserve a slot for that chip.
   const optionalTags: string[] = []
-  if (suffix === 'incl') optionalTags.push('Utilities included')
+  if (utilitiesLabel) optionalTags.push(utilitiesLabel)
   if (garage) optionalTags.push('Garage')
   if (label && !briefPetsActive) optionalTags.push(label)
   const tags =

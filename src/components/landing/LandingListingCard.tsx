@@ -327,18 +327,24 @@ export function LandingListingCard({
         </div>
         {listing.tags.length > 0 ? (
           <div className="cl2-card-highlights" aria-label="Listing highlights">
-            {listing.tags.map((tag) => (
-              <span
-                key={tag}
-                className={
-                  tag === 'Utilities included'
-                    ? 'cl2-card-highlight cl2-card-highlight--value'
-                    : 'cl2-card-highlight'
-                }
-              >
-                {tag}
-              </span>
-            ))}
+            {listing.tags.map((tag) => {
+              const isUtilitiesTag =
+                tag === 'Utilities included' ||
+                tag === 'POU' ||
+                tag === 'Utilities not included'
+              return (
+                <span
+                  key={tag}
+                  className={
+                    isUtilitiesTag
+                      ? 'cl2-card-highlight cl2-card-highlight--value'
+                      : 'cl2-card-highlight'
+                  }
+                >
+                  {tag}
+                </span>
+              )
+            })}
           </div>
         ) : null}
       </div>

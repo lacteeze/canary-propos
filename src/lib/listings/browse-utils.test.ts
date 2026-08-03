@@ -8,6 +8,7 @@ import {
   parseBrowseFilters,
   resolveParkingDisplay,
   resolvePetLabel,
+  resolveUtilitiesLabel,
 } from './browse-utils'
 import type { BrowseListing } from './browse-types'
 
@@ -84,6 +85,77 @@ describe('hasUtilitiesIncluded', () => {
     expect(hasUtilitiesIncluded(null)).toBe(false)
     expect(hasUtilitiesIncluded('1 bed, 1 bath, parking.')).toBe(false)
     expect(hasUtilitiesIncluded('Utilities not included.')).toBe(false)
+  })
+
+  it('prefers listing_brief.utilities when set', () => {
+    expect(
+      hasUtilitiesIncluded('Tenant pays utilities.', null, null, 'Utilities included')
+    ).toBe(true)
+    expect(
+      hasUtilitiesIncluded('Utilities included.', null, null, 'Tenant pays utilities')
+    ).toBe(false)
+  })
+})
+
+describe('resolveUtilitiesLabel', () => {
+  it('labels brief POU as POU', () => {
+    expect(resolveUtilitiesLabel({ briefUtilities: 'POU' })).toBe('POU')
+    expect(resolveUtilitiesLabel({ briefUtilities: 'POU — tenant responsibility' })).toBe('POU')
+  })
+
+  it('labels tenant-pays brief as Utilities not included', () => {
+    expect(resolveUtilitiesLabel({ briefUtilities: 'Tenant pays utilities' })).toBe(
+      'Utilities not included'
+    )
+  })
+
+  it('labels utilities included brief', () => {
+    expect(resolveUtilitiesLabel({ briefUtilities: 'Utilities included' })).toBe(
+      'Utilities included'
+    )
+  })
+
+  it('does not invent a chip for partial heat-included brief', () => {
+    expect(resolveUtilitiesLabel({ briefUtilities: 'Heat included' })).toBe(null)
+  })
+
+  it('detects POU phrases in description / amenities', () => {
+    expect(resolveUtilitiesLabel({ description: 'Bright unit. POU.' })).toBe('POU')
+    expect(
+      resolveUtilitiesLabel({ description: 'Tenant pays utilities. Parking on street.' })
+    ).toBe('Utilities not included')
+    expect(resolveUtilitiesLabel({ description: 'Hydro extra. Nice kitchen.' })).toBe(
+      'Utilities not included'
+    )
+    expect(resolveUtilitiesLabel({ amenities: ['Pay own utilities'] })).toBe(
+      'Utilities not included'
+    )
+    expect(resolveUtilitiesLabel({ highlights: ['Utilities not included'] })).toBe(
+      'Utilities not included'
+    )
+  })
+
+  it('included wins over POU when both match', () => {
+    expect(
+      resolveUtilitiesLabel({
+        description: 'Utilities included. Note: some listings say POU.',
+      })
+    ).toBe('Utilities included')
+    expect(
+      resolveUtilitiesLabel({
+        briefUtilities: 'Utilities included',
+        description: 'POU / tenant pays utilities.',
+      })
+    ).toBe('Utilities included')
+  })
+
+  it('prefers listing_brief.utilities over conflicting copy', () => {
+    expect(
+      resolveUtilitiesLabel({
+        briefUtilities: 'POU',
+        description: 'Utilities included in marketing copy.',
+      })
+    ).toBe('POU')
   })
 })
 
@@ -269,6 +341,75 @@ describe('mapListingRow value tags', () => {
       ''
     )
     expect(mapped.tags).toEqual(['Utilities included', 'Garage', 'Pets by approval'])
+  })
+
+  it('shows POU chip from listing_brief.utilities and not both utilities tags', () => {
+    const mapped = mapListingRow(
+      {
+        id: 'pou-1',
+        slug: 'pou-unit',
+        listing_title: '12 Water St',
+        listing_description: 'Bright apartment. Utilities included in old copy.',
+        display_rent: 1600,
+        highlights: [],
+        available_from: null,
+        created_at: '2026-01-01T00:00:00Z',
+        units: {
+          id: 'u1',
+          bedrooms: 1,
+          bathrooms: 1,
+          asking_rent: 1600,
+          amenities: ['Garage'],
+          properties: {
+            id: 'p1',
+            street_address: "12 Water St, St. John's",
+            city: "St. John's",
+            province: 'NL',
+            photo_paths: null,
+            listing_brief: { utilities: 'POU', pets: 'No pets', parking: '1 driveway spot' },
+          },
+        },
+      },
+      '',
+      ''
+    )
+    expect(mapped.rentSuffix).toBe('POU')
+    expect(mapped.tags).toContain('POU')
+    expect(mapped.tags).not.toContain('Utilities included')
+    expect(mapped.tags[0]).toBe('POU')
+  })
+
+  it('shows Utilities not included chip from tenant-pays brief', () => {
+    const mapped = mapListingRow(
+      {
+        id: 'tenant-pays',
+        slug: 'tenant-pays',
+        listing_title: '9 Duckworth',
+        listing_description: 'Downtown walk-up.',
+        display_rent: 1400,
+        highlights: [],
+        available_from: null,
+        created_at: '2026-01-01T00:00:00Z',
+        units: {
+          id: 'u1',
+          bedrooms: 1,
+          bathrooms: 1,
+          asking_rent: 1400,
+          amenities: [],
+          properties: {
+            id: 'p1',
+            street_address: "9 Duckworth St, St. John's",
+            city: "St. John's",
+            province: 'NL',
+            photo_paths: null,
+            listing_brief: { utilities: 'Tenant pays utilities' },
+          },
+        },
+      },
+      '',
+      ''
+    )
+    expect(mapped.tags).toEqual(['Utilities not included'])
   })
 })
 

@@ -6,12 +6,18 @@ import { createClient } from '@/lib/supabase/server'
 import {
   appendLearnedListingBriefOptions,
   collectNewListingBriefOptions,
+  emptyListingBrief,
+  getLearnedListingBriefOptions,
+  isDefaultListingBriefOption,
+  LISTING_BRIEF_FIELD_KEYS,
   listingBriefSchema,
   mergeListingBriefOptions,
   parseListingBrief,
   petsLabelFromAmenities,
+  removeLearnedListingBriefOption,
   syncPetsIntoAmenities,
   type ListingBrief,
+  type ListingBriefField,
   type ListingBriefOptions,
 } from '@/lib/listings/listing-brief'
 
@@ -44,7 +50,7 @@ export async function getPropertyKnowledge(propertyId: string): Promise<{
 }> {
   const emptyOptions = mergeListingBriefOptions({})
   const ctx = await getStaff()
-  if (!ctx) return { markdown: '', listingBrief: parseListingBrief({}), briefOptions: emptyOptions }
+  if (!ctx) return { markdown: '', listingBrief: emptyListingBrief(), briefOptions: emptyOptions }
 
   const [{ data: prop }, { data: kb }, { data: optRow }, { data: units }] = await Promise.all([
     ctx.supabase
@@ -136,7 +142,8 @@ export async function savePropertyListingBrief(
   const ctx = await getStaff()
   if (!ctx) return { success: false, error: 'Not authorized.' }
 
-  const parsed = listingBriefSchema.safeParse(brief)
+  // Coerce legacy / malformed features via parseListingBrief before schema validate.
+  const parsed = listingBriefSchema.safeParse(parseListingBrief(brief))
   if (!parsed.success) return { success: false, error: 'Invalid listing fields.' }
 
   const now = new Date().toISOString()
@@ -207,7 +214,53 @@ export async function savePropertyListingBrief(
   return { success: true, briefOptions }
 }
 
+/** Remove a custom-learned dropdown option org-wide (seed defaults cannot be removed). */
+export async function removeListingBriefOrgOption(
+  field: ListingBriefField,
+  value: string
+): Promise<ActionResult & { briefOptions?: ListingBriefOptions }> {
+  const ctx = await getStaff()
+  if (!ctx) return { success: false, error: 'Not authorized.' }
+
+  if (!(LISTING_BRIEF_FIELD_KEYS as readonly string[]).includes(field)) {
+    return { success: false, error: 'Invalid field.' }
+  }
+  const trimmed = value.trim()
+  if (!trimmed) return { success: false, error: 'Empty option.' }
+  if (isDefaultListingBriefOption(field, trimmed)) {
+    return { success: false, error: 'Built-in options cannot be removed.' }
+  }
+
+  const { data: optRow } = await ctx.supabase
+    .from('listing_brief_options')
+    .select('options')
+    .eq('org_id', ctx.person.org_id)
+    .maybeSingle()
+
+  const learned = getLearnedListingBriefOptions(optRow?.options, field)
+  if (!learned.some((v) => v.toLowerCase() === trimmed.toLowerCase())) {
+    return {
+      success: true,
+      briefOptions: mergeListingBriefOptions(optRow?.options),
+    }
+  }
+
+  const nextStored = removeLearnedListingBriefOption(optRow?.options, field, trimmed)
+  const now = new Date().toISOString()
+  if (optRow) {
+    const { error: optErr } = await ctx.supabase
+      .from('listing_brief_options')
+      .update({ options: nextStored, updated_at: now })
+      .eq('org_id', ctx.person.org_id)
+    if (optErr) return { success: false, error: optErr.message }
+  }
+
+  revalidatePath('/app')
+  return { success: true, briefOptions: mergeListingBriefOptions(nextStored) }
+}
+
 const leaseListingFieldsSchema = z.object({
+
   utilities_included: z.string().trim().max(300).nullable(),
   pets_policy: z.string().trim().max(200).nullable(),
   parking_spots: z.number().int().min(0).max(50).nullable(),

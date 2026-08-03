@@ -3,6 +3,7 @@
 import { useEffect, useId, useState, useTransition } from 'react'
 import {
   getPropertyKnowledge,
+  removeListingBriefOrgOption,
   savePropertyKnowledge,
   savePropertyListingBrief,
 } from '@/app/actions/property-knowledge'
@@ -12,14 +13,17 @@ import {
 } from '@/app/actions/listing-ai'
 import {
   DEFAULT_LISTING_BRIEF_OPTIONS,
+  emptyListingBrief,
+  isDefaultListingBriefOption,
   mergeListingBriefOptions,
   type ListingBrief,
   type ListingBriefField,
   type ListingBriefOptions,
+  type ListingBriefScalarField,
 } from '@/lib/listings/listing-brief'
 
-const BRIEF_FIELDS: {
-  key: ListingBriefField
+const SCALAR_FIELDS: {
+  key: ListingBriefScalarField
   label: string
   placeholder: string
 }[] = [
@@ -29,7 +33,6 @@ const BRIEF_FIELDS: {
   { key: 'laundry', label: 'Laundry', placeholder: 'e.g. In-unit washer/dryer' },
   { key: 'furnished', label: 'Furnished', placeholder: 'e.g. Unfurnished' },
   { key: 'neighborhood', label: 'Neighborhood', placeholder: 'Near downtown, quiet street…' },
-  { key: 'features', label: 'Standout features', placeholder: 'Hardwood, south-facing…' },
 ]
 
 const fieldStyle: React.CSSProperties = {
@@ -110,6 +113,195 @@ function BriefCombobox({
   )
 }
 
+function RemovableChip({
+  label,
+  onRemove,
+  title,
+}: {
+  label: string
+  onRemove: () => void
+  title?: string
+}) {
+  return (
+    <span
+      className="cy-feature-chip"
+      title={title}
+      style={{
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '3px 8px',
+        borderRadius: 6,
+        fontSize: 11.5,
+        fontWeight: 600,
+        background: 'var(--elev)',
+        border: '1px solid var(--border)',
+        color: 'var(--text)',
+        maxWidth: '100%',
+      }}
+    >
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {label}
+      </span>
+      <button
+        type="button"
+        className="cy-feature-chip__remove"
+        onClick={onRemove}
+        aria-label={`Remove ${label}`}
+        style={{
+          appearance: 'none',
+          border: 'none',
+          background: 'transparent',
+          color: 'var(--dim)',
+          cursor: 'pointer',
+          padding: 0,
+          margin: 0,
+          fontSize: 13,
+          lineHeight: 1,
+          width: 14,
+          height: 14,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: 0,
+          transition: 'opacity 120ms ease',
+          flex: 'none',
+        }}
+      >
+        ×
+      </button>
+    </span>
+  )
+}
+
+function FeaturesMultiSelect({
+  selected,
+  options,
+  onChange,
+  onRemoveOrgOption,
+  pending,
+}: {
+  selected: string[]
+  options: string[]
+  onChange: (next: string[]) => void
+  onRemoveOrgOption: (value: string) => void
+  pending: boolean
+}) {
+  const [customMode, setCustomMode] = useState(false)
+  const [customValue, setCustomValue] = useState('')
+
+  const selectedLower = new Set(selected.map((s) => s.toLowerCase()))
+  const available = options.filter((o) => !selectedLower.has(o.toLowerCase()))
+  const learnedCustoms = options.filter((o) => !isDefaultListingBriefOption('features', o))
+
+  function addFeature(value: string) {
+    const trimmed = value.trim()
+    if (!trimmed) return
+    if (selected.some((s) => s.toLowerCase() === trimmed.toLowerCase())) return
+    onChange([...selected, trimmed])
+  }
+
+  function removeFeature(value: string) {
+    onChange(selected.filter((s) => s.toLowerCase() !== value.toLowerCase()))
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 6, fontSize: 12, gridColumn: '1 / -1' }}>
+      <style>{`
+        .cy-feature-chip:hover .cy-feature-chip__remove,
+        .cy-feature-chip:focus-within .cy-feature-chip__remove {
+          opacity: 1 !important;
+        }
+        .cy-feature-chip__remove:hover {
+          color: var(--red) !important;
+        }
+      `}</style>
+      <span style={{ color: 'var(--dim)' }}>Standout features</span>
+      {selected.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {selected.map((f) => (
+            <RemovableChip key={f} label={f} onRemove={() => removeFeature(f)} title="Remove from this property" />
+          ))}
+        </div>
+      )}
+      <select
+        className="cy-select cy-select--field"
+        value=""
+        disabled={pending}
+        onChange={(e) => {
+          const v = e.target.value
+          if (!v) return
+          if (v === '__custom__') {
+            setCustomMode(true)
+            return
+          }
+          setCustomMode(false)
+          setCustomValue('')
+          addFeature(v)
+        }}
+        aria-label="Add standout feature"
+      >
+        <option value="">— Add feature —</option>
+        {available.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+        <option value="__custom__">Custom…</option>
+      </select>
+      {customMode && (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input
+            value={customValue}
+            placeholder="e.g. Bay window, fenced yard…"
+            onChange={(e) => setCustomValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                addFeature(customValue)
+                setCustomValue('')
+                setCustomMode(false)
+              }
+            }}
+            style={fieldStyle}
+            aria-label="Custom standout feature"
+          />
+          <button
+            type="button"
+            className="cy-btn-ghost"
+            disabled={pending || !customValue.trim()}
+            onClick={() => {
+              addFeature(customValue)
+              setCustomValue('')
+              setCustomMode(false)
+            }}
+          >
+            Add
+          </button>
+        </div>
+      )}
+      {learnedCustoms.length > 0 && (
+        <div style={{ display: 'grid', gap: 4 }}>
+          <span style={{ fontSize: 11, color: 'var(--dim)' }}>
+            Org custom options (hover × to remove from dropdown)
+          </span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {learnedCustoms.map((o) => (
+              <RemovableChip
+                key={`org-${o}`}
+                label={o}
+                title="Remove from org dropdown list"
+                onRemove={() => onRemoveOrgOption(o)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function PropertyListingAiPanel({
   propertyId,
   listingId,
@@ -119,15 +311,7 @@ export function PropertyListingAiPanel({
   listingId?: string | null
   canEdit: boolean
 }) {
-  const [brief, setBrief] = useState<ListingBrief>({
-    pets: '',
-    utilities: '',
-    parking: '',
-    laundry: '',
-    furnished: '',
-    neighborhood: '',
-    features: '',
-  })
+  const [brief, setBrief] = useState<ListingBrief>(() => emptyListingBrief())
   const [briefOptions, setBriefOptions] = useState<ListingBriefOptions>(() =>
     mergeListingBriefOptions({})
   )
@@ -166,7 +350,7 @@ export function PropertyListingAiPanel({
       <div>
         <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Listing quick fields</div>
         <div style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 1fr' }}>
-          {BRIEF_FIELDS.map((f) => (
+          {SCALAR_FIELDS.map((f) => (
             <BriefCombobox
               key={f.key}
               fieldKey={f.key}
@@ -177,9 +361,29 @@ export function PropertyListingAiPanel({
               onChange={(v) => setBrief((b) => ({ ...b, [f.key]: v }))}
             />
           ))}
+          <FeaturesMultiSelect
+            selected={brief.features}
+            options={briefOptions.features ?? DEFAULT_LISTING_BRIEF_OPTIONS.features}
+            pending={pending}
+            onChange={(features) => setBrief((b) => ({ ...b, features }))}
+            onRemoveOrgOption={(value) => {
+              startTransition(async () => {
+                setErr('')
+                setMsg('')
+                const res = await removeListingBriefOrgOption('features', value)
+                if (!res.success) {
+                  setErr(res.error)
+                  return
+                }
+                if (res.briefOptions) setBriefOptions(res.briefOptions)
+                setMsg('Removed custom option from org list.')
+              })
+            }}
+          />
         </div>
         <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--dim)' }}>
-          Choose a preset or Custom… to type a new value — new values are remembered for next time.
+          Choose presets or Custom… — new values are remembered for next time. Standout features
+          support multiple tags; hover × on a chip to clear it.
         </p>
         <button
           type="button"

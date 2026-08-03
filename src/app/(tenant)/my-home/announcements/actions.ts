@@ -32,7 +32,7 @@ export async function createAnnouncement(
 
   // Auth guard: only managers or employees may post announcements
   if (!person.role.includes('manager') && !person.role.includes('employee')) {
-    redirect('/dashboard')
+    redirect('/app')
   }
 
   // Validate inputs

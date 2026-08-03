@@ -2016,8 +2016,23 @@ export default function CanaryApp({
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
-    if (params.get('view') === 'billing') {
-      setView('billing')
+    const viewParam = params.get('view')
+    const allowedViews = new Set([
+      'dashboard',
+      'leases',
+      'properties',
+      'projects',
+      'billing',
+      'people',
+      'payments',
+      'portfolios',
+      'tasks',
+      'inbox',
+      'messages',
+      'notifications',
+    ])
+    if (viewParam && allowedViews.has(viewParam)) {
+      setView(viewParam)
       params.delete('view')
       const next = params.toString()
       window.history.replaceState({}, '', next ? `${window.location.pathname}?${next}` : window.location.pathname)

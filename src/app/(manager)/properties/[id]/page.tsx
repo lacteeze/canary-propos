@@ -68,7 +68,7 @@ export default async function PropertyDetailPage({ params }: PageProps) {
     .single()
 
   // Redirect if property not found or wrong org
-  if (!property) redirect('/properties')
+  if (!property) redirect('/app?view=properties')
 
   // Fetch units for this property
   const { data: units } = await supabase
@@ -160,7 +160,7 @@ export default async function PropertyDetailPage({ params }: PageProps) {
     <div className="mx-auto max-w-5xl px-4 py-8 md:px-8">
       {/* Back link */}
       <div className="mb-4">
-        <Link href="/properties" className="text-sm text-stone-500 hover:text-stone-700">
+        <Link href="/app?view=properties" className="text-sm text-stone-500 hover:text-stone-700">
           ← Properties
         </Link>
       </div>

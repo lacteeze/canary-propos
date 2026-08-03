@@ -1,7 +1,7 @@
 'use client'
 
 // src/components/layout/ManagerShell.tsx
-// Manager portal shell — sidebar (desktop) + bottom tab bar (mobile)
+// Legacy shell for leftover detail pages only. Nav escapes to CanaryApp.
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -16,16 +16,15 @@ import {
 } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Properties', href: '/properties', icon: Building2 },
-  { label: 'People', href: '/people', icon: Users },
-  { label: 'Leases', href: '/leases', icon: FileText },
-  { label: 'Maintenance', href: '/maintenance', icon: Wrench },
-  { label: 'Payments', href: '/payments', icon: CreditCard },
+  { label: 'Dashboard', href: '/app', icon: LayoutDashboard },
+  { label: 'Properties', href: '/app?view=properties', icon: Building2 },
+  { label: 'People', href: '/app?view=people', icon: Users },
+  { label: 'Leases', href: '/app?view=leases', icon: FileText },
+  { label: 'Maintenance', href: '/app?view=projects', icon: Wrench },
+  { label: 'Payments', href: '/app?view=payments', icon: CreditCard },
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
 
-// Bottom tab bar shows first 5 items on mobile
 const MOBILE_NAV_ITEMS = NAV_ITEMS.slice(0, 5)
 
 interface ManagerShellProps {
@@ -37,12 +36,10 @@ export default function ManagerShell({ children }: ManagerShellProps) {
 
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: '#FAFAF9' }}>
-      {/* Desktop sidebar */}
       <aside
         className="hidden lg:flex lg:flex-col lg:w-60 lg:fixed lg:inset-y-0"
         style={{ backgroundColor: '#F5F4F2' }}
       >
-        {/* Org logo + name */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-stone-200">
           <div className="w-8 h-8 rounded bg-stone-300 flex items-center justify-center text-xs font-semibold text-stone-600">
             C
@@ -52,10 +49,14 @@ export default function ManagerShell({ children }: ManagerShellProps) {
           </span>
         </div>
 
-        {/* Nav items */}
+        <div className="mx-3 mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Legacy detail view — use Canary for lists and new work.
+        </div>
+
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
           {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
-            const active = pathname === href || pathname.startsWith(href + '/')
+            const pathOnly = href.split('?')[0]
+            const active = pathname === pathOnly || pathname.startsWith(pathOnly + '/')
             return (
               <Link
                 key={href}
@@ -75,7 +76,6 @@ export default function ManagerShell({ children }: ManagerShellProps) {
           })}
         </nav>
 
-        {/* User avatar + dropdown placeholder */}
         <div className="px-4 py-4 border-t border-stone-200">
           <div className="flex items-center gap-3 min-h-11">
             <div className="w-8 h-8 rounded-full bg-stone-300 flex items-center justify-center text-xs font-semibold text-stone-600 shrink-0">
@@ -86,21 +86,20 @@ export default function ManagerShell({ children }: ManagerShellProps) {
         </div>
       </aside>
 
-      {/* Content area */}
       <div className="flex-1 lg:ml-60 flex flex-col">
         <main className="flex-1 p-4 lg:p-8 max-w-[1280px] w-full mx-auto pb-20 lg:pb-8">
           {children}
         </main>
       </div>
 
-      {/* Mobile bottom tab bar */}
       <nav
         className="lg:hidden fixed bottom-0 inset-x-0 border-t border-stone-200 flex"
         style={{ backgroundColor: '#F5F4F2' }}
         aria-label="Mobile navigation"
       >
         {MOBILE_NAV_ITEMS.map(({ label, href, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + '/')
+          const pathOnly = href.split('?')[0]
+          const active = pathname === pathOnly || pathname.startsWith(pathOnly + '/')
           return (
             <Link
               key={href}

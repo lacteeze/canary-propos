@@ -126,7 +126,7 @@ export default async function LeaseDetailPage({ params }: LeaseDetailPageProps) 
       {/* Header */}
       <div className="mb-6">
         <Link
-          href="/leases"
+          href="/app?view=leases"
           className="mb-4 inline-flex items-center text-sm text-stone-500 hover:text-stone-700"
         >
           ← Leases

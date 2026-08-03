@@ -79,7 +79,7 @@ export function WorkOrderList({ workOrders }: WorkOrderListProps) {
         <p className="text-base font-medium text-stone-700">No work orders yet</p>
         <p className="mt-2 text-sm text-stone-500">
           Create a new work order to get started.{' '}
-          <Link href="/maintenance/new" className="text-stone-700 underline hover:text-stone-900">
+          <Link href="/app?view=projects" className="text-stone-700 underline hover:text-stone-900">
             Create one now
           </Link>
         </p>

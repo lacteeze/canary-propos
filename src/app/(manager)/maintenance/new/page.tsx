@@ -119,7 +119,7 @@ export default function NewWorkOrderPage() {
       if (!result.success) {
         setServerError(result.error)
       } else {
-        router.push('/maintenance')
+        router.push('/app?view=projects')
       }
     } catch {
       setServerError('An unexpected error occurred. Please try again.')
@@ -132,8 +132,8 @@ export default function NewWorkOrderPage() {
     <div className="mx-auto max-w-2xl px-4 py-8 md:px-8">
       {/* Back link */}
       <div className="mb-4">
-        <Link href="/maintenance" className="text-sm text-stone-500 hover:text-stone-700">
-          ← Maintenance
+        <Link href="/app?view=projects" className="text-sm text-stone-500 hover:text-stone-700">
+          ← Projects
         </Link>
       </div>
 
@@ -260,7 +260,7 @@ export default function NewWorkOrderPage() {
             {submitting ? 'Creating…' : 'Create Work Order'}
           </button>
           <Link
-            href="/maintenance"
+            href="/app?view=projects"
             className="rounded-lg border border-stone-300 px-5 py-2 text-sm font-medium text-stone-600 hover:bg-stone-50"
           >
             Cancel

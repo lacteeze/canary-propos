@@ -66,7 +66,7 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
 
   if (!callerPerson) redirect('/login')
   if (!callerPerson.role?.includes('manager') && !callerPerson.role?.includes('admin')) {
-    redirect('/dashboard')
+    redirect('/app')
   }
 
   // Fetch work order — explicit column list, NO token columns (T-05-09)
@@ -128,7 +128,7 @@ export default async function WorkOrderDetailPage({ params }: PageProps) {
     <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
       {/* Back link */}
       <div className="mb-4">
-        <Link href="/maintenance" className="text-sm text-stone-500 hover:text-stone-700">
+        <Link href="/app?view=projects" className="text-sm text-stone-500 hover:text-stone-700">
           ← Maintenance
         </Link>
       </div>

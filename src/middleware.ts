@@ -123,9 +123,18 @@ export async function middleware(request: NextRequest) {
   // itself resolves the person + role from the people table (JWT role claims
   // may be missing on accounts created before the auth hook was enabled).
 
-  // Legacy backend entry — the CanaryApp at /app replaces the old dashboard
-  if (pathname === '/dashboard' && user) {
-    return NextResponse.redirect(new URL('/app', request.url))
+  // Legacy ManagerShell list URLs → CanaryApp (exact paths only; detail routes stay)
+  const legacyListRedirects: Record<string, string> = {
+    '/dashboard': '/app',
+    '/properties': '/app?view=properties',
+    '/leases': '/app?view=leases',
+    '/payments': '/app?view=payments',
+    '/people': '/app?view=people',
+    '/maintenance': '/app?view=projects',
+    '/billing': '/app?view=billing',
+  }
+  if (user && legacyListRedirects[pathname]) {
+    return NextResponse.redirect(new URL(legacyListRedirects[pathname], request.url))
   }
 
   // Role guards per portal (D-04)

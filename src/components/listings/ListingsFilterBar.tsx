@@ -94,7 +94,7 @@ export function ListingsFilterBar({
             color: filters.pets ? 'var(--accent-text)' : 'var(--dim)',
           }}
         >
-          🐾 Pet friendly
+          Pet friendly
         </button>
 
         <button

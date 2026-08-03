@@ -763,15 +763,28 @@ export default function CanaryApp({
   )
 
   // ---------- nav ----------
-  const allNav: { key: string; label: string; privOnly?: boolean; hideFor?: CanaryRole[] }[] = [
+  const allNav: { key: string; label: string; privOnly?: boolean; hideFor?: CanaryRole[]; href?: string }[] = [
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'leases', label: 'Leasing' },
     { key: 'properties', label: 'Properties' },
     { key: 'projects', label: 'Projects' },
+    { key: 'billing', label: 'Billing', privOnly: true, hideFor: ['Vendor', 'Tenant'], href: '/billing' },
   ]
   const navItems = allNav
     .filter((n) => !(n.privOnly && !priv))
     .filter((n) => !(n.hideFor && n.hideFor.includes(role)))
+
+  const goNav = useCallback(
+    (n: (typeof allNav)[number]) => {
+      setDrawer(null)
+      if (n.href) {
+        router.push(n.href)
+        return
+      }
+      setView(n.key)
+    },
+    [router],
+  )
 
   // ---------- search matchers ----------
   // If q contains "garage", require hasGarage; remaining text matches address substring.
@@ -2179,7 +2192,7 @@ export default function CanaryApp({
                 type="button"
                 className={`cy-topnav-item${view === n.key ? ' cy-topnav-item--active' : ''}`}
                 title={n.label}
-                onClick={() => { setView(n.key); setDrawer(null) }}
+                onClick={() => goNav(n)}
               >
                 {n.label}
               </button>
@@ -2199,7 +2212,14 @@ export default function CanaryApp({
               >
                 <DropdownMenuRadioGroup
                   value={view}
-                  onValueChange={(v) => { setView(v); setDrawer(null) }}
+                  onValueChange={(v) => {
+                    const item = navItems.find((n) => n.key === v)
+                    if (item) goNav(item)
+                    else {
+                      setView(v)
+                      setDrawer(null)
+                    }
+                  }}
                 >
                   {navItems.map((n) => (
                     <DropdownMenuRadioItem key={n.key} value={n.key}>

@@ -3,9 +3,11 @@ import {
   hasGarage,
   hasUtilitiesIncluded,
   filterListings,
+  isPetFriendly,
   mapListingRow,
   parseBrowseFilters,
   resolveParkingDisplay,
+  resolvePetLabel,
 } from './browse-utils'
 import type { BrowseListing } from './browse-types'
 
@@ -124,6 +126,45 @@ describe('resolveParkingDisplay', () => {
   })
 })
 
+describe('resolvePetLabel', () => {
+  it('prefers listing_brief.pets By approval', () => {
+    expect(
+      resolvePetLabel({
+        briefPets: 'By approval',
+        description: 'No pets mentioned in copy.',
+        amenities: [],
+      })
+    ).toBe('Pets by approval')
+  })
+
+  it('recognizes synced bare By approval amenity without brief', () => {
+    expect(
+      resolvePetLabel({
+        briefPets: '',
+        amenities: ['By approval'],
+      })
+    ).toBe('Pets by approval')
+  })
+
+  it('treats No pets brief as no chip', () => {
+    expect(resolvePetLabel({ briefPets: 'No pets', amenities: ['Pet friendly'] })).toBe(null)
+  })
+
+  it('keeps Cats OK exact label from brief', () => {
+    expect(resolvePetLabel({ briefPets: 'Cats OK' })).toBe('Cats OK')
+  })
+})
+
+describe('isPetFriendly', () => {
+  it('matches bare By approval amenity', () => {
+    expect(isPetFriendly(['By approval'], null)).toBe(true)
+  })
+
+  it('respects listing_brief No pets', () => {
+    expect(isPetFriendly(['Pet friendly'], null, null, 'No pets')).toBe(false)
+  })
+})
+
 describe('mapListingRow value tags', () => {
   it('prioritizes utilities, garage, and pets on the card tags', () => {
     const mapped = mapListingRow(
@@ -161,7 +202,7 @@ describe('mapListingRow value tags', () => {
     expect(mapped.tags).toEqual(['Utilities included', 'Garage', 'Pets OK'])
   })
 
-  it('reads parking from listing_brief on the property', () => {
+  it('reads parking and pets from listing_brief on the property', () => {
     const mapped = mapListingRow(
       {
         id: 'casey-75',
@@ -192,6 +233,42 @@ describe('mapListingRow value tags', () => {
       ''
     )
     expect(mapped.parking).toBe('2')
+    expect(mapped.petFriendly).toBe(true)
+    expect(mapped.petLabel).toBe('Pets by approval')
+    expect(mapped.tags).toContain('Pets by approval')
+  })
+
+  it('keeps brief pets chip when utilities and garage fill other slots', () => {
+    const mapped = mapListingRow(
+      {
+        id: 'signal-151a',
+        slug: '151-a-signal-hill',
+        listing_title: '151 A Signal Hill',
+        listing_description: 'Utilities included. Private garage. Bright apartment.',
+        display_rent: 2200,
+        highlights: [],
+        available_from: null,
+        created_at: '2026-01-01T00:00:00Z',
+        units: {
+          id: 'u1',
+          bedrooms: 2,
+          bathrooms: 1,
+          asking_rent: 2200,
+          amenities: ['Garage', 'By approval'],
+          properties: {
+            id: 'p1',
+            street_address: "151 A Signal Hill Rd, St. John's",
+            city: "St. John's",
+            province: 'NL',
+            photo_paths: null,
+            listing_brief: { pets: 'By approval', parking: '1 Off-Street' },
+          },
+        },
+      },
+      '',
+      ''
+    )
+    expect(mapped.tags).toEqual(['Utilities included', 'Garage', 'Pets by approval'])
   })
 })
 

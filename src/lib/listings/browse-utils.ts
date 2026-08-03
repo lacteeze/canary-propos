@@ -117,13 +117,25 @@ function rentSuffix(
   return hasUtilitiesIncluded(description, highlights, amenities) ? 'incl' : 'POU'
 }
 
-function isPetFriendly(
+/**
+ * True when listing copy / amenities clearly allow pets (including by approval).
+ * Recognizes synced amenity tags like bare "By approval" from listing_brief.pets.
+ */
+export function isPetFriendly(
   amenities: string[] | null,
   description: string | null,
-  highlights?: string[] | null
+  highlights?: string[] | null,
+  briefPets?: string | null
 ): boolean {
+  const brief = briefPets?.trim()
+  if (brief) return !/^no pets$/i.test(brief)
+
   const text = listingCorpus(description, highlights, amenities)
-  return /pet[\s-]*friendly|pets?\s*(considered|by\s*approval|allowed|welcome|negotiable|ok|okay)|dog[\s-]*friendly|cat[\s-]*friendly/i.test(
+  if (!text) return false
+  if (/\bno pets\b/i.test(text) && !/by\s*approval|considered|negotiable|allowed|welcome|ok\b/i.test(text)) {
+    return false
+  }
+  return /pet[\s-]*friendly|pets?\s*(considered|by\s*approval|allowed|welcome|negotiable|ok|okay)|(?:^|[\s,;|/])by\s*approval\b|welcome(?:\s*\/\s*|\s+)by\s*approval|dog[\s-]*friendly|cat[\s-]*friendly|cats?\s*ok|dogs?\s*ok/i.test(
     text
   )
 }
@@ -138,13 +150,30 @@ export function hasGarage(
   return /\bgarage\b/i.test(text)
 }
 
-function petLabel(
-  amenities: string[] | null,
-  description: string | null,
+/**
+ * Public card pet value chip.
+ * Prefers properties.listing_brief.pets (what staff edit), then
+ * description / highlights / amenities heuristics.
+ */
+export function resolvePetLabel(opts: {
+  briefPets?: string | null
+  description?: string | null
   highlights?: string[] | null
-): string | null {
-  if (!isPetFriendly(amenities, description, highlights)) return null
-  const text = listingCorpus(description, highlights, amenities)
+  amenities?: string[] | null
+}): string | null {
+  const brief = opts.briefPets?.trim()
+  if (brief) {
+    if (/^no pets$/i.test(brief)) return null
+    if (/by\s*approval|considered|negotiable/i.test(brief)) return 'Pets by approval'
+    if (/^pets?\s*ok$/i.test(brief) || /pet[\s-]*friendly/i.test(brief)) return 'Pets OK'
+    // Cats OK / Dogs OK / custom staff text — show as stored
+    return brief
+  }
+
+  if (!isPetFriendly(opts.amenities ?? null, opts.description ?? null, opts.highlights)) {
+    return null
+  }
+  const text = listingCorpus(opts.description, opts.highlights, opts.amenities)
   if (/by\s*approval|considered|negotiable/i.test(text)) {
     return 'Pets by approval'
   }
@@ -196,13 +225,27 @@ export function mapListingRow(
   const termLabel =
     termType === 'mid' ? 'Mid-term' : 'Long-term'
   const amenities = unit?.amenities ?? null
-  const briefParking =
+  const brief =
     property?.listing_brief &&
     typeof property.listing_brief === 'object' &&
     !Array.isArray(property.listing_brief)
-      ? String((property.listing_brief as { parking?: unknown }).parking ?? '')
-      : ''
-  const pet = isPetFriendly(amenities, listing.listing_description, listing.highlights)
+      ? (property.listing_brief as { parking?: unknown; pets?: unknown })
+      : null
+  const briefParking = brief ? String(brief.parking ?? '') : ''
+  const briefPets = brief ? String(brief.pets ?? '').trim() : ''
+  const briefPetsActive = Boolean(briefPets && !/^no pets$/i.test(briefPets))
+  const label = resolvePetLabel({
+    briefPets,
+    description: listing.listing_description,
+    highlights: listing.highlights,
+    amenities,
+  })
+  const pet = isPetFriendly(
+    amenities,
+    listing.listing_description,
+    listing.highlights,
+    briefPets
+  )
   const garage = hasGarage(amenities, listing.listing_description, listing.highlights)
   const parking = resolveParkingDisplay({
     briefParking,
@@ -211,13 +254,17 @@ export function mapListingRow(
     amenities,
   })
   const suffix = rentSuffix(listing.listing_description, listing.highlights, amenities)
-  const label = petLabel(amenities, listing.listing_description, listing.highlights)
 
   // Value-justifying signals for the card — prioritize rent justification.
-  const tags: string[] = []
-  if (suffix === 'incl') tags.push('Utilities included')
-  if (garage) tags.push('Garage')
-  if (label) tags.push(label)
+  // When staff set listing_brief.pets, always reserve a slot for that chip.
+  const optionalTags: string[] = []
+  if (suffix === 'incl') optionalTags.push('Utilities included')
+  if (garage) optionalTags.push('Garage')
+  if (label && !briefPetsActive) optionalTags.push(label)
+  const tags =
+    briefPetsActive && label
+      ? [...optionalTags.slice(0, 2), label]
+      : optionalTags.slice(0, 3)
 
   const rawPaths = (property?.photo_paths ?? []).filter(
     (p): p is string => !!p && !/^https?:\/\//i.test(p)
@@ -245,7 +292,7 @@ export function mapListingRow(
     petFriendly: pet,
     petLabel: label,
     hasGarage: garage,
-    tags: tags.slice(0, 3),
+    tags,
     photo,
     photos,
     photoCount: photos.length,

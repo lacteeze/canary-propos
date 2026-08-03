@@ -1,5 +1,5 @@
 // Manager notification email when a visitor submits an inquiry or application.
-import { Button, Heading, Hr, Text } from '@react-email/components'
+import { Button, Heading, Hr, Link, Text } from '@react-email/components'
 import { shortPropertyAddress } from '@/lib/addresses/short-property-address'
 import { emailStyles } from '@/lib/email/brand'
 import { EmailLayout } from '@/lib/email/templates/EmailLayout'
@@ -64,7 +64,9 @@ export function InquiryNotificationEmail({
               <Text style={compactBodyStyle}>
                 <strong>{visitorName}</strong>
                 <br />
-                {visitorEmail}
+                <Link href={`mailto:${visitorEmail}`} style={mailtoStyle}>
+                  {visitorEmail}
+                </Link>
                 {visitorPhone ? (
                   <>
                     <br />
@@ -146,4 +148,9 @@ const compactBodyStyle = {
   ...emailStyles.bodyText,
   margin: '0',
   lineHeight: '1.45',
+}
+
+const mailtoStyle = {
+  ...emailStyles.link,
+  textDecoration: 'underline' as const,
 }

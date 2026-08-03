@@ -12,6 +12,8 @@ export interface SendEmailOptions {
   subject: string
   template: ReactElement
   from?: string
+  /** Reply-To — bare email or "Name <email>"; forwarded to Pingram. */
+  replyTo?: string | string[]
 }
 
 /**

@@ -9,6 +9,7 @@ import { createClient as createClientJs } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { shortPropertyAddress } from '@/lib/addresses/short-property-address'
 import { sendEmail } from '@/lib/email/send'
+import { formatEmailAddress } from '@/lib/email/pingram'
 import { PINGRAM_EMAIL_TYPES } from '@/lib/email/pingram-types'
 import { InquiryNotificationEmail } from '@/lib/email/templates/InquiryNotificationEmail'
 import React from 'react'
@@ -93,11 +94,13 @@ async function sendManagerNotification(params: {
   const subjectPrefix =
     params.type === 'interest' ? 'Interest' : params.type === 'inquiry' ? 'Viewing' : 'Application'
 
+  // From stays Canary/noreply; Reply-To = visitor so manager "Reply" reaches them.
   const result = await sendEmail({
     type: PINGRAM_EMAIL_TYPES.inquiryNotification,
     to: managerEmail,
     subject: `${subjectPrefix}: ${shortLabel}`,
     from: 'Canary PM <notifications@canarypm.ca>',
+    replyTo: formatEmailAddress(params.visitorEmail, params.visitorName),
     template: React.createElement(InquiryNotificationEmail, {
       visitorName: params.visitorName,
       visitorEmail: params.visitorEmail,

@@ -1,7 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
-import Link from 'next/link'
+import { useCallback, useEffect, useMemo, useState, useTransition, type CSSProperties } from 'react'
 import {
   closePortfolioMonth,
   generateChargesForMonth,
@@ -53,12 +52,71 @@ function splitCsvLine(line: string): string[] {
 
 type Dash = Awaited<ReturnType<typeof getBillingDashboard>>
 
+const labelStyle: CSSProperties = {
+  display: 'block',
+  fontSize: 11,
+  fontWeight: 600,
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase',
+  color: 'var(--dim)',
+  marginBottom: 6,
+}
+
+const fieldStyle: CSSProperties = {
+  width: '100%',
+  background: 'var(--elev)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  padding: '8px 10px',
+  color: 'var(--text)',
+  fontSize: 13,
+  fontFamily: 'inherit',
+}
+
+const panelStyle: CSSProperties = {
+  background: 'var(--panel)',
+  border: '1px solid var(--border)',
+  borderRadius: 14,
+  padding: '16px 18px',
+}
+
+const tableWrapStyle: CSSProperties = {
+  overflow: 'hidden',
+  borderRadius: 14,
+  border: '1px solid var(--border)',
+  background: 'var(--panel)',
+}
+
+const thStyle: CSSProperties = {
+  padding: '10px 14px',
+  textAlign: 'left',
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase',
+  color: 'var(--dim)',
+  background: 'var(--elev)',
+  borderBottom: '1px solid var(--border)',
+}
+
+const tdStyle: CSSProperties = {
+  padding: '12px 14px',
+  fontSize: 13,
+  color: 'var(--text)',
+  borderTop: '1px solid var(--border)',
+}
+
 export function BillingDashboard({
   initialYear,
   initialMonth,
+  onOpenPayments,
+  onImportPayments,
 }: {
   initialYear: number
   initialMonth: number
+  /** Prefer in-app navigation over old /payments manager shell */
+  onOpenPayments?: () => void
+  onImportPayments?: () => void
 }) {
   const [year, setYear] = useState(initialYear)
   const [month, setMonth] = useState(initialMonth)
@@ -97,45 +155,50 @@ export function BillingDashboard({
     return 'Balanced'
   }, [summary])
 
+  const netColor =
+    summary?.direction === 'collect'
+      ? 'var(--red)'
+      : summary?.direction === 'disburse'
+        ? 'var(--green)'
+        : 'var(--text)'
+
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
         <div>
-          <h1 className="text-xl font-semibold text-stone-900">Billing</h1>
-          <p className="mt-1 text-sm text-stone-500">
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>Billing</h2>
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--dim)', lineHeight: 1.45 }}>
             Portfolio balances, lease arrears, STR stays, and month close.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/payments"
-            className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
-          >
-            Payments table
-          </Link>
-          <Link
-            href="/app?import=payments"
-            className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
-          >
-            Import payments CSV
-          </Link>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {onOpenPayments ? (
+            <button type="button" className="cy-btn-ghost" onClick={onOpenPayments}>
+              Payments ledger
+            </button>
+          ) : null}
+          {onImportPayments ? (
+            <button type="button" className="cy-btn-ghost" onClick={onImportPayments}>
+              Import payments CSV
+            </button>
+          ) : null}
         </div>
       </div>
 
-      <div className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-stone-200 bg-white p-4">
-        <label className="text-sm">
-          <span className="mb-1 block text-stone-500">Year</span>
+      <div style={{ ...panelStyle, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 12 }}>
+        <label style={{ fontSize: 13 }}>
+          <span style={labelStyle}>Year</span>
           <input
             type="number"
-            className="w-24 rounded-md border border-stone-200 px-2 py-1.5"
+            style={{ ...fieldStyle, width: 96 }}
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
           />
         </label>
-        <label className="text-sm">
-          <span className="mb-1 block text-stone-500">Month</span>
+        <label style={{ fontSize: 13 }}>
+          <span style={labelStyle}>Month</span>
           <select
-            className="rounded-md border border-stone-200 px-2 py-1.5"
+            style={{ ...fieldStyle, width: 88 }}
             value={month}
             onChange={(e) => setMonth(Number(e.target.value))}
           >
@@ -146,10 +209,10 @@ export function BillingDashboard({
             ))}
           </select>
         </label>
-        <label className="text-sm min-w-[200px]">
-          <span className="mb-1 block text-stone-500">Portfolio</span>
+        <label style={{ fontSize: 13, minWidth: 200, flex: '1 1 200px' }}>
+          <span style={labelStyle}>Portfolio</span>
           <select
-            className="w-full rounded-md border border-stone-200 px-2 py-1.5"
+            style={fieldStyle}
             value={portfolioId}
             onChange={(e) => setPortfolioId(e.target.value)}
           >
@@ -160,16 +223,12 @@ export function BillingDashboard({
             ))}
           </select>
         </label>
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => load()}
-          className="rounded-lg bg-stone-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <button type="button" className="cy-btn-primary cy-accent-btn" disabled={pending} onClick={() => load()}>
           Refresh
         </button>
         <button
           type="button"
+          className="cy-btn-ghost"
           disabled={pending}
           onClick={() => {
             startTransition(async () => {
@@ -181,39 +240,41 @@ export function BillingDashboard({
               load()
             })
           }}
-          className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-stone-700"
         >
           Generate rent charges
         </button>
       </div>
 
-      {msg ? <p className="mb-3 text-sm text-green-700">{msg}</p> : null}
-      {err ? <p className="mb-3 text-sm text-red-700">{err}</p> : null}
+      {msg ? <p style={{ margin: 0, fontSize: 13, color: 'var(--green)' }}>{msg}</p> : null}
+      {err ? <p style={{ margin: 0, fontSize: 13, color: 'var(--red)' }}>{err}</p> : null}
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-stone-200 bg-white p-4">
-          <div className="text-xs font-medium uppercase tracking-wide text-stone-500">Portfolio net</div>
-          <div className="mt-2 text-2xl font-semibold text-stone-900">{netLabel}</div>
-          <div className="mt-1 text-xs text-stone-500">
+      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+        <div style={panelStyle}>
+          <div style={labelStyle}>Portfolio net</div>
+          <div style={{ marginTop: 4, fontSize: 22, fontWeight: 700, color: netColor }}>{netLabel}</div>
+          <div style={{ marginTop: 6, fontSize: 12, color: 'var(--dim)' }}>
             {summary?.alreadyClosed ? 'Month closed' : 'Open period'}
           </div>
         </div>
-        <div className="rounded-xl border border-stone-200 bg-white p-4">
-          <div className="text-xs font-medium uppercase tracking-wide text-stone-500">Rent collected</div>
-          <div className="mt-2 text-2xl font-semibold">{money(summary?.rentCollected ?? 0)}</div>
+        <div style={panelStyle}>
+          <div style={labelStyle}>Rent collected</div>
+          <div style={{ marginTop: 4, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
+            {money(summary?.rentCollected ?? 0)}
+          </div>
         </div>
-        <div className="rounded-xl border border-stone-200 bg-white p-4">
-          <div className="text-xs font-medium uppercase tracking-wide text-stone-500">Expenses + fees</div>
-          <div className="mt-2 text-2xl font-semibold">
+        <div style={panelStyle}>
+          <div style={labelStyle}>Expenses + fees</div>
+          <div style={{ marginTop: 4, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
             {money((summary?.totalExpenses ?? 0) + (summary?.managementFees ?? 0))}
           </div>
         </div>
       </div>
 
       {summary && portfolioId ? (
-        <div className="mb-8 flex flex-wrap gap-2">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <button
             type="button"
+            className="cy-btn-primary cy-accent-btn"
             disabled={pending || summary.alreadyClosed}
             onClick={() => {
               startTransition(async () => {
@@ -223,56 +284,60 @@ export function BillingDashboard({
                 if (!res.success) setErr(res.error)
                 else {
                   setMsg(
-                    `Month closed — ${res.direction === 'collect' ? 'collect' : 'disburse'} ${money(res.net)}.`
+                    `Month closed — ${res.direction === 'collect' ? 'collect' : 'disburse'} ${money(res.net)}.`,
                   )
                 }
                 load()
               })
             }}
-            className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             Close month
           </button>
           <a
             href={`/api/statements/export?scope=portfolio&id=${portfolioId}&year=${year}&month=${month}&format=pdf`}
-            className="rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700"
+            className="cy-btn-ghost"
+            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
           >
             PDF statement
           </a>
           <a
             href={`/api/statements/export?scope=portfolio&id=${portfolioId}&year=${year}&month=${month}&format=csv`}
-            className="rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700"
+            className="cy-btn-ghost"
+            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
           >
             CSV statement
           </a>
         </div>
       ) : null}
 
-      <section className="mb-10">
-        <h2 className="mb-3 text-base font-semibold text-stone-900">Property balances</h2>
-        <div className="overflow-hidden rounded-xl border border-stone-200">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-stone-50 text-xs uppercase text-stone-500">
+      <section>
+        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
+          Property balances
+        </h3>
+        <div style={tableWrapStyle}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead>
               <tr>
-                <th className="px-4 py-2">Property</th>
-                <th className="px-4 py-2">Rent</th>
-                <th className="px-4 py-2">Expenses</th>
-                <th className="px-4 py-2">STR net</th>
-                <th className="px-4 py-2">Net</th>
-                <th className="px-4 py-2" />
+                <th style={thStyle}>Property</th>
+                <th style={thStyle}>Rent</th>
+                <th style={thStyle}>Expenses</th>
+                <th style={thStyle}>STR net</th>
+                <th style={thStyle}>Net</th>
+                <th style={thStyle} />
               </tr>
             </thead>
             <tbody>
               {(summary?.properties ?? []).map((p) => (
-                <tr key={p.propertyId} className="border-t border-stone-100">
-                  <td className="px-4 py-2">{p.propertyAddress}</td>
-                  <td className="px-4 py-2">{money(p.rentCollected)}</td>
-                  <td className="px-4 py-2">{money(p.totalExpenses)}</td>
-                  <td className="px-4 py-2">{money(p.strNetToOwner)}</td>
-                  <td className="px-4 py-2 font-medium">{money(p.net)}</td>
-                  <td className="px-4 py-2 text-right">
+                <tr key={p.propertyId}>
+                  <td style={tdStyle}>{p.propertyAddress}</td>
+                  <td style={tdStyle}>{money(p.rentCollected)}</td>
+                  <td style={tdStyle}>{money(p.totalExpenses)}</td>
+                  <td style={tdStyle}>{money(p.strNetToOwner)}</td>
+                  <td style={{ ...tdStyle, fontWeight: 600 }}>{money(p.net)}</td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>
                     <a
-                      className="text-xs text-stone-600 underline"
+                      className="cy-btn-ghost"
+                      style={{ fontSize: 12, textDecoration: 'none', padding: '4px 8px' }}
                       href={`/api/statements/export?scope=property&id=${p.propertyId}&year=${year}&month=${month}&format=csv`}
                     >
                       CSV
@@ -282,7 +347,7 @@ export function BillingDashboard({
               ))}
               {!summary?.properties?.length ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-stone-500">
+                  <td colSpan={6} style={{ ...tdStyle, textAlign: 'center', color: 'var(--dim)', padding: 28 }}>
                     No properties in this portfolio for the period.
                   </td>
                 </tr>
@@ -292,27 +357,30 @@ export function BillingDashboard({
         </div>
       </section>
 
-      <section className="mb-10">
-        <h2 className="mb-3 text-base font-semibold text-stone-900">Lease balances (outstanding rent)</h2>
-        <div className="overflow-hidden rounded-xl border border-stone-200">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-stone-50 text-xs uppercase text-stone-500">
+      <section>
+        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
+          Lease balances (outstanding rent)
+        </h3>
+        <div style={tableWrapStyle}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead>
               <tr>
-                <th className="px-4 py-2">Property</th>
-                <th className="px-4 py-2">Tenant</th>
-                <th className="px-4 py-2">Balance</th>
-                <th className="px-4 py-2" />
+                <th style={thStyle}>Property</th>
+                <th style={thStyle}>Tenant</th>
+                <th style={thStyle}>Balance</th>
+                <th style={thStyle} />
               </tr>
             </thead>
             <tbody>
               {(dash?.leaseBalances ?? []).map((l) => (
-                <tr key={l.leaseId} className="border-t border-stone-100">
-                  <td className="px-4 py-2">{l.property}</td>
-                  <td className="px-4 py-2">{l.tenant}</td>
-                  <td className="px-4 py-2 font-medium text-amber-800">{money(l.balance)}</td>
-                  <td className="px-4 py-2 text-right">
+                <tr key={l.leaseId}>
+                  <td style={tdStyle}>{l.property}</td>
+                  <td style={tdStyle}>{l.tenant}</td>
+                  <td style={{ ...tdStyle, fontWeight: 600, color: 'var(--amber)' }}>{money(l.balance)}</td>
+                  <td style={{ ...tdStyle, textAlign: 'right' }}>
                     <a
-                      className="text-xs text-stone-600 underline"
+                      className="cy-btn-ghost"
+                      style={{ fontSize: 12, textDecoration: 'none', padding: '4px 8px' }}
                       href={`/api/statements/export?scope=lease&id=${l.leaseId}&year=${year}&month=${month}&format=csv`}
                     >
                       Statement CSV
@@ -322,7 +390,7 @@ export function BillingDashboard({
               ))}
               {!dash?.leaseBalances?.length ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-stone-500">
+                  <td colSpan={4} style={{ ...tdStyle, textAlign: 'center', color: 'var(--dim)', padding: 28 }}>
                     No outstanding lease balances (generate rent charges if needed).
                   </td>
                 </tr>
@@ -332,30 +400,32 @@ export function BillingDashboard({
         </div>
       </section>
 
-      <section className="mb-10">
-        <h2 className="mb-3 text-base font-semibold text-stone-900">Project balances</h2>
-        <div className="overflow-hidden rounded-xl border border-stone-200">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-stone-50 text-xs uppercase text-stone-500">
+      <section>
+        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
+          Project balances
+        </h3>
+        <div style={tableWrapStyle}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead>
               <tr>
-                <th className="px-4 py-2">Project</th>
-                <th className="px-4 py-2">Property</th>
-                <th className="px-4 py-2">Billed</th>
-                <th className="px-4 py-2">Estimate</th>
+                <th style={thStyle}>Project</th>
+                <th style={thStyle}>Property</th>
+                <th style={thStyle}>Billed</th>
+                <th style={thStyle}>Estimate</th>
               </tr>
             </thead>
             <tbody>
               {(dash?.projectBalances ?? []).map((p) => (
-                <tr key={p.projectId} className="border-t border-stone-100">
-                  <td className="px-4 py-2">{p.name}</td>
-                  <td className="px-4 py-2">{p.property}</td>
-                  <td className="px-4 py-2">{money(p.billed)}</td>
-                  <td className="px-4 py-2">{p.estimate != null ? money(p.estimate) : '—'}</td>
+                <tr key={p.projectId}>
+                  <td style={tdStyle}>{p.name}</td>
+                  <td style={tdStyle}>{p.property}</td>
+                  <td style={tdStyle}>{money(p.billed)}</td>
+                  <td style={tdStyle}>{p.estimate != null ? money(p.estimate) : '—'}</td>
                 </tr>
               ))}
               {!dash?.projectBalances?.length ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-stone-500">
+                  <td colSpan={4} style={{ ...tdStyle, textAlign: 'center', color: 'var(--dim)', padding: 28 }}>
                     No open projects.
                   </td>
                 </tr>
@@ -365,25 +435,27 @@ export function BillingDashboard({
         </div>
       </section>
 
-      <section className="rounded-xl border border-stone-200 bg-white p-5">
-        <h2 className="mb-1 text-base font-semibold text-stone-900">Import Hospitable stays CSV</h2>
-        <p className="mb-4 text-sm text-stone-500">
+      <section style={panelStyle}>
+        <h3 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
+          Import Hospitable stays CSV
+        </h3>
+        <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--dim)', lineHeight: 1.45 }}>
           Columns: reservation_code, property / address or hospitable_property_id, check_out, gross_amount.
           Cleaning and management fees use defaults below unless provided per row.
         </p>
-        <div className="mb-3 flex flex-wrap gap-3">
-          <label className="text-sm">
-            <span className="mb-1 block text-stone-500">Default cleaning fee ($)</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
+          <label style={{ fontSize: 13 }}>
+            <span style={labelStyle}>Default cleaning fee ($)</span>
             <input
-              className="w-28 rounded-md border border-stone-200 px-2 py-1.5"
+              style={{ ...fieldStyle, width: 120 }}
               value={cleaningFlat}
               onChange={(e) => setCleaningFlat(e.target.value)}
             />
           </label>
-          <label className="text-sm">
-            <span className="mb-1 block text-stone-500">Default mgmt fee (%)</span>
+          <label style={{ fontSize: 13 }}>
+            <span style={labelStyle}>Default mgmt fee (%)</span>
             <input
-              className="w-28 rounded-md border border-stone-200 px-2 py-1.5"
+              style={{ ...fieldStyle, width: 120 }}
               value={mgmtPct}
               onChange={(e) => setMgmtPct(e.target.value)}
             />
@@ -392,6 +464,7 @@ export function BillingDashboard({
         <input
           type="file"
           accept=".csv,text/csv"
+          style={{ fontSize: 13, color: 'var(--dim)' }}
           onChange={(e) => {
             const file = e.target.files?.[0]
             if (!file) return

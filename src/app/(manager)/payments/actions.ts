@@ -106,6 +106,7 @@ export async function recordPayment(formData: RecordPaymentInput): Promise<Actio
 
   revalidatePath('/payments')
   revalidatePath('/billing')
+  revalidatePath('/app')
   return { success: true }
 }
 

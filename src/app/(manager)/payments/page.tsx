@@ -83,7 +83,7 @@ export default async function PaymentsPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            href="/billing"
+            href="/app?view=billing"
             className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
           >
             Billing dashboard

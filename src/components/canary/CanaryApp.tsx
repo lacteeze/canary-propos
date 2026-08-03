@@ -44,6 +44,7 @@ import { LeasingPipelineView } from './LeasingPipelineView'
 import MessagesView from './MessagesView'
 import PropertyOccupancyCalendar from './PropertyOccupancyCalendar'
 import PropertyPhotosView from './PropertyPhotosView'
+import { BillingDashboard } from '@/components/billing/BillingDashboard'
 import type { CanaryDb, CanaryDraft, CanaryHospitableTask, CanaryInquiry, CanaryLease, CanaryOwnerOccupiedBlock, CanaryPayment, CanaryPerson, CanaryPortfolio, CanaryProject, CanaryProperty, CanaryRole, CanaryStrBooking, DraftListingStatus, HospitableCalendarData, HospitableTasksData } from '@/lib/canary/types'
 import { deleteLocalOwnerOccupiedBlock, loadLocalOwnerOccupiedBlocks } from '@/lib/canary/owner-occupied-storage'
 import { isOpenHospitableTask } from '@/lib/hospitable/map-tasks'
@@ -763,28 +764,16 @@ export default function CanaryApp({
   )
 
   // ---------- nav ----------
-  const allNav: { key: string; label: string; privOnly?: boolean; hideFor?: CanaryRole[]; href?: string }[] = [
+  const allNav: { key: string; label: string; privOnly?: boolean; hideFor?: CanaryRole[] }[] = [
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'leases', label: 'Leasing' },
     { key: 'properties', label: 'Properties' },
     { key: 'projects', label: 'Projects' },
-    { key: 'billing', label: 'Billing', privOnly: true, hideFor: ['Vendor', 'Tenant'], href: '/billing' },
+    { key: 'billing', label: 'Billing', privOnly: true, hideFor: ['Vendor', 'Tenant'] },
   ]
   const navItems = allNav
     .filter((n) => !(n.privOnly && !priv))
     .filter((n) => !(n.hideFor && n.hideFor.includes(role)))
-
-  const goNav = useCallback(
-    (n: (typeof allNav)[number]) => {
-      setDrawer(null)
-      if (n.href) {
-        router.push(n.href)
-        return
-      }
-      setView(n.key)
-    },
-    [router],
-  )
 
   // ---------- search matchers ----------
   // If q contains "garage", require hasGarage; remaining text matches address substring.
@@ -2027,6 +2016,12 @@ export default function CanaryApp({
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
+    if (params.get('view') === 'billing') {
+      setView('billing')
+      params.delete('view')
+      const next = params.toString()
+      window.history.replaceState({}, '', next ? `${window.location.pathname}?${next}` : window.location.pathname)
+    }
     if (params.get('import') === 'payments') {
       setImportModalOpen(true)
       setView('payments')
@@ -2192,7 +2187,7 @@ export default function CanaryApp({
                 type="button"
                 className={`cy-topnav-item${view === n.key ? ' cy-topnav-item--active' : ''}`}
                 title={n.label}
-                onClick={() => goNav(n)}
+                onClick={() => { setView(n.key); setDrawer(null) }}
               >
                 {n.label}
               </button>
@@ -2212,14 +2207,7 @@ export default function CanaryApp({
               >
                 <DropdownMenuRadioGroup
                   value={view}
-                  onValueChange={(v) => {
-                    const item = navItems.find((n) => n.key === v)
-                    if (item) goNav(item)
-                    else {
-                      setView(v)
-                      setDrawer(null)
-                    }
-                  }}
+                  onValueChange={(v) => { setView(v); setDrawer(null) }}
                 >
                   {navItems.map((n) => (
                     <DropdownMenuRadioItem key={n.key} value={n.key}>
@@ -3145,8 +3133,9 @@ export default function CanaryApp({
                 </select>
                 <span style={{ color: 'var(--dim)', fontSize: 13 }}>{filteredPay.length + ' transactions'}</span>
                 <button type="button" className="cy-btn-ghost" onClick={() => setImportModalOpen(true)}>Import CSV</button>
-                <a href="/billing" className="cy-btn-ghost" style={{ textDecoration: 'none' }}>Billing dashboard →</a>
-                <a href="/payments" className="cy-btn-ghost" style={{ textDecoration: 'none' }}>Full table →</a>
+                <button type="button" className="cy-btn-ghost" onClick={() => { setView('billing'); setDrawer(null) }}>
+                  Billing dashboard →
+                </button>
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 16, alignItems: 'center' }}>
                   <span style={{ fontSize: 13, color: 'var(--dim)' }}>Net <b style={{ color: payNetN < 0 ? 'var(--red)' : 'var(--green)', fontSize: 15 }}>{money(Math.abs(payNetN)) || '$0'}</b></span>
                 </div>
@@ -3156,23 +3145,16 @@ export default function CanaryApp({
 
           {view === 'billing' && (
             <section>
-              <div
-                style={{
-                  background: 'var(--panel)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 14,
-                  padding: '28px 24px',
-                  maxWidth: 560,
+              <BillingDashboard
+                initialYear={new Date().getFullYear()}
+                initialMonth={new Date().getMonth() + 1}
+                onOpenPayments={() => { setView('payments'); setDrawer(null) }}
+                onImportPayments={() => {
+                  setView('payments')
+                  setDrawer(null)
+                  setImportModalOpen(true)
                 }}
-              >
-                <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700 }}>Billing dashboard</h2>
-                <p style={{ margin: '0 0 16px', fontSize: 14, color: 'var(--dim)', lineHeight: 1.5 }}>
-                  Portfolio close-month, lease balances, Hospitable stays import, and PDF/CSV statements.
-                </p>
-                <a href="/billing" className="cy-btn-primary cy-accent-btn" style={{ textDecoration: 'none', display: 'inline-block' }}>
-                  Open billing →
-                </a>
-              </div>
+              />
             </section>
           )}
 

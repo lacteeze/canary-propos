@@ -162,6 +162,7 @@ export async function generateChargesForMonth(year: number, month: number): Prom
   )
   revalidatePath('/billing')
   revalidatePath('/app')
+  revalidatePath('/app')
   if (result.errors.length && result.created === 0) {
     return { success: false, error: result.errors.slice(0, 3).join('; ') }
   }
@@ -256,6 +257,7 @@ export async function closePortfolioMonth(input: {
   }
 
   revalidatePath('/billing')
+  revalidatePath('/app')
   return {
     success: true,
     closingId: closing.id,
@@ -428,6 +430,7 @@ export async function importHospitableStaysCsv(
   }
 
   revalidatePath('/billing')
+  revalidatePath('/app')
   return { success: true, imported, skipped, errors: errors.slice(0, 20) }
 }
 

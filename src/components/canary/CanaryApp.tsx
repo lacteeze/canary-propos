@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/client'
 import { activateDraftListing, deleteDraftListing, saveDraftListing, savePaymentEntry } from '@/app/actions/canary'
 import { updateOwnAvatarPath } from '@/app/actions/profile'
 import { archiveProperties, unarchiveProperties, deleteProperties, mergeProperties } from '@/app/actions/entity-updates'
+import { invitePersonToPortal } from '@/app/(manager)/people/actions'
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -223,7 +224,7 @@ export default function CanaryApp({
   const router = useRouter()
   const [, startTransition] = useTransition()
 
-  const [view, setView] = useState('dashboard')
+  const [view, setView] = useState(userRole === 'Vendor' ? 'projects' : 'dashboard')
   const [theme, setTheme] = useState<'dark' | 'light'>('light')
   const [role, setRole] = useState<CanaryRole>(userRole)
   const [personaId, setPersonaId] = useState(canSwitchRoles ? '' : userPersonId)
@@ -374,7 +375,12 @@ export default function CanaryApp({
     } else if (role === 'Vendor' && personaId) {
       const me = db.people.find((x) => x.id === personaId)
       const nm = me ? me.name : '§none§'
-      projects = projects.filter((j) => (j.contractors || '').includes(nm))
+      // Prefer assigned_vendor_id; fall back to contractor name for legacy rows
+      projects = projects.filter(
+        (j) =>
+          j.assignedVendorId === personaId ||
+          (!j.assignedVendorId && nm !== '§none§' && (j.contractors || '').includes(nm)),
+      )
       const addrs = new Set(projects.map((j) => j.property))
       properties = properties.filter((p) => addrs.has(p.address))
       leases = []
@@ -765,9 +771,9 @@ export default function CanaryApp({
 
   // ---------- nav ----------
   const allNav: { key: string; label: string; privOnly?: boolean; hideFor?: CanaryRole[] }[] = [
-    { key: 'dashboard', label: 'Dashboard' },
-    { key: 'leases', label: 'Leasing' },
-    { key: 'properties', label: 'Properties' },
+    { key: 'dashboard', label: 'Dashboard', hideFor: ['Vendor'] },
+    { key: 'leases', label: 'Leasing', hideFor: ['Vendor'] },
+    { key: 'properties', label: 'Properties', hideFor: ['Vendor'] },
     { key: 'projects', label: 'Projects' },
     { key: 'billing', label: 'Billing', privOnly: true, hideFor: ['Vendor', 'Tenant'] },
   ]
@@ -1469,7 +1475,12 @@ export default function CanaryApp({
       open: (j: CanaryProject) => () => setDrawer({ kind: 'project', id: j.id }),
       group: (j: CanaryProject) => j.status || '—',
       groupOrder: ['In Progress', 'Approved to Schedule', 'Reviewing Estimates', 'Requires Estimate', 'Estimate', 'Postponed', 'Cancelled'],
-      card: (j: CanaryProject) => ({ title: j.name || 'Untitled', sub: short(j.property) + ' · ' + (j.priority || 'No priority'), right: j.estimate || '', rightColor: 'var(--dim)' }),
+      card: (j: CanaryProject) => ({
+        title: j.name || 'Untitled',
+        sub: short(j.property) + ' · ' + (j.priority || 'No priority'),
+        right: role === 'Vendor' ? (j.status || '') : (j.estimate || ''),
+        rightColor: 'var(--dim)',
+      }),
       cols: [
         { key: 'name', label: 'Project', flex: '2', bold: true, get: (j: CanaryProject) => j.name || 'Untitled' },
         { key: 'property', label: 'Property', flex: '1.4', dim: true, get: (j: CanaryProject) => short(j.property) },
@@ -1477,9 +1488,13 @@ export default function CanaryApp({
         { key: 'priority', label: 'Priority', flex: '0 0 96px', get: (j: CanaryProject) => j.priority || '—' },
         { key: 'startDate', label: 'Start', flex: '0 0 84px', dim: true, get: (j: CanaryProject) => j.startDate || '—' },
         { key: 'endDate', label: 'End', flex: '0 0 84px', dim: true, get: (j: CanaryProject) => j.endDate || '—' },
-        { key: 'contractors', label: 'Contractor', flex: '1', dim: true, get: (j: CanaryProject) => j.contractors || '—' },
-        { key: 'estimate', label: 'Estimate', flex: '0 0 84px', align: 'right', dim: true, get: (j: CanaryProject) => j.estimate || '—' },
-        { key: 'budget', label: 'Budget', flex: '0 0 84px', align: 'right', dim: true, get: (j: CanaryProject) => j.budget || '—' },
+        ...(role === 'Vendor'
+          ? []
+          : [
+              { key: 'contractors', label: 'Contractor', flex: '1', dim: true, get: (j: CanaryProject) => j.contractors || '—' },
+              { key: 'estimate', label: 'Estimate', flex: '0 0 84px', align: 'right' as const, dim: true, get: (j: CanaryProject) => j.estimate || '—' },
+              { key: 'budget', label: 'Budget', flex: '0 0 84px', align: 'right' as const, dim: true, get: (j: CanaryProject) => j.budget || '—' },
+            ]),
       ],
       getters: {},
     },
@@ -1746,8 +1761,28 @@ export default function CanaryApp({
         actions.push({ label: '+ Draft lease', onClick: () => startDraftFor(p) })
       }
     }
+    if (drawer.kind === 'person') {
+      const pe = db.people.find((x) => x.id === drawer.id)
+      const portalRoles = ['Vendor', 'Tenant', 'Client', 'Admin']
+      if (pe?.email && portalRoles.includes(pe.role)) {
+        actions.push({
+          label: 'Invite to portal',
+          onClick: () => {
+            if (!window.confirm(`Send a portal invite to ${pe.email}?`)) return
+            startTransition(async () => {
+              const res = await invitePersonToPortal(pe.id)
+              if (!res.success) {
+                toast.error(res.error)
+                return
+              }
+              toast.success(`Invite sent to ${pe.email}`)
+            })
+          },
+        })
+      }
+    }
     return actions
-  }, [drawer, priv, db.leases, db.properties, startDraftFor, openPropertyCalendar, router, startTransition])
+  }, [drawer, priv, db.leases, db.properties, db.people, startDraftFor, openPropertyCalendar, router, startTransition])
 
   const calViewData = useMemo(() => {
     if (!calView) return null

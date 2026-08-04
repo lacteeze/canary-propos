@@ -156,9 +156,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // /jobs — vendor only
-  if (pathname.startsWith('/jobs') && role !== 'vendor') {
-    return NextResponse.redirect(new URL('/login', request.url))
+  // /jobs — legacy vendor shell; send vendors into CanaryApp Projects
+  if (pathname.startsWith('/jobs')) {
+    if (role !== 'vendor') {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+    return NextResponse.redirect(new URL('/app?view=projects', request.url))
   }
 
   // /admin — admin only (first layer; (admin)/layout.tsx adds independent server-side check per Pitfall 6)

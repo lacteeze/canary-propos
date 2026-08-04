@@ -27,7 +27,10 @@ export default async function CanaryAppPage() {
   // Signed in but no people row yet — finish workspace setup first
   if (caller === 'no-person') redirect('/onboarding')
 
-  const db = await loadCanaryDb(caller.orgId)
+  const isVendorOnly =
+    caller.roles.includes('vendor') &&
+    !caller.roles.some((r) => ['admin', 'manager', 'employee'].includes(r))
+  const db = await loadCanaryDb(caller.orgId, { redactForVendor: isVendorOnly })
   // STR/task matching should not bind to archived units (keeps them off the leasing timeline).
   const activeProperties = db.properties.filter((p) => !p.archivedAt)
 

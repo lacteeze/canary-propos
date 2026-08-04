@@ -15,7 +15,7 @@ const ROLE_REDIRECT_MAP: Record<string, string> = {
   admin: '/app',
   tenant: '/app',
   owner: '/app',
-  vendor: '/app',
+  vendor: '/app?view=projects',
 }
 
 export async function GET(request: NextRequest) {

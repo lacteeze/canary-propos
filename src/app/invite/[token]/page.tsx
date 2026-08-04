@@ -21,7 +21,7 @@ const ROLE_REDIRECT: Record<string, string> = {
   employee: '/app',
   tenant: '/app',
   owner: '/app',
-  vendor: '/app',
+  vendor: '/app?view=projects',
   admin: '/app',
 }
 

@@ -152,8 +152,12 @@ export async function getCaller(): Promise<Caller | 'no-user' | 'no-person'> {
   }
 }
 
-export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
+export async function loadCanaryDb(
+  orgId: string,
+  options?: { redactForVendor?: boolean }
+): Promise<CanaryDb> {
   const supabase = await createClient()
+  const redactForVendor = options?.redactForVendor === true
 
   const [orgRes, unitsRes, leasesRes, portfoliosRes, workOrdersRes, peopleRes, listingsRes, inquiriesRes, inquiryNotesRes, paymentsRes, expensesRes, mediaRes] =
     await Promise.all([
@@ -473,9 +477,14 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
       const contractor = vendorName
       const fmtMoney = (n: number | null | undefined) =>
         n != null ? `$${Number(n).toLocaleString('en-CA', { maximumFractionDigits: 0 })}` : ''
+      // Vendor portal: keep operational fields; hide owner/internal financials & risk scores
+      const estimate = redactForVendor ? '' : fmtMoney(j.estimated_cost)
+      const budget = redactForVendor ? '' : fmtMoney(j.budget)
+      const deposit = redactForVendor ? '' : fmtMoney(j.deposit)
       return {
         id: j.id,
         propertyDbId: j.property_id ?? '',
+        assignedVendorId: j.assigned_vendor_id ?? '',
         name: j.title,
         property: fullAddress(j.properties.street_address, j.properties.city),
         status: WORK_ORDER_STATUS_LABEL[j.status] ?? j.status,
@@ -483,18 +492,18 @@ export async function loadCanaryDb(orgId: string): Promise<CanaryDb> {
         priorityNumber: j.priority_number != null ? String(j.priority_number) : '',
         description: j.description ?? '',
         contractors: contractor,
-        estimate: fmtMoney(j.estimated_cost),
+        estimate,
         startDate: j.start_date ?? '',
         endDate: j.end_date ?? '',
         completedDate: j.completed_date ? String(j.completed_date).slice(0, 10) : '',
         notes: j.notes?.trim() || '',
-        budget: fmtMoney(j.budget),
-        deposit: fmtMoney(j.deposit),
+        budget,
+        deposit,
         services: j.services?.trim() || '',
-        fireRisk: j.fire_risk != null ? String(j.fire_risk) : '',
-        waterDamageRisk: j.water_damage_risk != null ? String(j.water_damage_risk) : '',
-        lossOfRentRisk: j.loss_of_rent_risk != null ? String(j.loss_of_rent_risk) : '',
-        liabilityRisk: j.liability_risk != null ? String(j.liability_risk) : '',
+        fireRisk: redactForVendor ? '' : j.fire_risk != null ? String(j.fire_risk) : '',
+        waterDamageRisk: redactForVendor ? '' : j.water_damage_risk != null ? String(j.water_damage_risk) : '',
+        lossOfRentRisk: redactForVendor ? '' : j.loss_of_rent_risk != null ? String(j.loss_of_rent_risk) : '',
+        liabilityRisk: redactForVendor ? '' : j.liability_risk != null ? String(j.liability_risk) : '',
       }
     })
 

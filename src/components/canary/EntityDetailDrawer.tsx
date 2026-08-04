@@ -1283,38 +1283,66 @@ export default function EntityDetailDrawer({
       title = j.name || 'Untitled'
       sub = short(j.property)
       kindLabel = 'Project · ' + (j.status || '')
-      sections = [
-        <Section
-          key="main"
-          title="Project details"
-          rows={[
-            {
-              label: 'Status',
-              value: canEdit ? (
-                <StatusSelect value={j.status || PROJECT_STATUSES[0]} options={PROJECT_STATUSES} onSave={wrapSave((v) => updateProjectField(j.id, 'status', v))} />
-              ) : (j.status || '—'),
-            },
-            {
-              label: 'Priority',
-              value: canEdit ? (
-                <StatusSelect value={j.priority || PROJECT_PRIORITIES[2]} options={PROJECT_PRIORITIES} onSave={wrapSave((v) => updateProjectField(j.id, 'priority', v))} />
-              ) : (j.priority || '—'),
-            },
-            { label: 'Property', value: j.property || '—' },
-            { label: 'Title', value: <InlineField value={j.name} label="title" confirm onSave={wrapSave((v) => updateProjectField(j.id, 'title', v))} disabled={!canEdit} /> },
-            { label: 'Start', value: j.startDate || '—' },
-            { label: 'End', value: j.endDate || '—' },
-            { label: 'Completed', value: j.completedDate || '—' },
-            { label: 'Estimate', value: <InlineField value={(j.estimate || '').replace(/[$,]/g, '')} label="estimate" type="number" confirm onSave={wrapSave((v) => updateProjectField(j.id, 'estimated_cost', v))} disabled={!canEdit} /> },
-            { label: 'Budget', value: j.budget || '—' },
-            { label: 'Contractor', value: j.contractors || '—' },
-            { label: 'Risk (fire / water / rent / liability)', value: [j.fireRisk, j.waterDamageRisk, j.lossOfRentRisk, j.liabilityRisk].filter(Boolean).join(' / ') || '—' },
-            { label: 'Description', value: <InlineField value={j.description} label="description" type="textarea" onSave={wrapSave((v) => updateProjectField(j.id, 'description', v))} disabled={!canEdit} /> },
-            { label: 'Notes', value: j.notes || '—' },
-          ]}
-        />,
+      const projectRows = [
+        {
+          label: 'Status',
+          value: canEdit ? (
+            <StatusSelect value={j.status || PROJECT_STATUSES[0]} options={PROJECT_STATUSES} onSave={wrapSave((v) => updateProjectField(j.id, 'status', v))} />
+          ) : (j.status || '—'),
+        },
+        {
+          label: 'Priority',
+          value: canEdit ? (
+            <StatusSelect value={j.priority || PROJECT_PRIORITIES[2]} options={PROJECT_PRIORITIES} onSave={wrapSave((v) => updateProjectField(j.id, 'priority', v))} />
+          ) : (j.priority || '—'),
+        },
+        { label: 'Property', value: short(j.property) || '—' },
+        {
+          label: 'Title',
+          value: canEdit ? (
+            <InlineField value={j.name} label="title" confirm onSave={wrapSave((v) => updateProjectField(j.id, 'title', v))} disabled={!canEdit} />
+          ) : (j.name || '—'),
+        },
+        { label: 'Start', value: j.startDate || '—' },
+        { label: 'End', value: j.endDate || '—' },
+        { label: 'Completed', value: j.completedDate || '—' },
+        ...(priv
+          ? [
+              { label: 'Estimate', value: <InlineField value={(j.estimate || '').replace(/[$,]/g, '')} label="estimate" type="number" confirm onSave={wrapSave((v) => updateProjectField(j.id, 'estimated_cost', v))} disabled={!canEdit} /> },
+              { label: 'Budget', value: j.budget || '—' },
+              {
+                label: 'Contractor',
+                value: canEdit ? (
+                  <StatusSelect
+                    value={j.assignedVendorId || '__none__'}
+                    options={[
+                      '__none__',
+                      ...db.people.filter((pe) => pe.role === 'Vendor' || pe.roles?.includes('vendor')).map((pe) => pe.id),
+                    ]}
+                    formatOption={(id) => {
+                      if (id === '__none__') return '— Unassigned —'
+                      return db.people.find((pe) => pe.id === id)?.name || j.contractors || id
+                    }}
+                    onSave={wrapSave((v) => updateProjectField(j.id, 'assigned_vendor_id', v === '__none__' ? '' : v))}
+                  />
+                ) : (j.contractors || '—'),
+              },
+              { label: 'Risk (fire / water / rent / liability)', value: [j.fireRisk, j.waterDamageRisk, j.lossOfRentRisk, j.liabilityRisk].filter(Boolean).join(' / ') || '—' },
+            ]
+          : []),
+        {
+          label: 'Description',
+          value: canEdit ? (
+            <InlineField value={j.description} label="description" type="textarea" onSave={wrapSave((v) => updateProjectField(j.id, 'description', v))} disabled={!canEdit} />
+          ) : (j.description || '—'),
+        },
+        { label: 'Notes', value: j.notes || '—' },
       ]
-      if (j.propertyDbId) {
+      sections = [
+        <Section key="main" title="Project details" rows={projectRows} />,
+      ]
+      // Property chat can contain internal staff notes — staff only
+      if (j.propertyDbId && priv) {
         sections.push(
           <PropertyChatSection key="chat" propertyDbId={j.propertyDbId} canEdit={canEdit} onOpenMessages={onOpenMessages} />
         )

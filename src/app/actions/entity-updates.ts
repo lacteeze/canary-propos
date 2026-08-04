@@ -951,7 +951,7 @@ export async function updatePortfolioField(
 
 export async function updateProjectField(
   projectId: string,
-  field: 'status' | 'priority' | 'title' | 'description' | 'estimated_cost',
+  field: 'status' | 'priority' | 'title' | 'description' | 'estimated_cost' | 'assigned_vendor_id',
   value: string
 ): Promise<ActionResult> {
   const ctx = await getStaffContext()
@@ -959,7 +959,7 @@ export async function updateProjectField(
 
   const { data: wo } = await ctx.supabase
     .from('work_orders')
-    .select('id, status, priority, title, description, estimated_cost')
+    .select('id, status, priority, title, description, estimated_cost, assigned_vendor_id')
     .eq('id', projectId)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -988,6 +988,25 @@ export async function updateProjectField(
     if (Number.isNaN(n) || n < 0) return { success: false, error: 'Invalid estimate.' }
     changes.push({ field: 'estimated_cost', oldValue: str(wo.estimated_cost), newValue: String(n) })
     patch.estimated_cost = n
+  } else if (field === 'assigned_vendor_id') {
+    const vendorId = value.trim() || null
+    if (vendorId) {
+      const { data: vendor } = await ctx.supabase
+        .from('people')
+        .select('id, role')
+        .eq('id', vendorId)
+        .eq('org_id', ctx.person.org_id)
+        .maybeSingle()
+      if (!vendor || !(vendor.role as string[] | null)?.includes('vendor')) {
+        return { success: false, error: 'Select a vendor contact.' }
+      }
+    }
+    changes.push({
+      field: 'assigned_vendor_id',
+      oldValue: wo.assigned_vendor_id,
+      newValue: vendorId,
+    })
+    patch.assigned_vendor_id = vendorId
   }
 
   const { error } = await ctx.supabase.from('work_orders').update(patch).eq('id', projectId).eq('org_id', ctx.person.org_id)

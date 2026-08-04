@@ -22,6 +22,8 @@ const ROLES = [
   { value: 'manager', label: 'Manager' },
   { value: 'employee', label: 'Employee' },
   { value: 'tenant', label: 'Tenant' },
+  { value: 'vendor', label: 'Vendor' },
+  { value: 'owner', label: 'Owner' },
 ]
 
 export function InviteUserForm({ orgName, buttonLabel = 'Invite someone' }: InviteUserFormProps) {

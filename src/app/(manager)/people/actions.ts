@@ -14,7 +14,7 @@ import { TeamInviteEmail } from '@/lib/email/templates/TeamInviteEmail'
 
 const inviteSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
-  role: z.enum(['manager', 'employee', 'tenant']),
+  role: z.enum(['manager', 'employee', 'tenant', 'vendor', 'owner']),
   // Tenant-only fields (D-07)
   propertyAddress: z.string().optional(),
   unitNumber: z.string().optional(),
@@ -150,6 +150,103 @@ export async function inviteUser(formData: {
       }),
     })
   }
+
+  if (!emailResult.success) {
+    return { success: false, error: 'Invite created but email failed to send. Please try again.' }
+  }
+
+  return { success: true }
+}
+
+/** Invite an existing people row (e.g. vendor contact) to create a portal login. */
+export async function invitePersonToPortal(personId: string): Promise<ActionResult> {
+  const ctx = await getCallerContext()
+  if (!ctx) {
+    return { success: false, error: 'You must be signed in.' }
+  }
+  if (!ctx.person.role?.includes('manager') && !ctx.person.role?.includes('admin')) {
+    return { success: false, error: 'Only managers can invite people.' }
+  }
+
+  const orgId = ctx.person.org_id
+  const { data: target, error: fetchError } = await ctx.supabase
+    .from('people')
+    .select('id, email, role, first_name, user_id, invite_accepted_at')
+    .eq('id', personId)
+    .eq('org_id', orgId)
+    .single()
+
+  if (fetchError || !target) {
+    return { success: false, error: 'Person not found in your organization.' }
+  }
+  if (!target.email) {
+    return { success: false, error: 'Add an email address before sending an invite.' }
+  }
+  if (target.user_id && target.invite_accepted_at) {
+    return { success: false, error: 'This person already has a portal login.' }
+  }
+
+  const roles = (target.role as string[] | null) ?? []
+  const primary =
+    roles.find((r) => ['vendor', 'tenant', 'owner', 'manager', 'employee', 'admin'].includes(r)) ??
+    roles[0]
+  if (!primary || !['manager', 'employee', 'tenant', 'vendor', 'owner'].includes(primary)) {
+    return { success: false, error: 'This contact role cannot be invited to the portal.' }
+  }
+
+  const inviteToken = randomUUID()
+  const { error: updateError } = await ctx.supabase
+    .from('people')
+    .update({
+      invite_token: inviteToken,
+      invite_sent_at: new Date().toISOString(),
+      invite_accepted_at: null,
+    })
+    .eq('id', personId)
+    .eq('org_id', orgId)
+
+  if (updateError) {
+    console.error('[invitePersonToPortal] update error:', updateError)
+    return { success: false, error: 'Failed to create invite. Please try again.' }
+  }
+
+  const { data: org } = await ctx.supabase
+    .from('organizations')
+    .select('name')
+    .eq('id', orgId)
+    .single()
+  const orgName = org?.name ?? 'Your property manager'
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  const signUpUrl = `${baseUrl}/invite/${inviteToken}`
+
+  const emailResult =
+    primary === 'tenant'
+      ? await sendEmail({
+          type: PINGRAM_EMAIL_TYPES.tenantInvite,
+          to: target.email,
+          subject: `Your tenancy invite from ${orgName}`,
+          from: 'Canary PM <notifications@canarypm.ca>',
+          template: createElement(TenantInviteEmail, {
+            tenantFirstName: target.first_name ?? 'there',
+            orgName,
+            propertyAddress: '',
+            unitNumber: '',
+            moveInDate: 'To be confirmed',
+            signUpUrl,
+          }),
+        })
+      : await sendEmail({
+          type: PINGRAM_EMAIL_TYPES.teamInvite,
+          to: target.email,
+          subject: `You've been invited to join ${orgName}`,
+          from: 'Canary PM <notifications@canarypm.ca>',
+          template: createElement(TeamInviteEmail, {
+            inviteeEmail: target.email,
+            orgName,
+            role: primary,
+            signUpUrl,
+          }),
+        })
 
   if (!emailResult.success) {
     return { success: false, error: 'Invite created but email failed to send. Please try again.' }

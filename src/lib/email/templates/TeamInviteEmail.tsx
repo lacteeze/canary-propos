@@ -6,7 +6,7 @@ import { EmailLayout } from '@/lib/email/templates/EmailLayout'
 export interface TeamInviteEmailProps {
   inviteeEmail: string
   orgName: string
-  role: string // "manager" | "employee"
+  role: string // "manager" | "employee" | "vendor" | "owner"
   signUpUrl: string
 }
 
@@ -16,7 +16,16 @@ export function TeamInviteEmail({
   role,
   signUpUrl,
 }: TeamInviteEmailProps) {
-  const roleLabel = role === 'manager' ? 'a manager' : 'an employee'
+  const roleLabel =
+    role === 'manager'
+      ? 'a manager'
+      : role === 'employee'
+        ? 'an employee'
+        : role === 'vendor'
+          ? 'a vendor'
+          : role === 'owner'
+            ? 'an owner'
+            : `a ${role}`
 
   return (
     <EmailLayout

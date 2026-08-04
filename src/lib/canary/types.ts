@@ -122,6 +122,8 @@ export interface CanaryProject {
   id: string
   /** properties.id for the linked property */
   propertyDbId: string
+  /** people.id of assigned vendor (work_orders.assigned_vendor_id) */
+  assignedVendorId: string
   name: string
   property: string
   status: string

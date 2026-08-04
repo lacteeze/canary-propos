@@ -2,6 +2,7 @@
 // Loads live Supabase data (scoped by RLS for the signed-in user) and maps it
 // into the CanaryDb shape consumed by the CanaryApp client.
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { hasGarage } from '@/lib/listings/browse-utils'
 import { normalizeLeaseTermType } from './lease-term'
 import type {
@@ -133,22 +134,36 @@ export async function getCaller(): Promise<Caller | 'no-user' | 'no-person'> {
   } = await supabase.auth.getUser()
   if (!user) return 'no-user'
 
+  // Prefer RLS path (session JWT has org/role claims).
   const { data: person } = await supabase
     .from('people')
     .select('id, org_id, role, first_name, last_name, email, avatar_path')
     .eq('user_id', user.id)
     .eq('active', true)
-    .single()
+    .maybeSingle()
 
-  if (!person) return 'no-person'
+  // Fallback: after onboarding the JWT may still lack claims, so RLS hides the
+  // row. Look up by user_id with the service role (still scoped to this user).
+  const resolved =
+    person ??
+    (
+      await createAdminClient()
+        .from('people')
+        .select('id, org_id, role, first_name, last_name, email, avatar_path')
+        .eq('user_id', user.id)
+        .eq('active', true)
+        .maybeSingle()
+    ).data
+
+  if (!resolved) return 'no-person'
   return {
-    personId: person.id,
-    orgId: person.org_id,
-    roles: (person.role as unknown as string[]) ?? [],
+    personId: resolved.id,
+    orgId: resolved.org_id,
+    roles: (resolved.role as unknown as string[]) ?? [],
     name:
-      [person.first_name, person.last_name].filter(Boolean).join(' ') ||
-      person.email,
-    avatarPath: person.avatar_path ?? null,
+      [resolved.first_name, resolved.last_name].filter(Boolean).join(' ') ||
+      resolved.email,
+    avatarPath: resolved.avatar_path ?? null,
   }
 }
 

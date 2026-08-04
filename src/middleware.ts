@@ -8,6 +8,7 @@ import {
   applyAuthCookieMaxAge,
   isAuthPersistEnabled,
 } from '@/lib/supabase/auth-persist'
+import { ensureJwtClaimsFromPeople } from '@/lib/auth/sync-jwt-claims'
 
 function isPublicListingsPath(pathname: string): boolean {
   return pathname.startsWith('/listings')
@@ -51,6 +52,18 @@ function isProtectedPath(pathname: string): boolean {
     pathname.startsWith('/settings') ||
     pathname.startsWith('/inquiries')
   )
+}
+
+/** Preserve session cookies set during refreshSession onto redirect responses. */
+function redirectWithSession(
+  url: URL,
+  sessionResponse: NextResponse,
+): NextResponse {
+  const redirect = NextResponse.redirect(url)
+  sessionResponse.cookies.getAll().forEach((cookie) => {
+    redirect.cookies.set(cookie.name, cookie.value)
+  })
+  return redirect
 }
 
 export async function middleware(request: NextRequest) {
@@ -112,11 +125,40 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
-  const role = user?.app_metadata?.role as string | undefined
+  // After onboarding (or for stuck sessions), JWT may lack org_id/role even though
+  // a people row exists. Sync claims + refresh so /app RLS can see the membership.
+  if (
+    user &&
+    (pathname.startsWith('/app') ||
+      pathname.startsWith('/onboarding') ||
+      pathname.startsWith('/dashboard'))
+  ) {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      await ensureJwtClaimsFromPeople(supabase, user, session?.access_token)
+    } catch (err) {
+      console.error('[middleware] JWT claim sync failed', err)
+    }
+  }
+
+  const {
+    data: { user: freshUser },
+  } = user
+    ? await supabase.auth.getUser()
+    : { data: { user: null } }
+  const activeUser = freshUser ?? user
+  const role = activeUser?.app_metadata?.role as string | undefined
 
   // Unauthenticated user accessing a protected path → redirect to /login
-  if (!user && isProtectedPath(pathname)) {
-    return NextResponse.redirect(new URL('/login', request.url))
+  if (!activeUser && isProtectedPath(pathname)) {
+    return redirectWithSession(new URL('/login', request.url), supabaseResponse)
+  }
+
+  // Completed onboarding but still on /onboarding → send to app
+  if (activeUser && pathname.startsWith('/onboarding') && role && activeUser.app_metadata?.org_id) {
+    return redirectWithSession(new URL('/app', request.url), supabaseResponse)
   }
 
   // /app — the CanaryApp portal. Any authenticated user may enter; the page
@@ -133,8 +175,11 @@ export async function middleware(request: NextRequest) {
     '/maintenance': '/app?view=projects',
     '/billing': '/app?view=billing',
   }
-  if (user && legacyListRedirects[pathname]) {
-    return NextResponse.redirect(new URL(legacyListRedirects[pathname], request.url))
+  if (activeUser && legacyListRedirects[pathname]) {
+    return redirectWithSession(
+      new URL(legacyListRedirects[pathname], request.url),
+      supabaseResponse,
+    )
   }
 
   // Role guards per portal (D-04)
@@ -143,30 +188,33 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/dashboard') &&
     !['manager', 'employee', 'admin'].includes(role ?? '')
   ) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return redirectWithSession(new URL('/login', request.url), supabaseResponse)
   }
 
   // /my-home — tenant only
   if (pathname.startsWith('/my-home') && role !== 'tenant') {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return redirectWithSession(new URL('/login', request.url), supabaseResponse)
   }
 
   // /portfolio — owner only
   if (pathname.startsWith('/portfolio') && role !== 'owner') {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return redirectWithSession(new URL('/login', request.url), supabaseResponse)
   }
 
   // /jobs — legacy vendor shell; send vendors into CanaryApp Projects
   if (pathname.startsWith('/jobs')) {
     if (role !== 'vendor') {
-      return NextResponse.redirect(new URL('/login', request.url))
+      return redirectWithSession(new URL('/login', request.url), supabaseResponse)
     }
-    return NextResponse.redirect(new URL('/app?view=projects', request.url))
+    return redirectWithSession(
+      new URL('/app?view=projects', request.url),
+      supabaseResponse,
+    )
   }
 
   // /admin — admin only (first layer; (admin)/layout.tsx adds independent server-side check per Pitfall 6)
   if (pathname.startsWith('/admin') && role !== 'admin') {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return redirectWithSession(new URL('/login', request.url), supabaseResponse)
   }
 
   return supabaseResponse

@@ -2,7 +2,6 @@
 
 import { useState, useRef } from 'react'
 import { Upload, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024 // 2MB
@@ -36,8 +35,7 @@ export function LogoStep({ onNext, onSkip, isLoading }: LogoStepProps) {
 
     setError(null)
     setFile(selected)
-    const url = URL.createObjectURL(selected)
-    setPreview(url)
+    setPreview(URL.createObjectURL(selected))
   }
 
   function handleRemove() {
@@ -47,44 +45,36 @@ export function LogoStep({ onNext, onSkip, isLoading }: LogoStepProps) {
   }
 
   async function handleContinue() {
-    // If no file selected, continue without logo (treated same as skip)
     if (!file) {
       onNext(null)
       return
     }
-    // Pass the file name as placeholder — actual upload happens client-side
-    // The onNext callback receives null here; real upload is handled in page.tsx
     onNext(file.name)
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <h2 className="text-[1.25rem] font-semibold leading-tight text-stone-900">
-          Add your logo
-        </h2>
-        <p className="text-stone-500">
-          Your logo appears on tenant portals and email communications.
-        </p>
-      </div>
+    <div>
+      <h2 className="onboard-title">Add your logo</h2>
+      <p className="onboard-sub">
+        Your logo appears on tenant portals and email communications.
+      </p>
 
-      {/* Upload area */}
-      <div className="flex flex-col items-center gap-3">
+      <div className="flex flex-col items-center gap-3" style={{ marginBottom: 22 }}>
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
           aria-label="Upload organization logo"
-          className="flex h-20 w-20 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-stone-300 bg-stone-50 transition-colors hover:border-stone-400 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2"
+          className="onboard-logo-btn"
         >
           {preview ? (
             <Avatar className="h-20 w-20">
               <AvatarImage src={preview} alt="Organization logo preview" />
               <AvatarFallback>
-                <Upload className="h-6 w-6 text-stone-400" aria-hidden="true" />
+                <Upload className="h-6 w-6" style={{ color: 'var(--faint)' }} aria-hidden="true" />
               </AvatarFallback>
             </Avatar>
           ) : (
-            <Upload className="h-6 w-6 text-stone-400" aria-hidden="true" />
+            <Upload className="h-6 w-6" style={{ color: 'var(--faint)' }} aria-hidden="true" />
           )}
         </button>
 
@@ -92,7 +82,8 @@ export function LogoStep({ onNext, onSkip, isLoading }: LogoStepProps) {
           <button
             type="button"
             onClick={handleRemove}
-            className="text-sm text-red-600 underline-offset-4 hover:underline"
+            className="onboard-skip"
+            style={{ color: 'var(--red)', textDecoration: 'underline' }}
           >
             Remove
           </button>
@@ -108,38 +99,34 @@ export function LogoStep({ onNext, onSkip, isLoading }: LogoStepProps) {
         />
 
         {error && (
-          <p role="alert" className="text-sm text-red-600">
+          <p role="alert" className="text-sm" style={{ color: 'var(--red)' }}>
             {error}
           </p>
         )}
 
-        <p className="text-xs text-stone-400">PNG, JPEG, or WebP — max 2MB</p>
+        <p style={{ fontSize: 12, color: 'var(--faint)', margin: 0 }}>
+          PNG, JPEG, or WebP — max 2MB
+        </p>
       </div>
 
-      <div className="space-y-2">
-        <Button
+      <div className="onboard-actions">
+        <button
           type="button"
-          onClick={handleContinue}
+          onClick={() => void handleContinue()}
           disabled={isLoading}
-          className="min-h-11 w-full font-semibold"
-          style={{ backgroundColor: '#D97706', color: '#ffffff' }}
+          className="auth-btn"
         >
           {isLoading ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               Saving...
             </>
           ) : (
             'Continue'
           )}
-        </Button>
+        </button>
 
-        <button
-          type="button"
-          onClick={onSkip}
-          disabled={isLoading}
-          className="block w-full text-center text-sm text-stone-500 underline-offset-4 hover:underline"
-        >
+        <button type="button" onClick={onSkip} disabled={isLoading} className="onboard-skip">
           Skip for now
         </button>
       </div>

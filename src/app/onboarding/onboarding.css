@@ -1,0 +1,156 @@
+/* Onboarding wizard — Canary / macos27 tokens (extends auth.css) */
+
+.onboard-wrap {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.onboard-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px;
+}
+
+.onboard-step-meta {
+  font-family: var(--font-plex-mono), 'IBM Plex Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.onboard-progress {
+  height: 4px;
+  width: 100%;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.onboard-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+
+.onboard-card {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  box-shadow: var(--shadow);
+  padding: 28px 26px 24px;
+}
+
+.onboard-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  color: var(--text);
+  margin: 0 0 6px;
+}
+
+.onboard-sub {
+  font-size: 13.5px;
+  color: var(--dim);
+  line-height: 1.5;
+  margin: 0 0 22px;
+}
+
+.onboard-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.onboard-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.onboard-skip {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--dim);
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 6px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.onboard-skip:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.onboard-skip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.onboard-logo-btn {
+  display: flex;
+  height: 88px;
+  width: 88px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 2px dashed var(--border2);
+  background: var(--elev);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.onboard-logo-btn:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+}
+
+.onboard-complete-icon {
+  display: inline-flex;
+  height: 52px;
+  width: 52px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  color: var(--accent);
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+/* Native select — matches auth inputs */
+.cnry .onboard-select {
+  height: 44px;
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input);
+  color: var(--text);
+  font-size: 14.5px;
+  padding: 0 12px;
+  outline: none;
+}
+
+.cnry .onboard-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}

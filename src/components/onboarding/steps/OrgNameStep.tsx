@@ -4,7 +4,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   Form,
@@ -42,24 +41,21 @@ export function OrgNameStep({ defaultValue = '', onNext, isLoading }: OrgNameSte
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="space-y-1">
-          <h2 className="text-[1.25rem] font-semibold leading-tight text-stone-900">
-            What&apos;s your company called?
-          </h2>
-          <p className="text-stone-500">
-            This is how your organization will appear to managers, tenants, and owners.
-          </p>
-        </div>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-1">
+        <h2 className="onboard-title">What&apos;s your company called?</h2>
+        <p className="onboard-sub">
+          This is how your organization will appear to managers, tenants, and owners.
+        </p>
 
         <FormField
           control={form.control}
           name="name"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Organization name</FormLabel>
+            <FormItem className="onboard-field">
+              <FormLabel className="auth-label">Organization name</FormLabel>
               <FormControl>
                 <Input
+                  className="auth-input"
                   placeholder="e.g. Canary Property Management"
                   autoFocus
                   {...field}
@@ -70,21 +66,18 @@ export function OrgNameStep({ defaultValue = '', onNext, isLoading }: OrgNameSte
           )}
         />
 
-        <Button
-          type="submit"
-          disabled={isLoading}
-          className="min-h-11 w-full font-semibold"
-          style={{ backgroundColor: '#D97706', color: '#ffffff' }}
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-              Saving...
-            </>
-          ) : (
-            'Continue'
-          )}
-        </Button>
+        <div className="onboard-actions">
+          <button type="submit" disabled={isLoading} className="auth-btn">
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Saving...
+              </>
+            ) : (
+              'Continue'
+            )}
+          </button>
+        </div>
       </form>
     </Form>
   )

@@ -169,10 +169,11 @@ export async function getCaller(): Promise<Caller | 'no-user' | 'no-person'> {
 
 export async function loadCanaryDb(
   orgId: string,
-  options?: { redactForVendor?: boolean }
+  options?: { redactForVendor?: boolean; vendorPersonId?: string }
 ): Promise<CanaryDb> {
   const supabase = await createClient()
   const redactForVendor = options?.redactForVendor === true
+  const vendorPersonId = options?.vendorPersonId?.trim() || ''
 
   const [orgRes, unitsRes, leasesRes, portfoliosRes, workOrdersRes, peopleRes, listingsRes, inquiriesRes, inquiryNotesRes, paymentsRes, expensesRes, mediaRes] =
     await Promise.all([
@@ -636,6 +637,27 @@ export async function loadCanaryDb(
         persisted: true,
       })),
   ].sort((a, b) => (a.date < b.date ? 1 : -1))
+
+  // Defense-in-depth for vendor portal: only assigned projects + their properties.
+  // RLS should already enforce this; this keeps the client payload minimal if a
+  // session is mis-roled or a policy is missing.
+  if (redactForVendor && vendorPersonId) {
+    const vendorProjects = projects.filter((j) => j.assignedVendorId === vendorPersonId)
+    const vendorAddrs = new Set(vendorProjects.map((j) => j.property))
+    const vendorProperties = properties.filter((p) => vendorAddrs.has(p.address))
+    const self = people.find((p) => p.id === vendorPersonId)
+    return {
+      orgId,
+      properties: vendorProperties,
+      leases: [],
+      portfolios: [],
+      projects: vendorProjects,
+      people: self ? [self] : [],
+      drafts: [],
+      payments: [],
+      inquiries: [],
+    }
+  }
 
   return { orgId, properties, leases, portfolios, projects, people, drafts, payments, inquiries }
 }

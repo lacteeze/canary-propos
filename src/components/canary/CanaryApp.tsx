@@ -372,15 +372,20 @@ export default function CanaryApp({
       projects = projects.filter((j) => addrs.has(j.property))
       portfolios = []
       people = []
-    } else if (role === 'Vendor' && personaId) {
-      const me = db.people.find((x) => x.id === personaId)
+    } else if (role === 'Vendor') {
+      // Always scope vendors — never show full org when personaId is briefly empty
+      // (role-switch) or missing. Preview uses persona; real vendors use userPersonId.
+      const vendorId = personaId || (!canSwitchRoles ? userPersonId : '')
+      const me = db.people.find((x) => x.id === vendorId)
       const nm = me ? me.name : '§none§'
       // Prefer assigned_vendor_id; fall back to contractor name for legacy rows
-      projects = projects.filter(
-        (j) =>
-          j.assignedVendorId === personaId ||
-          (!j.assignedVendorId && nm !== '§none§' && (j.contractors || '').includes(nm)),
-      )
+      projects = vendorId
+        ? projects.filter(
+            (j) =>
+              j.assignedVendorId === vendorId ||
+              (!j.assignedVendorId && nm !== '§none§' && (j.contractors || '').includes(nm)),
+          )
+        : []
       const addrs = new Set(projects.map((j) => j.property))
       properties = properties.filter((p) => addrs.has(p.address))
       leases = []
@@ -395,7 +400,7 @@ export default function CanaryApp({
         ? inquiries0.filter((i) => addrs.has(i.property))
         : []
     return { properties, leases, portfolios, projects, people, drafts, inquiries }
-  }, [db, role, personaId, priv])
+  }, [db, role, personaId, priv, userPersonId, canSwitchRoles])
 
   // ---------- personas ----------
   const personaOptions = useMemo(() => {
@@ -435,10 +440,10 @@ export default function CanaryApp({
 
   const onRoleChange = useCallback((next: CanaryRole) => {
     setRole(next)
-    setView('dashboard')
+    setView(next === 'Vendor' ? 'projects' : 'dashboard')
     setDrawer(null)
-    setPersonaId('')
-  }, [])
+    setPersonaId(next === 'Vendor' && !canSwitchRoles ? userPersonId : '')
+  }, [canSwitchRoles, userPersonId])
 
   React.useEffect(() => {
     if (!priv && canSwitchRoles && !personaId && personaOptions.length) setPersonaId(personaOptions[0].id)

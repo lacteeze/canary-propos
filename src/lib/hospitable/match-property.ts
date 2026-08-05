@@ -40,6 +40,25 @@ export function matchHospitableToCanaryAddress(
   return null
 }
 
+/**
+ * Hospitable properties that belong to this org's Canary portfolio
+ * (explicit unit.hospitable_property_id link or fuzzy address match).
+ * Never return the full Hospitable account when the org has no matching units —
+ * that was leaking Canary STR tasks into empty orgs (e.g. Vendor PM).
+ */
+export function orgScopedHospitableProperties(
+  hospitableProperties: HospitableProperty[],
+  canaryProperties: CanaryProperty[]
+): HospitableProperty[] {
+  if (!canaryProperties.length || !hospitableProperties.length) return []
+  const byId = buildHospitableAddressMap(canaryProperties)
+  return hospitableProperties.filter((hp) => {
+    if (byId.has(hp.id)) return true
+    if (matchHospitableToCanaryAddress(hp, canaryProperties)) return true
+    return Boolean(resolveToCanaryAddress(hospitablePropertyLabel(hp), canaryProperties))
+  })
+}
+
 /** Resolve timeline row address for each Hospitable property (explicit id first, then fuzzy). */
 export function resolveHospitablePropertyAddresses(
   hospitableProperties: HospitableProperty[],
@@ -57,7 +76,9 @@ export function resolveHospitablePropertyAddresses(
     const fuzzy =
       matchHospitableToCanaryAddress(hp, canaryProperties) ??
       resolveToCanaryAddress(hospitablePropertyLabel(hp), canaryProperties)
-    result.set(hp.id, fuzzy ?? hospitablePropertyLabel(hp))
+    // Only map properties that resolve to this org — never fall back to a raw
+    // Hospitable label (that surfaces other tenants' STR inventory).
+    if (fuzzy) result.set(hp.id, fuzzy)
   }
 
   return result

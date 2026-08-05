@@ -44,10 +44,11 @@ export default function CanaryActionFab({ view, priv, onAction }: CanaryActionFa
   const wrapRef = useRef<HTMLDivElement>(null)
 
   const actions = fabActionsForView(view, priv)
-  if (!actions.length) return null
 
+  // Hooks must run unconditionally — when priv flips to false (Vendor/Tenant portal
+  // preview), an early return before useEffect caused "Rendered fewer hooks than expected".
   useEffect(() => {
-    if (!open) return
+    if (!actions.length || !open) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
     const onClick = (e: MouseEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
@@ -58,7 +59,9 @@ export default function CanaryActionFab({ view, priv, onAction }: CanaryActionFa
       document.removeEventListener('keydown', onKey)
       document.removeEventListener('mousedown', onClick)
     }
-  }, [open])
+  }, [open, actions.length])
+
+  if (!actions.length) return null
 
   const importHint = importDatasetForView(view)
 

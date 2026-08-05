@@ -4,6 +4,7 @@ import {
   isHospitableConfigured,
   type HospitableProperty,
 } from '@/lib/hospitable/client'
+import { orgScopedHospitableProperties } from '@/lib/hospitable/match-property'
 import { isOpenHospitableTask, mapHospitableTasks } from '@/lib/hospitable/map-tasks'
 import type { CanaryProperty, CanaryStrBooking, HospitableTasksData } from './types'
 
@@ -41,12 +42,17 @@ export async function loadHospitableTasks(
   }
 
   try {
-    const properties = hospitableProperties ?? (await fetchAllProperties())
+    if (!canaryProperties.length) {
+      return emptyTasks('No properties in this organization to match Hospitable tasks.')
+    }
+
+    const allProperties = hospitableProperties ?? (await fetchAllProperties())
+    const properties = orgScopedHospitableProperties(allProperties, canaryProperties)
     if (!properties.length) {
       return {
         tasks: [],
         connected: true,
-        statusMessage: 'Hospitable connected — no properties found.',
+        statusMessage: 'Hospitable connected — no properties linked to this organization.',
         openCount: 0,
       }
     }

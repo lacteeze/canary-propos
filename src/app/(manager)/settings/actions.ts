@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { CANADIAN_PROVINCES } from '@/lib/constants/provinces'
 import { getGmailAuthUrl } from '@/lib/gmail'
 import { getDriveAuthUrl } from '@/lib/google-drive'
+import { getTasksAuthUrl } from '@/lib/google-tasks'
 
 const provinceCodes = CANADIAN_PROVINCES.map((p) => p.value) as [string, ...string[]]
 
@@ -180,6 +181,60 @@ export async function disconnectDrive(_orgId?: string): Promise<UpdateOrgResult>
   if (error) {
     console.error('[disconnectDrive] error:', error)
     return { success: false, error: 'Failed to disconnect Google Drive.' }
+  }
+
+  revalidatePath('/settings')
+  return { success: true }
+}
+
+// --- getGoogleTasksConnectUrl: Google OAuth URL for Tasks connection ---
+export async function getGoogleTasksConnectUrl(): Promise<UpdateOrgResult & { url?: string }> {
+  const ctx = await getCallerContext()
+  if (!ctx) {
+    return { success: false, error: 'You must be signed in.' }
+  }
+
+  if (!ctx.person.role?.includes('manager') && !ctx.person.role?.includes('admin')) {
+    return { success: false, error: 'Only managers can connect Google Tasks.' }
+  }
+
+  try {
+    const url = getTasksAuthUrl(ctx.person.org_id)
+    return { success: true, url }
+  } catch (err) {
+    console.error('[getGoogleTasksConnectUrl] failed:', err)
+    const message =
+      err instanceof Error && err.message
+        ? err.message
+        : 'Failed to generate Google Tasks authorization URL.'
+    return { success: false, error: message }
+  }
+}
+
+// --- disconnectGoogleTasks: clears tasks_* token columns on the org row ---
+export async function disconnectGoogleTasks(_orgId?: string): Promise<UpdateOrgResult> {
+  const ctx = await getCallerContext()
+  if (!ctx) {
+    return { success: false, error: 'You must be signed in.' }
+  }
+
+  if (!ctx.person.role?.includes('manager') && !ctx.person.role?.includes('admin')) {
+    return { success: false, error: 'Only managers can disconnect Google Tasks.' }
+  }
+
+  const { error } = await ctx.supabase
+    .from('organizations')
+    .update({
+      tasks_access_token: null,
+      tasks_refresh_token: null,
+      tasks_token_expiry: null,
+      tasks_connected_at: null,
+    })
+    .eq('id', ctx.person.org_id)
+
+  if (error) {
+    console.error('[disconnectGoogleTasks] error:', error)
+    return { success: false, error: 'Failed to disconnect Google Tasks.' }
   }
 
   revalidatePath('/settings')

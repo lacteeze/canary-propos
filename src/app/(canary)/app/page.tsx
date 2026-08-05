@@ -6,9 +6,10 @@ import CanaryApp from '@/components/canary/CanaryApp'
 import { getCaller, loadCanaryDb } from '@/lib/canary/load-db'
 import { loadHospitableCalendar } from '@/lib/canary/load-hospitable-calendar'
 import { loadHospitableTasks } from '@/lib/canary/load-hospitable-tasks'
+import { loadOrgTasks } from '@/lib/canary/load-org-tasks'
 import { fetchAllProperties, isHospitableConfigured } from '@/lib/hospitable/client'
 import { createClient } from '@/lib/supabase/server'
-import type { CanaryRole, HospitableCalendarData, HospitableTasksData } from '@/lib/canary/types'
+import type { CanaryRole, HospitableCalendarData, HospitableTasksData, OrgTasksData } from '@/lib/canary/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,6 +74,12 @@ export default async function CanaryAppPage() {
       hospitableProperties
     )
   }
+
+  // Team tasks: vendors only see tasks assigned/shared to them
+  const orgTasks: OrgTasksData = await loadOrgTasks(caller.orgId, {
+    assigneeOnlyPersonId: isVendorOnly ? caller.personId : undefined,
+  })
+
   const role = toCanaryRole(caller.roles)
   const canSwitchRoles = role === 'Admin' || role === 'Manager'
 
@@ -90,6 +97,7 @@ export default async function CanaryAppPage() {
       db={db}
       hospitableCalendar={hospitableCalendar}
       hospitableTasks={hospitableTasks}
+      orgTasks={orgTasks}
       userRole={role}
       userPersonId={caller.personId}
       canSwitchRoles={canSwitchRoles}

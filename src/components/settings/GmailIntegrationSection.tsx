@@ -7,17 +7,20 @@ import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { getGmailConnectUrl, disconnectGmail } from '@/app/(manager)/settings/actions'
 import { DriveIntegrationSection } from '@/components/settings/DriveIntegrationSection'
+import { GoogleTasksIntegrationSection } from '@/components/settings/GoogleTasksIntegrationSection'
 
 interface GmailIntegrationSectionProps {
   orgId: string
   gmailConnectedAt: string | null
   driveConnectedAt?: string | null
+  tasksConnectedAt?: string | null
 }
 
 export function GmailIntegrationSection({
   orgId,
   gmailConnectedAt,
   driveConnectedAt = null,
+  tasksConnectedAt = null,
 }: GmailIntegrationSectionProps) {
   const searchParams = useSearchParams()
   const [isConnected, setIsConnected] = useState(gmailConnectedAt !== null)
@@ -153,6 +156,7 @@ export function GmailIntegrationSection({
       </div>
 
       <DriveIntegrationSection orgId={orgId} driveConnectedAt={driveConnectedAt} />
+      <GoogleTasksIntegrationSection orgId={orgId} tasksConnectedAt={tasksConnectedAt} />
     </section>
   )
 }

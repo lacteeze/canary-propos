@@ -33,6 +33,7 @@ import AddOwnerOccupiedModal from './AddOwnerOccupiedModal'
 import OwnerOccupiedDetailDrawer from './OwnerOccupiedDetailDrawer'
 import BookingDetailDrawer from './BookingDetailDrawer'
 import TaskDetailDrawer from './TaskDetailDrawer'
+import TeamTasksBoard from './TeamTasksBoard'
 import {
   CARD_LAYOUT_PRESET,
   KPI_LAYOUT_PRESET,
@@ -46,7 +47,7 @@ import MessagesView from './MessagesView'
 import PropertyOccupancyCalendar from './PropertyOccupancyCalendar'
 import PropertyPhotosView from './PropertyPhotosView'
 import { BillingDashboard } from '@/components/billing/BillingDashboard'
-import type { CanaryDb, CanaryDraft, CanaryHospitableTask, CanaryInquiry, CanaryLease, CanaryOwnerOccupiedBlock, CanaryPayment, CanaryPerson, CanaryPortfolio, CanaryProject, CanaryProperty, CanaryRole, CanaryStrBooking, DraftListingStatus, HospitableCalendarData, HospitableTasksData } from '@/lib/canary/types'
+import type { CanaryDb, CanaryDraft, CanaryHospitableTask, CanaryInquiry, CanaryLease, CanaryOwnerOccupiedBlock, CanaryPayment, CanaryPerson, CanaryPortfolio, CanaryProject, CanaryProperty, CanaryRole, CanaryStrBooking, DraftListingStatus, HospitableCalendarData, HospitableTasksData, OrgTasksData } from '@/lib/canary/types'
 import { deleteLocalOwnerOccupiedBlock, loadLocalOwnerOccupiedBlocks } from '@/lib/canary/owner-occupied-storage'
 import { isOpenHospitableTask } from '@/lib/hospitable/map-tasks'
 import { draftStatusBadge, draftTimelineMeta, inquiryStatusBadge } from '@/lib/canary/types'
@@ -186,6 +187,7 @@ interface CanaryAppProps {
   db: CanaryDb
   hospitableCalendar: HospitableCalendarData
   hospitableTasks: HospitableTasksData
+  orgTasks: OrgTasksData
   userRole: CanaryRole
   userPersonId: string
   canSwitchRoles: boolean
@@ -214,6 +216,7 @@ export default function CanaryApp({
   db,
   hospitableCalendar,
   hospitableTasks,
+  orgTasks,
   userRole,
   userPersonId,
   canSwitchRoles,
@@ -258,6 +261,8 @@ export default function CanaryApp({
   const [peopleRole, setPeopleRole] = useState('')
   const [projFilter, setProjFilter] = useState('')
   const [taskFilter, setTaskFilter] = useState('Open')
+  /** Team tasks board is default; Hospitable tab when connected. */
+  const [tasksBoardTab, setTasksBoardTab] = useState<'team' | 'hospitable'>('team')
   const [drawer, setDrawer] = useState<Drawer>(null)
   const [pageViews, setPageViews] = useState<Record<string, string>>({})
   const [pageSort, setPageSort] = useState<Record<string, SortState>>({})
@@ -524,7 +529,15 @@ export default function CanaryApp({
     deleteLocalOwnerOccupiedBlock(id, userPersonId)
     setLocalOwnerBlocks((prev) => prev.filter((b) => b.id !== id))
   }, [userPersonId])
-  const showTasksKpi = role !== 'Tenant' && role !== 'Vendor'
+  const showTasksKpi = role !== 'Tenant'
+  const canManageOrgTasks = role === 'Admin' || role === 'Manager'
+  const showHospitableTasksTab =
+    role !== 'Vendor' && role !== 'Tenant' && hospitableTasks.connected
+  const teamOpenTaskCount = orgTasks.openCount
+  const combinedOpenTaskCount =
+    role === 'Vendor'
+      ? teamOpenTaskCount
+      : teamOpenTaskCount + (hospitableTasks.connected ? openTaskCount : 0)
   const strInWindow = useMemo(() => {
     const today = todayMid.getTime()
     return scopedStrBookings.filter((b) => {
@@ -570,7 +583,7 @@ export default function CanaryApp({
     ...(showTasksKpi
       ? [{
           label: 'Tasks',
-          value: hospitableTasks.connected ? String(openTaskCount) : '—',
+          value: String(combinedOpenTaskCount),
           color: 'var(--amber)',
           view: 'tasks',
         }]
@@ -780,6 +793,7 @@ export default function CanaryApp({
     { key: 'leases', label: 'Leasing', hideFor: ['Vendor'] },
     { key: 'properties', label: 'Properties', hideFor: ['Vendor'] },
     { key: 'projects', label: 'Projects' },
+    { key: 'tasks', label: 'Tasks', hideFor: ['Tenant'] },
     { key: 'billing', label: 'Billing', privOnly: true, hideFor: ['Vendor', 'Tenant'] },
   ]
   const navItems = allNav
@@ -1836,7 +1850,7 @@ export default function CanaryApp({
       { key: 'payments', label: 'Payments', meta: 'Charges & credits', hideFor: ['Vendor'] },
       { key: 'billing', label: 'Billing', meta: 'Balances & statements', privOnly: true, hideFor: ['Vendor', 'Tenant'] },
       { key: 'projects', label: 'Projects', meta: 'Maintenance & work' },
-      { key: 'tasks', label: 'Tasks', meta: 'Hospitable housekeeping & ops', hideFor: ['Tenant', 'Vendor'] },
+      { key: 'tasks', label: 'Tasks', meta: 'Team tasks & Hospitable ops', hideFor: ['Tenant'] },
       { key: 'inbox', label: 'Email', meta: 'Gmail triage', privOnly: true },
       { key: 'messages', label: 'Messages', meta: 'Team chat', privOnly: true },
       { key: 'notifications', label: 'Notifications', meta: 'Alerts & updates' },
@@ -3233,162 +3247,198 @@ export default function CanaryApp({
             </section>
           )}
 
-          {/* ============ TASKS (Hospitable) ============ */}
+          {/* ============ TASKS (Team board + optional Hospitable) ============ */}
           {view === 'tasks' && showTasksKpi && (
             <section>
-              <div className="cy-toolbar">
-                {taskStatuses.map((st) => (
-                  <button key={st || 'all'} className={`cy-pill${taskFilter === st ? ' cy-pill--active' : ''}`} onClick={() => setTaskFilter(st)}>
-                    {st || 'All'}{' '}
+              {showHospitableTasksTab && (
+                <div className="cy-toolbar" style={{ marginBottom: 4 }}>
+                  <button
+                    type="button"
+                    className={`cy-pill${tasksBoardTab === 'team' ? ' cy-pill--active' : ''}`}
+                    onClick={() => setTasksBoardTab('team')}
+                  >
+                    Team tasks{' '}
                     <span style={{ opacity: 0.6, fontFamily: MONO, fontSize: 11 }}>
-                      {st ? String(taskCounts[st] || 0) : String(scopedHospitableTasks.length)}
+                      {String(teamOpenTaskCount)}
                     </span>
                   </button>
-                ))}
-                <span style={{ color: 'var(--dim)', fontSize: 13, marginLeft: 'auto' }}>
-                  {hospitableTasks.statusMessage}
-                </span>
-              </div>
-
-              {!hospitableTasks.connected && (
-                <div
-                  style={{
-                    background: 'var(--panel)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 14,
-                    padding: '40px 28px',
-                    textAlign: 'center',
-                    maxWidth: 520,
-                    margin: '12px auto 0',
-                  }}
-                >
-                  <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700 }}>Hospitable not connected</h2>
-                  <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--dim)' }}>
-                    {hospitableTasks.statusMessage || 'Add HOSPITABLE_API_PAT to load housekeeping and ops tasks.'}
-                  </p>
+                  <button
+                    type="button"
+                    className={`cy-pill${tasksBoardTab === 'hospitable' ? ' cy-pill--active' : ''}`}
+                    onClick={() => setTasksBoardTab('hospitable')}
+                  >
+                    Hospitable{' '}
+                    <span style={{ opacity: 0.6, fontFamily: MONO, fontSize: 11 }}>
+                      {String(openTaskCount)}
+                    </span>
+                  </button>
+                  {!hospitableTasks.connected && canManageOrgTasks && (
+                    <span style={{ color: 'var(--dim)', fontSize: 13, marginLeft: 'auto' }}>
+                      Hospitable housekeeping appears when the API is configured and properties match.
+                    </span>
+                  )}
                 </div>
               )}
 
-              {hospitableTasks.connected && filteredTasks.length === 0 && (
-                <div
-                  style={{
-                    background: 'var(--panel)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 14,
-                    padding: '40px 28px',
-                    textAlign: 'center',
-                    maxWidth: 520,
-                    margin: '12px auto 0',
-                  }}
-                >
-                  <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700 }}>No tasks</h2>
-                  <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--dim)' }}>
-                    {taskFilter || q
-                      ? 'Nothing matches this filter. Try All or clear search.'
-                      : hospitableTasks.statusMessage || 'No Hospitable tasks in the current window.'}
-                  </p>
-                </div>
+              {(tasksBoardTab === 'team' || !showHospitableTasksTab) && (
+                <TeamTasksBoard
+                  tasks={orgTasks.tasks}
+                  people={scoped.people}
+                  properties={activeProps}
+                  userPersonId={userPersonId}
+                  canManage={canManageOrgTasks}
+                  googleTasksConnected={orgTasks.googleTasksConnected}
+                  isVendor={role === 'Vendor'}
+                  searchQuery={q}
+                />
               )}
 
-              {hospitableTasks.connected && filteredTasks.length > 0 && (
-                <div className="cy-table-panel" style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, marginTop: 4 }}>
-                  <div className="cy-table-scroll">
-                    <div style={{ minWidth: 820 }}>
-                      <div
-                        className="cy-table-head"
-                        style={{ display: 'flex', gap: 12, padding: '4px 16px', borderBottom: '1px solid var(--border)', alignItems: 'center' }}
+              {showHospitableTasksTab && tasksBoardTab === 'hospitable' && (
+                <>
+                  <div className="cy-toolbar">
+                    {taskStatuses.map((st) => (
+                      <button key={st || 'all'} className={`cy-pill${taskFilter === st ? ' cy-pill--active' : ''}`} onClick={() => setTaskFilter(st)}>
+                        {st || 'All'}{' '}
+                        <span style={{ opacity: 0.6, fontFamily: MONO, fontSize: 11 }}>
+                          {st ? String(taskCounts[st] || 0) : String(scopedHospitableTasks.length)}
+                        </span>
+                      </button>
+                    ))}
+                    <span style={{ color: 'var(--dim)', fontSize: 13, marginLeft: 'auto' }}>
+                      {hospitableTasks.statusMessage}
+                    </span>
+                  </div>
+
+                  {filteredTasks.length === 0 && (
+                    <div
+                      style={{
+                        background: 'var(--panel)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 14,
+                        padding: '40px 28px',
+                        textAlign: 'center',
+                        maxWidth: 520,
+                        margin: '12px auto 0',
+                      }}
+                    >
+                      <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700 }}>No Hospitable tasks</h2>
+                      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--dim)' }}>
+                        {taskFilter || q
+                          ? 'Nothing matches this filter. Try All or clear search.'
+                          : hospitableTasks.statusMessage || 'No Hospitable tasks in the current window.'}
+                      </p>
+                      <button
+                        type="button"
+                        className="cy-btn"
+                        style={{ marginTop: 14 }}
+                        onClick={() => setTasksBoardTab('team')}
                       >
-                        {[
-                          { key: 'type', label: 'Type', flex: '0 0 110px' },
-                          { key: 'property', label: 'Property', flex: '1.4 1 0' },
-                          { key: 'guest', label: 'Guest / res', flex: '1 1 0' },
-                          { key: 'due', label: 'Due', flex: '0 0 100px' },
-                          { key: 'status', label: 'Status', flex: '0 0 120px' },
-                          { key: 'teammate', label: 'Assignee', flex: '0.9 1 0' },
-                        ].map((c) => (
+                        Back to Team tasks
+                      </button>
+                    </div>
+                  )}
+
+                  {filteredTasks.length > 0 && (
+                    <div className="cy-table-panel" style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, marginTop: 4 }}>
+                      <div className="cy-table-scroll">
+                        <div style={{ minWidth: 820 }}>
                           <div
-                            key={c.key}
-                            style={{
-                              flex: c.flex,
-                              minWidth: 0,
-                              padding: '7px 0',
-                              fontFamily: MONO,
-                              fontSize: '10.5px',
-                              letterSpacing: '.09em',
-                              textTransform: 'uppercase',
-                              color: 'var(--dim)',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                            }}
+                            className="cy-table-head"
+                            style={{ display: 'flex', gap: 12, padding: '4px 16px', borderBottom: '1px solid var(--border)', alignItems: 'center' }}
                           >
-                            {c.label}
-                          </div>
-                        ))}
-                      </div>
-                      {filteredTasks.map((t) => {
-                        const due = parseDate(t.dueDate)
-                        return (
-                          <div
-                            key={t.id}
-                            role="button"
-                            tabIndex={0}
-                            className="cy-hov"
-                            onClick={() => openTaskDetail(t.id)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault()
-                                openTaskDetail(t.id)
-                              }
-                            }}
-                            style={{
-                              display: 'flex',
-                              gap: 12,
-                              padding: '11px 16px',
-                              borderBottom: '1px solid var(--border)',
-                              alignItems: 'center',
-                              fontSize: '13.5px',
-                              minWidth: 0,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            <span style={{ flex: '0 0 110px', fontWeight: 650, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {t.type}
-                            </span>
-                            <span style={{ flex: '1.4 1 0', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={t.property}>
-                              {short(t.property)}
-                            </span>
-                            <span style={{ flex: '1 1 0', minWidth: 0, color: 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {t.guestLabel}
-                              {t.reservationCode && t.guestLabel !== `Res ${t.reservationCode}` ? ` · ${t.reservationCode}` : ''}
-                            </span>
-                            <span style={{ flex: '0 0 100px', fontFamily: MONO, fontSize: 12, fontWeight: 600 }}>
-                              {due ? fmtD(due) : '—'}
-                            </span>
-                            <span style={{ flex: '0 0 120px', minWidth: 0 }}>
-                              <span
+                            {[
+                              { key: 'type', label: 'Type', flex: '0 0 110px' },
+                              { key: 'property', label: 'Property', flex: '1.4 1 0' },
+                              { key: 'guest', label: 'Guest / res', flex: '1 1 0' },
+                              { key: 'due', label: 'Due', flex: '0 0 100px' },
+                              { key: 'status', label: 'Status', flex: '0 0 120px' },
+                              { key: 'teammate', label: 'Assignee', flex: '0.9 1 0' },
+                            ].map((c) => (
+                              <div
+                                key={c.key}
                                 style={{
-                                  fontSize: 11,
-                                  fontWeight: 700,
-                                  padding: '3px 9px',
-                                  borderRadius: 6,
-                                  background: 'var(--elev)',
-                                  border: '1px solid var(--border)',
-                                  color: taskStatusColor(t.status),
+                                  flex: c.flex,
+                                  minWidth: 0,
+                                  padding: '7px 0',
+                                  fontFamily: MONO,
+                                  fontSize: '10.5px',
+                                  letterSpacing: '.09em',
+                                  textTransform: 'uppercase',
+                                  color: 'var(--dim)',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
                                 }}
                               >
-                                {t.status}
-                              </span>
-                            </span>
-                            <span style={{ flex: '0.9 1 0', minWidth: 0, color: 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {t.teammate || '—'}
-                            </span>
+                                {c.label}
+                              </div>
+                            ))}
                           </div>
-                        )
-                      })}
+                          {filteredTasks.map((t) => {
+                            const due = parseDate(t.dueDate)
+                            return (
+                              <div
+                                key={t.id}
+                                role="button"
+                                tabIndex={0}
+                                className="cy-hov"
+                                onClick={() => openTaskDetail(t.id)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault()
+                                    openTaskDetail(t.id)
+                                  }
+                                }}
+                                style={{
+                                  display: 'flex',
+                                  gap: 12,
+                                  padding: '11px 16px',
+                                  borderBottom: '1px solid var(--border)',
+                                  alignItems: 'center',
+                                  fontSize: '13.5px',
+                                  minWidth: 0,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <span style={{ flex: '0 0 110px', fontWeight: 650, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {t.type}
+                                </span>
+                                <span style={{ flex: '1.4 1 0', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={t.property}>
+                                  {short(t.property)}
+                                </span>
+                                <span style={{ flex: '1 1 0', minWidth: 0, color: 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {t.guestLabel}
+                                  {t.reservationCode && t.guestLabel !== `Res ${t.reservationCode}` ? ` · ${t.reservationCode}` : ''}
+                                </span>
+                                <span style={{ flex: '0 0 100px', fontFamily: MONO, fontSize: 12, fontWeight: 600 }}>
+                                  {due ? fmtD(due) : '—'}
+                                </span>
+                                <span style={{ flex: '0 0 120px', minWidth: 0 }}>
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      padding: '3px 9px',
+                                      borderRadius: 6,
+                                      background: 'var(--elev)',
+                                      border: '1px solid var(--border)',
+                                      color: taskStatusColor(t.status),
+                                    }}
+                                  >
+                                    {t.status}
+                                  </span>
+                                </span>
+                                <span style={{ flex: '0.9 1 0', minWidth: 0, color: 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {t.teammate || '—'}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  )}
+                </>
               )}
             </section>
           )}

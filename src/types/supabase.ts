@@ -880,6 +880,10 @@ export type Database = {
           setup_completed_at: string | null
           slug: string
           stripe_customer_id: string | null
+          tasks_access_token: string | null
+          tasks_connected_at: string | null
+          tasks_refresh_token: string | null
+          tasks_token_expiry: number | null
           updated_at: string | null
         }
         Insert: {
@@ -904,6 +908,10 @@ export type Database = {
           setup_completed_at?: string | null
           slug: string
           stripe_customer_id?: string | null
+          tasks_access_token?: string | null
+          tasks_connected_at?: string | null
+          tasks_refresh_token?: string | null
+          tasks_token_expiry?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -928,9 +936,109 @@ export type Database = {
           setup_completed_at?: string | null
           slug?: string
           stripe_customer_id?: string | null
+          tasks_access_token?: string | null
+          tasks_connected_at?: string | null
+          tasks_refresh_token?: string | null
+          tasks_token_expiry?: number | null
           updated_at?: string | null
         }
         Relationships: []
+      }
+      org_tasks: {
+        Row: {
+          assignee_person_id: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          due_date: string | null
+          google_task_id: string | null
+          google_tasklist_id: string | null
+          id: string
+          org_id: string
+          priority: Database["public"]["Enums"]["org_task_priority"]
+          project_id: string | null
+          property_id: string | null
+          source: Database["public"]["Enums"]["org_task_source"]
+          status: Database["public"]["Enums"]["org_task_status"]
+          title: string
+          updated_at: string
+          visibility: Database["public"]["Enums"]["org_task_visibility"]
+        }
+        Insert: {
+          assignee_person_id?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          due_date?: string | null
+          google_task_id?: string | null
+          google_tasklist_id?: string | null
+          id?: string
+          org_id: string
+          priority?: Database["public"]["Enums"]["org_task_priority"]
+          project_id?: string | null
+          property_id?: string | null
+          source?: Database["public"]["Enums"]["org_task_source"]
+          status?: Database["public"]["Enums"]["org_task_status"]
+          title: string
+          updated_at?: string
+          visibility?: Database["public"]["Enums"]["org_task_visibility"]
+        }
+        Update: {
+          assignee_person_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          due_date?: string | null
+          google_task_id?: string | null
+          google_tasklist_id?: string | null
+          id?: string
+          org_id?: string
+          priority?: Database["public"]["Enums"]["org_task_priority"]
+          project_id?: string | null
+          property_id?: string | null
+          source?: Database["public"]["Enums"]["org_task_source"]
+          status?: Database["public"]["Enums"]["org_task_status"]
+          title?: string
+          updated_at?: string
+          visibility?: Database["public"]["Enums"]["org_task_visibility"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_tasks_assignee_person_id_fkey"
+            columns: ["assignee_person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_tasks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_tasks_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       owner_statements: {
         Row: {
@@ -1837,6 +1945,10 @@ export type Database = {
         | "other"
       renewal_status_enum: "pending" | "sent" | "accepted" | "declined"
       lease_term_type_enum: "fixed_term" | "month_to_month"
+      org_task_priority: "low" | "medium" | "high" | "urgent"
+      org_task_source: "manual" | "google"
+      org_task_status: "todo" | "doing" | "done"
+      org_task_visibility: "org" | "assignees"
       work_order_priority: "low" | "medium" | "high" | "urgent"
       work_order_status:
         | "draft"
@@ -1997,6 +2109,10 @@ export const Constants = {
       ],
       renewal_status_enum: ["pending", "sent", "accepted", "declined"],
       lease_term_type_enum: ["fixed_term", "month_to_month"],
+      org_task_priority: ["low", "medium", "high", "urgent"],
+      org_task_source: ["manual", "google"],
+      org_task_status: ["todo", "doing", "done"],
+      org_task_visibility: ["org", "assignees"],
       work_order_priority: ["low", "medium", "high", "urgent"],
       work_order_status: [
         "draft",

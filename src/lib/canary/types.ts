@@ -382,6 +382,41 @@ export interface HospitableTasksData {
   openCount: number
 }
 
+/** Internal team task (org_tasks) — manual or imported from Google Tasks. */
+export type OrgTaskStatus = 'todo' | 'doing' | 'done'
+export type OrgTaskPriority = 'low' | 'medium' | 'high' | 'urgent'
+export type OrgTaskSource = 'manual' | 'google'
+export type OrgTaskVisibility = 'org' | 'assignees'
+
+export interface CanaryOrgTask {
+  id: string
+  title: string
+  description: string
+  status: OrgTaskStatus
+  priority: OrgTaskPriority
+  /** YYYY-MM-DD or empty */
+  dueDate: string
+  assigneePersonId: string | null
+  assigneeName: string
+  createdBy: string
+  createdByName: string
+  propertyId: string | null
+  property: string
+  projectId: string | null
+  visibility: OrgTaskVisibility
+  source: OrgTaskSource
+  googleTaskId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface OrgTasksData {
+  tasks: CanaryOrgTask[]
+  googleTasksConnected: boolean
+  statusMessage: string
+  openCount: number
+}
+
 export interface CanaryPayment {
   id: string
   date: string

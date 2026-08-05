@@ -131,6 +131,10 @@
   min-height: 88px;
 }
 
+/* Beat `.cland2 button { color: inherit }` so light mode keeps white label text
+   (dark mode looked fine only because inherited --text is already light). */
+.cland2 .cpub-btn-primary,
+.cnry-browse .cpub-btn-primary,
 .cpub-btn-primary {
   display: flex;
   min-height: 44px;
@@ -144,11 +148,13 @@
   font-weight: 700;
   cursor: pointer;
   background: #1a2f5c;
-  color: #f4efe6;
+  color: #ffffff;
   box-shadow: 0 8px 24px rgba(26, 47, 92, 0.32);
   font-family: inherit;
 }
 
+.cland2 .cpub-btn-primary:disabled,
+.cnry-browse .cpub-btn-primary:disabled,
 .cpub-btn-primary:disabled {
   opacity: 0.65;
   cursor: not-allowed;

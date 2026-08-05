@@ -18,8 +18,107 @@ import { revalidatePath } from 'next/cache'
 
 // --- Action result type ---
 export type InquiryActionResult =
-  | { success: true }
+  | { success: true; message?: string }
   | { success: false; error: string }
+
+const DUPLICATE_PROPERTY_INQUIRY_MESSAGE =
+  "You've already inquired about this property — we'll be in touch."
+
+function normalizeInquiryEmail(email: string): string {
+  return email.trim().toLowerCase()
+}
+
+/**
+ * App-level dedupe: same org + email + property (via property_id or listing→unit→property).
+ * Skips when neither property_id nor listing_id is present (org-only /rent interest stays open).
+ * Uses service role because anon RLS has INSERT-only on inquiries.
+ */
+async function hasExistingPropertyInquiry(params: {
+  orgId: string
+  email: string
+  propertyId?: string | null
+  listingId?: string | null
+  /** Defaults to viewing + property-linked interest (`inquiry`). */
+  types?: Array<'inquiry' | 'application'>
+}): Promise<boolean> {
+  if (!params.propertyId && !params.listingId) return false
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn('[inquiries] SUPABASE_SERVICE_ROLE_KEY unset — skipping duplicate inquiry check')
+    return false
+  }
+
+  try {
+    const admin = createAdminClientInternal()
+    const emailNorm = normalizeInquiryEmail(params.email)
+    const types = params.types ?? ['inquiry']
+
+    let propertyId = params.propertyId ?? null
+    const listingIds = new Set<string>()
+    if (params.listingId) listingIds.add(params.listingId)
+
+    if (params.listingId && !propertyId) {
+      const { data: listing } = await admin
+        .from('listings')
+        .select('unit_id')
+        .eq('id', params.listingId)
+        .eq('org_id', params.orgId)
+        .maybeSingle()
+
+      if (listing?.unit_id) {
+        const { data: unit } = await admin
+          .from('units')
+          .select('property_id')
+          .eq('id', listing.unit_id)
+          .maybeSingle()
+        propertyId = unit?.property_id ?? null
+      }
+    }
+
+    if (propertyId) {
+      const { data: units } = await admin
+        .from('units')
+        .select('id')
+        .eq('property_id', propertyId)
+        .eq('org_id', params.orgId)
+
+      const unitIds = (units ?? []).map((u) => u.id)
+      if (unitIds.length > 0) {
+        const { data: listings } = await admin
+          .from('listings')
+          .select('id')
+          .eq('org_id', params.orgId)
+          .in('unit_id', unitIds)
+
+        for (const row of listings ?? []) listingIds.add(row.id)
+      }
+    }
+
+    const orParts: string[] = []
+    if (propertyId) orParts.push(`property_id.eq.${propertyId}`)
+    if (listingIds.size > 0) {
+      orParts.push(`listing_id.in.(${[...listingIds].join(',')})`)
+    }
+    if (orParts.length === 0) return false
+
+    // Filter email in app code (normalize) — avoid ilike, where `_` is a wildcard.
+    const { data, error } = await admin
+      .from('inquiries')
+      .select('id, email')
+      .eq('org_id', params.orgId)
+      .in('type', types)
+      .or(orParts.join(','))
+      .limit(50)
+
+    if (error) {
+      console.warn('[inquiries] duplicate check failed:', error.message)
+      return false
+    }
+    return (data ?? []).some((row) => normalizeInquiryEmail(row.email) === emailNorm)
+  } catch (err) {
+    console.warn('[inquiries] duplicate check failed:', err)
+    return false
+  }
+}
 
 // --- Anon client for public INSERTs ---
 function createAnonClient() {
@@ -127,7 +226,18 @@ async function sendManagerNotification(params: {
 async function validateListingOrg(
   listingId: string,
   submittedOrgId: string
-): Promise<{ valid: boolean; listingTitle: string; propertyAddress: string }> {
+): Promise<{
+  valid: boolean
+  listingTitle: string
+  propertyAddress: string
+  propertyId: string | null
+}> {
+  const invalid = {
+    valid: false,
+    listingTitle: '',
+    propertyAddress: '',
+    propertyId: null as string | null,
+  }
   try {
     const supabase = createAnonClient()
 
@@ -140,11 +250,12 @@ async function validateListingOrg(
       .single()
 
     if (listingError || !listing || listing.org_id !== submittedOrgId) {
-      return { valid: false, listingTitle: '', propertyAddress: '' }
+      return invalid
     }
 
     // Step 2: Fetch property address via unit (anon read allowed for published listings)
     let propertyAddress = ''
+    let propertyId: string | null = null
     if (listing.unit_id) {
       const { data: unit } = await supabase
         .from('units')
@@ -153,6 +264,7 @@ async function validateListingOrg(
         .single()
 
       if (unit?.property_id) {
+        propertyId = unit.property_id
         const { data: property } = await supabase
           .from('properties')
           .select('street_address, city, province')
@@ -169,10 +281,11 @@ async function validateListingOrg(
       valid: true,
       listingTitle: listing.listing_title,
       propertyAddress,
+      propertyId,
     }
   } catch (err) {
     console.warn('[inquiries] listing validation failed:', err)
-    return { valid: false, listingTitle: '', propertyAddress: '' }
+    return invalid
   }
 }
 
@@ -555,11 +668,26 @@ export async function submitInquiry(formData: FormData): Promise<InquiryActionRe
   }
 
   const { name, email, phone, move_in_date, budget, note, listing_id, org_id } = parsed.data
+  const emailNorm = normalizeInquiryEmail(email)
 
   // T-03-13: validate org_id against listing's actual org
-  const { valid, listingTitle, propertyAddress } = await validateListingOrg(listing_id, org_id)
+  const { valid, listingTitle, propertyAddress, propertyId } = await validateListingOrg(
+    listing_id,
+    org_id
+  )
   if (!valid) {
     return { success: false, error: 'Invalid listing or organization.' }
+  }
+
+  const duplicate = await hasExistingPropertyInquiry({
+    orgId: org_id,
+    email: emailNorm,
+    propertyId,
+    listingId: listing_id,
+    types: ['inquiry'],
+  })
+  if (duplicate) {
+    return { success: true, message: DUPLICATE_PROPERTY_INQUIRY_MESSAGE }
   }
 
   // INSERT with anon client (public RLS policy allows INSERT)
@@ -567,9 +695,10 @@ export async function submitInquiry(formData: FormData): Promise<InquiryActionRe
   const { error: insertError } = await supabase.from('inquiries').insert({
     org_id,
     listing_id,
+    property_id: propertyId,
     type: 'inquiry',
     name,
-    email,
+    email: emailNorm,
     phone: phone || null,
     move_in_date: move_in_date || null,
     budget: budget ?? null,
@@ -589,7 +718,7 @@ export async function submitInquiry(formData: FormData): Promise<InquiryActionRe
       listingTitle,
       propertyAddress,
       visitorName: name,
-      visitorEmail: email,
+      visitorEmail: emailNorm,
       visitorPhone: phone,
       type: 'inquiry',
       moveInDate: move_in_date,
@@ -613,11 +742,29 @@ export async function submitApplication(formData: FormData): Promise<InquiryActi
   }
 
   const { name, email, phone, move_in_date, note, listing_id, org_id } = parsed.data
+  const emailNorm = normalizeInquiryEmail(email)
 
   // T-03-13: validate org_id against listing's actual org
-  const { valid, listingTitle, propertyAddress } = await validateListingOrg(listing_id, org_id)
+  const { valid, listingTitle, propertyAddress, propertyId } = await validateListingOrg(
+    listing_id,
+    org_id
+  )
   if (!valid) {
     return { success: false, error: 'Invalid listing or organization.' }
+  }
+
+  const duplicate = await hasExistingPropertyInquiry({
+    orgId: org_id,
+    email: emailNorm,
+    propertyId,
+    listingId: listing_id,
+    types: ['application'],
+  })
+  if (duplicate) {
+    return {
+      success: true,
+      message: "You've already applied for this property — we'll be in touch.",
+    }
   }
 
   // INSERT with anon client
@@ -625,9 +772,10 @@ export async function submitApplication(formData: FormData): Promise<InquiryActi
   const { error: insertError } = await supabase.from('inquiries').insert({
     org_id,
     listing_id,
+    property_id: propertyId,
     type: 'application',
     name,
-    email,
+    email: emailNorm,
     phone: phone || null,
     move_in_date: move_in_date || null,
     budget: null,
@@ -647,7 +795,7 @@ export async function submitApplication(formData: FormData): Promise<InquiryActi
       listingTitle,
       propertyAddress,
       visitorName: name,
-      visitorEmail: email,
+      visitorEmail: emailNorm,
       visitorPhone: phone,
       type: 'application',
       moveInDate: move_in_date,
@@ -686,6 +834,7 @@ export async function submitGeneralInterest(formData: FormData): Promise<Inquiry
     property_slug,
     org_id,
   } = parsed.data
+  const emailNorm = normalizeInquiryEmail(email)
 
   const ctx = await resolveInterestContext({
     orgId: org_id,
@@ -696,6 +845,20 @@ export async function submitGeneralInterest(formData: FormData): Promise<Inquiry
   })
   if (!ctx.valid) {
     return { success: false, error: 'Invalid organization, listing, or property.' }
+  }
+
+  // Property/listing-scoped only — org-only /rent interest is not blocked.
+  if (ctx.propertyId || ctx.listingId) {
+    const duplicate = await hasExistingPropertyInquiry({
+      orgId: org_id,
+      email: emailNorm,
+      propertyId: ctx.propertyId,
+      listingId: ctx.listingId,
+      types: ['inquiry'],
+    })
+    if (duplicate) {
+      return { success: true, message: DUPLICATE_PROPERTY_INQUIRY_MESSAGE }
+    }
   }
 
   const composedNote = buildInterestNote({
@@ -715,7 +878,7 @@ export async function submitGeneralInterest(formData: FormData): Promise<Inquiry
     property_id: ctx.propertyId,
     type: 'inquiry',
     name,
-    email,
+    email: emailNorm,
     phone: phone || null,
     move_in_date: move_in_date || null,
     budget: budget ?? null,
@@ -734,7 +897,7 @@ export async function submitGeneralInterest(formData: FormData): Promise<Inquiry
       listingTitle: ctx.listingTitle || property_label || 'General interest',
       propertyAddress: ctx.propertyAddress || property_label || '',
       visitorName: name,
-      visitorEmail: email,
+      visitorEmail: emailNorm,
       visitorPhone: phone,
       type: 'interest',
       moveInDate: move_in_date,

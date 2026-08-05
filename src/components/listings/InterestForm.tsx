@@ -27,6 +27,7 @@ export function InterestForm({
 }: InterestFormProps) {
   const [isPending, startTransition] = useTransition()
   const [success, setSuccess] = useState(false)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -43,6 +44,7 @@ export function InterestForm({
     startTransition(async () => {
       const result = await submitGeneralInterest(formData)
       if (result.success) {
+        setSuccessMessage(result.message ?? null)
         setSuccess(true)
       } else {
         setError(result.error)
@@ -77,9 +79,12 @@ export function InterestForm({
           >
             ✓
           </div>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>You&apos;re on our list!</h3>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
+            {successMessage ? 'Already received' : "You're on our list!"}
+          </h3>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--dim)' }}>
-            Thanks — we&apos;ll reach out when something matches what you&apos;re looking for.
+            {successMessage ??
+              "Thanks — we'll reach out when something matches what you're looking for."}
           </p>
         </div>
       </div>

@@ -13,6 +13,7 @@ interface ApplicationFormProps {
 export function ApplicationForm({ listingId, orgId }: ApplicationFormProps) {
   const [isPending, startTransition] = useTransition()
   const [success, setSuccess] = useState(false)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -26,6 +27,7 @@ export function ApplicationForm({ listingId, orgId }: ApplicationFormProps) {
     startTransition(async () => {
       const result = await submitApplication(formData)
       if (result.success) {
+        setSuccessMessage(result.message ?? null)
         setSuccess(true)
       } else {
         setError(result.error)
@@ -38,9 +40,12 @@ export function ApplicationForm({ listingId, orgId }: ApplicationFormProps) {
       <div id="apply-form" className="cpub-form-card">
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '16px 0', textAlign: 'center' }}>
           <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(109,152,102,.15)', display: 'grid', placeItems: 'center', fontSize: 22, color: 'var(--green)' }}>✓</div>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Application received!</h3>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
+            {successMessage ? 'Already received' : 'Application received!'}
+          </h3>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--dim)' }}>
-            Thank you for your interest. We&apos;ll review your application and reach out shortly.
+            {successMessage ??
+              "Thank you for your interest. We'll review your application and reach out shortly."}
           </p>
         </div>
       </div>

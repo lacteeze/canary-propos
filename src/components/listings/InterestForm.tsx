@@ -13,6 +13,8 @@ export interface InterestFormProps {
   /** Display/context for notes + emails when there is no listing title */
   propertyLabel?: string | null
   propertySlug?: string | null
+  /** Hide card title/subtitle when the page already provides a heading (e.g. /rent). */
+  hideHeading?: boolean
 }
 
 export function InterestForm({
@@ -21,6 +23,7 @@ export function InterestForm({
   propertyId,
   propertyLabel,
   propertySlug,
+  hideHeading = false,
 }: InterestFormProps) {
   const [isPending, startTransition] = useTransition()
   const [success, setSuccess] = useState(false)
@@ -85,10 +88,14 @@ export function InterestForm({
 
   return (
     <div id="interest-form" className="cpub-form-card">
-      <h2>Tell us what you&apos;re looking for</h2>
-      <p className="cpub-form-sub">
-        Get on our list — share your must-haves and we&apos;ll match you with upcoming homes.
-      </p>
+      {!hideHeading && (
+        <>
+          <h2>Tell us what you&apos;re looking for</h2>
+          <p className="cpub-form-sub">
+            Get on our list — share your must-haves and we&apos;ll match you with upcoming homes.
+          </p>
+        </>
+      )}
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div className="cpub-field">
           <label htmlFor="int-name">

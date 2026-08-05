@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { CanarySettingsShell } from '@/components/settings/CanarySettingsShell'
 import { OrgSettingsForm } from '@/components/settings/OrgSettingsForm'
+import { InterestFormShareCard } from '@/components/settings/InterestFormShareCard'
 import { GmailIntegrationSection } from '@/components/settings/GmailIntegrationSection'
 
 export default async function SettingsPage() {
@@ -62,6 +63,8 @@ export default async function SettingsPage() {
           initialLogoPath={org.logo_path}
           initialLogoUrl={initialLogoUrl}
         />
+
+        <InterestFormShareCard />
 
         <Suspense fallback={null}>
           <GmailIntegrationSection

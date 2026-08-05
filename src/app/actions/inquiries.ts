@@ -336,7 +336,22 @@ async function resolveInterestContext(params: {
       return { valid: true, listingId, propertyId, listingTitle, propertyAddress }
     }
 
-    return empty
+    // Org-only general interest (standalone /rent share form — no listing/property)
+    const { data: org } = await client
+      .from('organizations')
+      .select('id, name')
+      .eq('id', params.orgId)
+      .maybeSingle()
+
+    if (!org) return empty
+
+    return {
+      valid: true,
+      listingId: null,
+      propertyId: null,
+      listingTitle: 'General interest',
+      propertyAddress: params.propertyLabel?.trim() || '',
+    }
   } catch (err) {
     console.warn('[inquiries] interest context resolution failed:', err)
     return empty
@@ -672,10 +687,6 @@ export async function submitGeneralInterest(formData: FormData): Promise<Inquiry
     org_id,
   } = parsed.data
 
-  if (!listing_id && !property_id) {
-    return { success: false, error: 'Missing listing or property context.' }
-  }
-
   const ctx = await resolveInterestContext({
     orgId: org_id,
     listingId: listing_id,
@@ -684,7 +695,7 @@ export async function submitGeneralInterest(formData: FormData): Promise<Inquiry
     propertySlug: property_slug,
   })
   if (!ctx.valid) {
-    return { success: false, error: 'Invalid listing or property.' }
+    return { success: false, error: 'Invalid organization, listing, or property.' }
   }
 
   const composedNote = buildInterestNote({

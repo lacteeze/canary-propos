@@ -1,28 +1,37 @@
 // src/app/invite/[token]/page.tsx
-// Invite acceptance page — validates invite_token, pre-associates org + role (ORGS-02, D-08)
+// Invite acceptance — org join for tenants/team (not "create organization")
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import type { Database } from '@/types/supabase'
+import { portalPathForRole } from '@/lib/auth/role-redirect'
+import '@/components/canary/canary.css'
 
 type InviteState =
   | { status: 'loading' }
   | { status: 'already_accepted' }
   | { status: 'not_found' }
-  | { status: 'ready'; email: string; role: string; orgName: string; personId: string }
+  | {
+      status: 'ready'
+      email: string
+      role: string
+      orgName: string
+      personId: string
+      firstName: string
+    }
   | { status: 'submitting' }
+  | { status: 'check_email'; message: string }
   | { status: 'error'; message: string }
 
-// All roles land in the CanaryApp portal — role scoping happens inside /app
-const ROLE_REDIRECT: Record<string, string> = {
-  manager: '/app',
-  employee: '/app',
-  tenant: '/app',
-  owner: '/app',
-  vendor: '/app?view=projects',
-  admin: '/app',
+const ROLE_LABEL: Record<string, string> = {
+  tenant: 'tenant',
+  vendor: 'vendor',
+  owner: 'owner',
+  manager: 'team member',
+  employee: 'team member',
+  admin: 'admin',
 }
 
 export default function InvitePage() {
@@ -56,7 +65,9 @@ export default function InvitePage() {
         role: data.role,
         orgName: data.orgName,
         personId: data.personId,
+        firstName: data.firstName ?? '',
       })
+      if (data.firstName) setFirstName(data.firstName)
     }
 
     loadInvite()
@@ -70,43 +81,50 @@ export default function InvitePage() {
 
     const supabase = createBrowserClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     )
 
-    // Create the account
+    const emailRedirectTo =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/auth/callback?invite_token=${encodeURIComponent(token)}`
+        : undefined
+
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email: state.email,
       password,
       options: {
+        emailRedirectTo,
         data: {
           first_name: firstName,
           last_name: lastName,
+          invite_token: token,
         },
       },
     })
 
     if (signUpError || !signUpData.user) {
+      const already =
+        signUpError?.message?.toLowerCase().includes('already') ||
+        signUpError?.message?.toLowerCase().includes('registered')
       setState({
         status: 'error',
-        message: signUpError?.message ?? 'Sign-up failed. Please try again.',
+        message: already
+          ? 'An account with this email already exists. Sign in below to join your portal.'
+          : (signUpError?.message ?? 'Sign-up failed. Please try again.'),
       })
       return
     }
 
-    // CR-06 fix: if email confirmation is required, session is null — show "check email" state.
-    // The invite will be linked in /auth/callback after email confirmation.
-    // We store the pending token in localStorage so the callback can complete linkage.
     if (!signUpData.session) {
-      // Store token for post-confirmation pickup in /auth/callback
       localStorage.setItem('pending_invite_token', token)
       setState({
-        status: 'error',
-        message: 'Account created! Check your email to confirm your address, then click the link to finish joining the team.',
+        status: 'check_email',
+        message:
+          'Account created. Check your email to confirm your address — then you will land in your portal.',
       })
       return
     }
 
-    // Confirmation not required (e.g. dev mode) — link immediately via authenticated route
     const acceptRes = await fetch('/api/invites/accept', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -116,177 +134,232 @@ export default function InvitePage() {
     if (!acceptRes.ok) {
       setState({
         status: 'error',
-        message: 'Account created but we could not link your invite. Please contact support.',
+        message:
+          'Account created but we could not link your invite. Please contact your property manager.',
       })
       return
     }
 
-    // Redirect to role-appropriate portal (D-08)
-    const redirect = ROLE_REDIRECT[state.role] ?? '/app'
+    const acceptData = (await acceptRes.json()) as { redirect?: string; role?: string }
+    const redirect =
+      acceptData.redirect ?? portalPathForRole(acceptData.role ?? state.role)
     router.replace(redirect)
   }
 
-  // --- Render states ---
+  const shell = (inner: ReactNode) => (
+    <div className="cnry" style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 24,
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            maxWidth: 420,
+            background: 'var(--panel)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow)',
+            padding: '32px 28px',
+          }}
+        >
+          {inner}
+        </div>
+      </div>
+    </div>
+  )
 
   if (state.status === 'loading') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-stone-50">
-        <p className="text-stone-600">Loading your invite...</p>
-      </div>
+    return shell(
+      <p style={{ color: 'var(--dim)', margin: 0, textAlign: 'center' }}>Loading your invite…</p>,
     )
   }
 
   if (state.status === 'already_accepted') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-stone-50">
-        <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-sm">
-          <h1 className="mb-2 text-xl font-semibold text-stone-900">
-            This invite has already been accepted
-          </h1>
-          <p className="text-stone-600">
-            If you already have an account, sign in at{' '}
-            <a href="/login" className="text-amber-600 underline">
-              app.canarypm.ca/login
-            </a>
-            .
-          </p>
-        </div>
-      </div>
+    return shell(
+      <>
+        <h1 style={{ margin: '0 0 8px', fontSize: 22, color: 'var(--text)' }}>
+          Invite already used
+        </h1>
+        <p style={{ margin: '0 0 20px', color: 'var(--dim)', lineHeight: 1.5 }}>
+          This invite was already accepted. Sign in to open your portal.
+        </p>
+        <a href="/login" className="cy-btn" style={{ display: 'block', textAlign: 'center' }}>
+          Sign in
+        </a>
+      </>,
     )
   }
 
   if (state.status === 'not_found') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-stone-50">
-        <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-sm">
-          <h1 className="mb-2 text-xl font-semibold text-stone-900">
-            This invite has expired
-          </h1>
-          <p className="text-stone-600">
-            Ask your property manager to send a new invite.
-          </p>
-        </div>
-      </div>
+    return shell(
+      <>
+        <h1 style={{ margin: '0 0 8px', fontSize: 22, color: 'var(--text)' }}>
+          Invite expired
+        </h1>
+        <p style={{ margin: 0, color: 'var(--dim)', lineHeight: 1.5 }}>
+          Ask your property manager to send a new invite.
+        </p>
+      </>,
+    )
+  }
+
+  if (state.status === 'check_email') {
+    return shell(
+      <>
+        <h1 style={{ margin: '0 0 8px', fontSize: 22, color: 'var(--text)' }}>
+          Confirm your email
+        </h1>
+        <p style={{ margin: 0, color: 'var(--dim)', lineHeight: 1.5 }}>{state.message}</p>
+      </>,
     )
   }
 
   if (state.status === 'error') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-stone-50">
-        <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-sm">
-          <h1 className="mb-2 text-xl font-semibold text-stone-900">
-            Something went wrong
-          </h1>
-          <p className="mb-6 text-stone-600">{state.message}</p>
-          <a href="/login" className="text-amber-600 underline">
-            Back to sign in
-          </a>
-        </div>
-      </div>
+    return shell(
+      <>
+        <h1 style={{ margin: '0 0 8px', fontSize: 22, color: 'var(--text)' }}>
+          Almost there
+        </h1>
+        <p style={{ margin: '0 0 20px', color: 'var(--dim)', lineHeight: 1.5 }}>
+          {state.message}
+        </p>
+        <a href="/login" className="cy-btn" style={{ display: 'block', textAlign: 'center' }}>
+          Sign in
+        </a>
+      </>,
     )
   }
 
   const isSubmitting = state.status === 'submitting'
+  const isTenant = state.status === 'ready' && state.role === 'tenant'
+  const orgName = state.status === 'ready' ? state.orgName : ''
+  const roleLabel =
+    state.status === 'ready' ? (ROLE_LABEL[state.role] ?? state.role) : ''
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-stone-50">
-      <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-sm">
-        {/* Header */}
-        <h1 className="mb-1 text-2xl font-semibold text-stone-900">
-          {state.status === 'ready' ? `Join ${state.orgName}` : 'Loading...'}
-        </h1>
-        {state.status === 'ready' && (
-          <p className="mb-6 text-stone-600">
-            Create your account to get started as a{' '}
-            <span className="font-medium">{state.role}</span>.
+  return shell(
+    <>
+      <p
+        style={{
+          margin: '0 0 6px',
+          fontSize: 12,
+          fontWeight: 600,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          color: 'var(--accent)',
+        }}
+      >
+        {isTenant ? 'Tenant portal' : 'Portal invite'}
+      </p>
+      <h1 style={{ margin: '0 0 8px', fontSize: 22, color: 'var(--text)' }}>
+        {isTenant ? `Join ${orgName || 'your home'}` : `Join ${orgName || 'the team'}`}
+      </h1>
+      <p style={{ margin: '0 0 24px', color: 'var(--dim)', lineHeight: 1.5 }}>
+        {isTenant
+          ? 'Set a password to access your lease, rent payments, and maintenance updates. You are joining an existing property — not creating a new organization.'
+          : `Create your account to get started as a ${roleLabel}.`}
+      </p>
+
+      {state.status === 'ready' && (
+        <form onSubmit={handleSignUp} style={{ display: 'grid', gap: 14 }}>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+              Email address
+            </span>
+            <input
+              type="email"
+              value={state.email}
+              readOnly
+              className="cy-input"
+              style={{ background: 'var(--elev)', color: 'var(--dim)' }}
+            />
+          </label>
+
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+              First name
+            </span>
+            <input
+              type="text"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              required
+              placeholder="Your first name"
+              className="cy-input"
+            />
+          </label>
+
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+              Last name
+            </span>
+            <input
+              type="text"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              required
+              placeholder="Your last name"
+              className="cy-input"
+            />
+          </label>
+
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+              Create a password
+            </span>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                placeholder="At least 8 characters"
+                className="cy-input"
+                style={{ paddingRight: 44 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                style={{
+                  position: 'absolute',
+                  right: 10,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  border: 0,
+                  background: 'transparent',
+                  color: 'var(--faint)',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                }}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+          </label>
+
+          <button type="submit" disabled={isSubmitting} className="cy-btn" style={{ marginTop: 4 }}>
+            {isSubmitting
+              ? 'Creating account…'
+              : isTenant
+                ? 'Join tenant portal'
+                : 'Create my account'}
+          </button>
+
+          <p style={{ margin: 0, textAlign: 'center', fontSize: 13, color: 'var(--dim)' }}>
+            Already have an account?{' '}
+            <a href="/login" style={{ color: 'var(--accent)', fontWeight: 600 }}>
+              Sign in
+            </a>
           </p>
-        )}
-
-        {state.status === 'ready' && (
-          <form onSubmit={handleSignUp} className="space-y-4">
-            {/* Email (pre-filled, read-only) */}
-            <div>
-              <label htmlFor="invite-email" className="mb-1 block text-sm font-medium text-stone-700">
-                Email address
-              </label>
-              <input
-                id="invite-email"
-                type="email"
-                value={state.email}
-                readOnly
-                className="w-full rounded-md border border-stone-200 bg-stone-100 px-3 py-2 text-stone-600 focus:outline-none"
-              />
-            </div>
-
-            {/* First name */}
-            <div>
-              <label htmlFor="invite-first-name" className="mb-1 block text-sm font-medium text-stone-700">
-                First name
-              </label>
-              <input
-                id="invite-first-name"
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                required
-                placeholder="Your first name"
-                className="w-full rounded-md border border-stone-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-600"
-              />
-            </div>
-
-            {/* Last name */}
-            <div>
-              <label htmlFor="invite-last-name" className="mb-1 block text-sm font-medium text-stone-700">
-                Last name
-              </label>
-              <input
-                id="invite-last-name"
-                type="text"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                required
-                placeholder="Your last name"
-                className="w-full rounded-md border border-stone-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-600"
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label htmlFor="invite-password" className="mb-1 block text-sm font-medium text-stone-700">
-                Create a password
-              </label>
-              <div className="relative">
-                <input
-                  id="invite-password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  placeholder="At least 8 characters"
-                  className="w-full rounded-md border border-stone-300 px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-amber-600"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
-                >
-                  {showPassword ? '🙈' : '👁'}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="mt-2 flex min-h-11 w-full items-center justify-center rounded-md bg-amber-600 px-4 py-2 text-white font-semibold hover:bg-amber-700 disabled:opacity-60"
-            >
-              {isSubmitting ? 'Creating account...' : 'Create my account'}
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
+        </form>
+      )}
+    </>,
   )
 }

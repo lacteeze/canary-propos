@@ -1,12 +1,20 @@
 // Syncs auth JWT app_metadata with the people row so RLS helpers
 // (org_id / user_role / person_id) match the database after onboarding.
+// Also links auth users to unlinked people rows by email (manager-uploaded tenants).
 import type { SupabaseClient, User } from '@supabase/supabase-js'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { primaryRoleFromClaim } from '@/lib/auth/role-redirect'
 
 type JwtAppMeta = {
   org_id?: string
   role?: string
   person_id?: string | null
+}
+
+type PersonRow = {
+  id: string
+  org_id: string
+  role: string[] | null
 }
 
 /** Decode app_metadata from the access token (what PostgREST RLS actually sees). */
@@ -27,20 +35,72 @@ export function jwtAppMetadata(accessToken: string | undefined | null): JwtAppMe
 }
 
 function primaryRole(roles: string[] | null | undefined): string {
-  if (!roles?.length) return 'manager'
-  if (roles.includes('admin')) return 'admin'
-  if (roles.includes('manager')) return 'manager'
-  if (roles.includes('employee')) return 'employee'
-  if (roles.includes('owner')) return 'owner'
-  if (roles.includes('tenant')) return 'tenant'
-  if (roles.includes('vendor')) return 'vendor'
-  return roles[0] ?? 'manager'
+  return primaryRoleFromClaim(roles) ?? 'manager'
+}
+
+/**
+ * Link auth.users → people when managers already uploaded the email
+ * (user_id null) or left a pending invite token. Returns the linked row.
+ */
+async function linkPersonByEmail(user: User): Promise<PersonRow | null> {
+  const email = user.email?.trim().toLowerCase()
+  if (!email) return null
+
+  const admin = createAdminClient()
+  const { data: candidates } = await admin
+    .from('people')
+    .select('id, org_id, role, invite_token, active')
+    .ilike('email', email)
+    .is('user_id', null)
+    .order('invite_sent_at', { ascending: false, nullsFirst: false })
+    .limit(5)
+
+  if (!candidates?.length) return null
+
+  // Prefer portal invitees / tenant-vendor-owner roles over bare contacts
+  const ranked = [...candidates].sort((a, b) => {
+    const score = (p: (typeof candidates)[0]) => {
+      let s = 0
+      if (p.invite_token) s += 4
+      const roles = (p.role as string[] | null) ?? []
+      if (roles.some((r) => ['tenant', 'vendor', 'owner', 'manager', 'employee', 'admin'].includes(r))) {
+        s += 2
+      }
+      if (p.active) s += 1
+      return s
+    }
+    return score(b) - score(a)
+  })
+
+  const match = ranked[0]
+  const { error } = await admin
+    .from('people')
+    .update({
+      user_id: user.id,
+      invite_accepted_at: new Date().toISOString(),
+      active: true,
+    })
+    .eq('id', match.id)
+    .is('user_id', null)
+
+  if (error) {
+    console.error('[linkPersonByEmail] failed', error)
+    return null
+  }
+
+  return {
+    id: match.id,
+    org_id: match.org_id,
+    role: match.role as string[] | null,
+  }
 }
 
 /**
  * If the signed-in user has a people row but the session JWT lacks org/role
  * claims (common right after onboarding), write claims + refresh the session
  * so subsequent RLS queries succeed.
+ *
+ * Also completes email→people linkage for manager-uploaded tenant/vendor emails.
  *
  * Safe to call from middleware (can write cookies) or Server Actions.
  */
@@ -65,12 +125,20 @@ export async function ensureJwtClaimsFromPeople(
 
   // No claims anywhere — look up people row (bypass RLS) and inject
   const admin = createAdminClient()
-  const { data: person } = await admin
-    .from('people')
-    .select('id, org_id, role')
-    .eq('user_id', user.id)
-    .eq('active', true)
-    .maybeSingle()
+  let person: PersonRow | null =
+    (
+      await admin
+        .from('people')
+        .select('id, org_id, role')
+        .eq('user_id', user.id)
+        .eq('active', true)
+        .maybeSingle()
+    ).data
+
+  // Manager uploaded email / pending invite — link auth user to people row
+  if (!person) {
+    person = await linkPersonByEmail(user)
+  }
 
   if (!person) return false
 

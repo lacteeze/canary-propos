@@ -15,6 +15,7 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { setAuthPersistPreference } from '@/lib/supabase/auth-persist'
 import { signInSchema, type SignInValues } from '@/lib/validation/auth'
+import { portalPathForRole } from '@/lib/auth/role-redirect'
 
 interface SignInFormProps {
   onSwitchToMagicLink: () => void
@@ -54,8 +55,13 @@ export function SignInForm({ onSwitchToMagicLink }: SignInFormProps) {
       return
     }
 
-    // Signed in — land in the CanaryApp portal (middleware enforces role access)
-    window.location.href = '/app'
+    // Refresh so Auth Hook / email→people linkage claims are on the session,
+    // then send tenants to /my-home and staff to /app.
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const role = session?.user?.app_metadata?.role as string | string[] | undefined
+    window.location.href = portalPathForRole(role)
   }
 
   return (

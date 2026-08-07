@@ -8,21 +8,58 @@ import {
   applyAuthCookieMaxAge,
   isAuthPersistEnabled,
 } from '@/lib/supabase/auth-persist'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { portalPathForRole, primaryRoleFromClaim } from '@/lib/auth/role-redirect'
+import { ensureJwtClaimsFromPeople } from '@/lib/auth/sync-jwt-claims'
 
-// All roles land in the CanaryApp portal — role scoping happens inside /app
-const ROLE_REDIRECT_MAP: Record<string, string> = {
-  manager: '/app',
-  employee: '/app',
-  admin: '/app',
-  tenant: '/app',
-  owner: '/app',
-  vendor: '/app?view=projects',
+async function acceptInviteToken(
+  userId: string,
+  userEmail: string | undefined,
+  token: string,
+): Promise<string | undefined> {
+  const admin = createAdminClient()
+  const { data: person } = await admin
+    .from('people')
+    .select('id, role, org_id, invite_accepted_at, email')
+    .eq('invite_token', token)
+    .maybeSingle()
+
+  if (!person || person.invite_accepted_at) return undefined
+  if (
+    person.email &&
+    userEmail &&
+    person.email.trim().toLowerCase() !== userEmail.trim().toLowerCase()
+  ) {
+    return undefined
+  }
+
+  const { error } = await admin
+    .from('people')
+    .update({
+      user_id: userId,
+      invite_accepted_at: new Date().toISOString(),
+      active: true,
+    })
+    .eq('id', person.id)
+
+  if (error) return undefined
+
+  const role = primaryRoleFromClaim(person.role as string[] | null) ?? 'tenant'
+  await admin.auth.admin.updateUserById(userId, {
+    app_metadata: {
+      role,
+      org_id: person.org_id,
+      person_id: person.id,
+    },
+  })
+  return role
 }
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const token_hash = searchParams.get('token_hash')
   const type = searchParams.get('type') as EmailOtpType | null
+  const inviteToken = searchParams.get('invite_token')
 
   if (token_hash && type) {
     const cookieStore = await cookies()
@@ -43,7 +80,7 @@ export async function GET(request: NextRequest) {
             )
           },
         },
-      }
+      },
     )
 
     const { error } = await supabase.auth.verifyOtp({ token_hash, type })
@@ -52,14 +89,35 @@ export async function GET(request: NextRequest) {
       const {
         data: { user },
       } = await supabase.auth.getUser()
-      const role = user?.app_metadata?.role as string | undefined
-      const redirectPath = ROLE_REDIRECT_MAP[role ?? ''] ?? '/app'
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? origin  // CR-02 fix
+
+      let role = user?.app_metadata?.role as string | undefined
+      const metaToken =
+        inviteToken ||
+        (user?.user_metadata?.invite_token as string | undefined) ||
+        null
+
+      if (user && metaToken) {
+        const acceptedRole = await acceptInviteToken(user.id, user.email, metaToken)
+        if (acceptedRole) role = acceptedRole
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (user) {
+        await ensureJwtClaimsFromPeople(supabase, user, session?.access_token)
+        const {
+          data: { user: fresh },
+        } = await supabase.auth.getUser()
+        role = (fresh?.app_metadata?.role as string | undefined) ?? role
+      }
+
+      const redirectPath = portalPathForRole(role)
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? origin
       return NextResponse.redirect(new URL(redirectPath, appUrl))
     }
   }
 
-  // Verification failed — redirect to error page
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? origin
   return NextResponse.redirect(new URL('/auth-code-error', appUrl))
 }

@@ -119,6 +119,33 @@ export default async function MyHomePage() {
               Pay Rent
             </Link>
           </div>
+
+          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+            <Link
+              href="/my-home/payments"
+              className="text-stone-600 underline underline-offset-2 hover:text-stone-900"
+            >
+              Payment history
+            </Link>
+            <Link
+              href="/my-home/maintenance"
+              className="text-stone-600 underline underline-offset-2 hover:text-stone-900"
+            >
+              Maintenance
+            </Link>
+            <Link
+              href="/my-home/checklist"
+              className="text-stone-600 underline underline-offset-2 hover:text-stone-900"
+            >
+              Move-in checklist
+            </Link>
+            <Link
+              href="/my-home/announcements"
+              className="text-stone-600 underline underline-offset-2 hover:text-stone-900"
+            >
+              Announcements
+            </Link>
+          </div>
         </div>
       )}
     </div>

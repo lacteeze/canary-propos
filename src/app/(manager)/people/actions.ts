@@ -219,6 +219,53 @@ export async function invitePersonToPortal(personId: string): Promise<ActionResu
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
   const signUpUrl = `${baseUrl}/invite/${inviteToken}`
 
+  // Viewer model: leases.tenant_id is the portal scope — enrich invite with that lease
+  let propertyAddress = ''
+  let unitNumber = ''
+  let moveInDate = 'To be confirmed'
+  if (primary === 'tenant') {
+    const { data: lease } = await ctx.supabase
+      .from('leases')
+      .select(
+        `
+        start_date,
+        units!unit_id(
+          unit_number,
+          properties!property_id(street_address, city)
+        )
+      `,
+      )
+      .eq('tenant_id', personId)
+      .eq('org_id', orgId)
+      .eq('status', 'active')
+      .order('start_date', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (lease) {
+      const unit = Array.isArray(lease.units) ? lease.units[0] : lease.units
+      const property = unit
+        ? Array.isArray(unit.properties)
+          ? unit.properties[0]
+          : unit.properties
+        : null
+      if (property?.street_address) {
+        propertyAddress = property.city
+          ? `${property.street_address}, ${property.city}`
+          : property.street_address
+      }
+      unitNumber = unit?.unit_number ?? ''
+      if (lease.start_date) {
+        const [y, m, d] = lease.start_date.split('-').map(Number)
+        moveInDate = new Date(y, m - 1, d).toLocaleDateString('en-CA', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
+      }
+    }
+  }
+
   const emailResult =
     primary === 'tenant'
       ? await sendEmail({
@@ -229,9 +276,9 @@ export async function invitePersonToPortal(personId: string): Promise<ActionResu
           template: createElement(TenantInviteEmail, {
             tenantFirstName: target.first_name ?? 'there',
             orgName,
-            propertyAddress: '',
-            unitNumber: '',
-            moveInDate: 'To be confirmed',
+            propertyAddress: propertyAddress || 'Your rental home',
+            unitNumber: unitNumber || '—',
+            moveInDate,
             signUpUrl,
           }),
         })

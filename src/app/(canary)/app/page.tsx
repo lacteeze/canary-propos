@@ -28,6 +28,12 @@ export default async function CanaryAppPage() {
   // Signed in but no people row yet — finish workspace setup first
   if (caller === 'no-person') redirect('/onboarding')
 
+  // Tenants use the dedicated portal (middleware also redirects; belt + suspenders)
+  const isTenantOnly =
+    caller.roles.includes('tenant') &&
+    !caller.roles.some((r) => ['admin', 'manager', 'employee'].includes(r))
+  if (isTenantOnly) redirect('/my-home')
+
   const isVendorOnly =
     caller.roles.includes('vendor') &&
     !caller.roles.some((r) => ['admin', 'manager', 'employee'].includes(r))

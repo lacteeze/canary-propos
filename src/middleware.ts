@@ -9,6 +9,7 @@ import {
   isAuthPersistEnabled,
 } from '@/lib/supabase/auth-persist'
 import { ensureJwtClaimsFromPeople } from '@/lib/auth/sync-jwt-claims'
+import { portalPathForRole } from '@/lib/auth/role-redirect'
 
 function isPublicListingsPath(pathname: string): boolean {
   return pathname.startsWith('/listings')
@@ -44,6 +45,7 @@ function isProtectedPath(pathname: string): boolean {
     pathname.startsWith('/app') ||
     pathname.startsWith('/dashboard') ||
     pathname.startsWith('/my-home') ||
+    pathname.startsWith('/receipts') ||
     pathname.startsWith('/portfolio') ||
     pathname.startsWith('/jobs') ||
     pathname.startsWith('/admin') ||
@@ -125,13 +127,15 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
-  // After onboarding (or for stuck sessions), JWT may lack org_id/role even though
-  // a people row exists. Sync claims + refresh so /app RLS can see the membership.
+  // After onboarding / invite accept, JWT may lack org_id/role even though a
+  // people row exists (or email can be linked). Sync claims + refresh for portals.
   if (
     user &&
     (pathname.startsWith('/app') ||
       pathname.startsWith('/onboarding') ||
-      pathname.startsWith('/dashboard'))
+      pathname.startsWith('/dashboard') ||
+      pathname.startsWith('/my-home') ||
+      pathname.startsWith('/receipts'))
   ) {
     try {
       const {
@@ -156,14 +160,23 @@ export async function middleware(request: NextRequest) {
     return redirectWithSession(new URL('/login', request.url), supabaseResponse)
   }
 
-  // Completed onboarding but still on /onboarding → send to app
+  // Completed onboarding but still on /onboarding → role-appropriate portal
   if (activeUser && pathname.startsWith('/onboarding') && role && activeUser.app_metadata?.org_id) {
-    return redirectWithSession(new URL('/app', request.url), supabaseResponse)
+    return redirectWithSession(
+      new URL(portalPathForRole(role), request.url),
+      supabaseResponse,
+    )
   }
 
-  // /app — the CanaryApp portal. Any authenticated user may enter; the page
-  // itself resolves the person + role from the people table (JWT role claims
-  // may be missing on accounts created before the auth hook was enabled).
+  // Tenants use the dedicated /my-home portal — not CanaryApp staff chrome.
+  // (Managers can still preview Tenant mode inside CanaryApp via role switcher.)
+  if (
+    activeUser &&
+    role === 'tenant' &&
+    (pathname === '/app' || pathname.startsWith('/app/'))
+  ) {
+    return redirectWithSession(new URL('/my-home', request.url), supabaseResponse)
+  }
 
   // Legacy ManagerShell list URLs → CanaryApp (exact paths only; detail routes stay)
   const legacyListRedirects: Record<string, string> = {
@@ -191,9 +204,16 @@ export async function middleware(request: NextRequest) {
     return redirectWithSession(new URL('/login', request.url), supabaseResponse)
   }
 
-  // /my-home — tenant only
-  if (pathname.startsWith('/my-home') && role !== 'tenant') {
-    return redirectWithSession(new URL('/login', request.url), supabaseResponse)
+  // /my-home + /receipts — tenant only
+  if (
+    (pathname.startsWith('/my-home') || pathname.startsWith('/receipts')) &&
+    role !== 'tenant'
+  ) {
+    const fallback = portalPathForRole(role)
+    return redirectWithSession(
+      new URL(role ? fallback : '/login', request.url),
+      supabaseResponse,
+    )
   }
 
   // /portfolio — owner only

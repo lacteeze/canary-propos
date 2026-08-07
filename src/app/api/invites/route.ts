@@ -3,6 +3,7 @@
 // Used by the invite acceptance page to pre-populate context before sign-up.
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { primaryRoleFromClaim } from '@/lib/auth/role-redirect'
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
   // Look up invite by token where not yet accepted (T-06-02: single-use)
   const { data: person, error } = await admin
     .from('people')
-    .select('id, email, role, org_id, invite_accepted_at, organizations(name)')
+    .select('id, email, role, org_id, invite_accepted_at, first_name, organizations(name)')
     .eq('invite_token', token)
     .single()
 
@@ -28,10 +29,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'already_accepted' }, { status: 410 })
   }
 
+  const role = primaryRoleFromClaim(person.role as string[] | null) ?? 'tenant'
+
   return NextResponse.json({
     email: person.email,
-    role: person.role,
+    role,
     orgName: (person.organizations as { name: string } | null)?.name ?? '',
     personId: person.id,
+    firstName: person.first_name ?? '',
   })
 }

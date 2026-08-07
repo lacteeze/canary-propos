@@ -147,7 +147,7 @@ export default function InvitePage() {
   }
 
   const shell = (inner: ReactNode) => (
-    <div className="cnry" style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+    <div className="cnry" data-ui="macos27" data-theme="light" style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <div
         style={{
           minHeight: '100vh',

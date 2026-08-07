@@ -2,12 +2,6 @@
 
 /**
  * RentPaymentForm — Stripe Elements card payment form for tenant rent.
- *
- * REQUIRES (not yet in package.json — install before deploying):
- *   npm install stripe @stripe/stripe-js @stripe/react-stripe-js
- *
- * Uses Stripe Elements (PaymentElement) for PCI-compliant card input.
- * Never touches raw card data.
  */
 
 import { useState, useEffect } from 'react'
@@ -18,7 +12,6 @@ import { loadStripe } from '@stripe/stripe-js'
 // @ts-ignore — install `@stripe/react-stripe-js` to resolve
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 
-// Load Stripe outside render loop (singleton)
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 
 interface RentPaymentFormProps {
@@ -31,12 +24,7 @@ function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(amount)
 }
 
-// Inner form — must be inside Elements provider
-function PaymentForm({
-  leaseId,
-  monthlyRent,
-  propertyAddress,
-}: RentPaymentFormProps) {
+function PaymentForm({ monthlyRent, propertyAddress }: RentPaymentFormProps) {
   const stripe = useStripe()
   const elements = useElements()
   const [isLoading, setIsLoading] = useState(false)
@@ -56,7 +44,6 @@ function PaymentForm({
       },
     })
 
-    // Only reaches here if there was an error (successful payments redirect)
     if (error) {
       setErrorMessage(error.message ?? 'An unexpected error occurred.')
     }
@@ -64,31 +51,34 @@ function PaymentForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="rounded-xl border border-stone-200 bg-white p-6">
-        <p className="mb-1 text-sm font-medium text-stone-500">Payment amount</p>
-        <p className="text-2xl font-semibold text-stone-900">{formatCurrency(monthlyRent)}</p>
-        <p className="mt-1 text-sm text-stone-500">{propertyAddress}</p>
+    <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 16 }}>
+      <div className="cy-portal-card">
+        <p className="cy-eyebrow" style={{ marginBottom: 6 }}>
+          Payment amount
+        </p>
+        <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>
+          {formatCurrency(monthlyRent)}
+        </p>
+        <p className="cy-portal-muted" style={{ margin: '6px 0 0' }}>
+          {propertyAddress}
+        </p>
       </div>
 
-      <div className="rounded-xl border border-stone-200 bg-white p-6">
+      <div className="cy-portal-card">
         <PaymentElement />
       </div>
 
-      {errorMessage && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-          <p className="text-sm text-red-700">{errorMessage}</p>
-        </div>
-      )}
+      {errorMessage && <div className="cy-portal-alert cy-portal-alert--err">{errorMessage}</div>}
 
-      <p className="text-xs text-stone-500">
+      <p className="cy-portal-muted" style={{ margin: 0, fontSize: 12 }}>
         ACH/bank payments are held for 5 business days before processing.
       </p>
 
       <button
         type="submit"
         disabled={!stripe || isLoading}
-        className="w-full rounded-lg bg-stone-900 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+        className="cy-btn-primary"
+        style={{ width: '100%', padding: '10px 16px' }}
       >
         {isLoading ? 'Processing…' : `Pay ${formatCurrency(monthlyRent)}`}
       </button>
@@ -96,7 +86,6 @@ function PaymentForm({
   )
 }
 
-// Outer wrapper — fetches clientSecret and provides Elements context
 export function RentPaymentForm({ leaseId, monthlyRent, propertyAddress }: RentPaymentFormProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [fetchError, setFetchError] = useState<string | null>(null)
@@ -122,17 +111,15 @@ export function RentPaymentForm({ leaseId, monthlyRent, propertyAddress }: RentP
   }, [leaseId, monthlyRent])
 
   if (fetchError) {
-    return (
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-        <p className="text-sm text-red-700">{fetchError}</p>
-      </div>
-    )
+    return <div className="cy-portal-alert cy-portal-alert--err">{fetchError}</div>
   }
 
   if (!clientSecret) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <p className="text-sm text-stone-500">Loading payment form…</p>
+      <div style={{ display: 'grid', placeItems: 'center', padding: '48px 0' }}>
+        <p className="cy-portal-muted" style={{ margin: 0 }}>
+          Loading payment form…
+        </p>
       </div>
     )
   }

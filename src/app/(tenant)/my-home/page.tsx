@@ -3,9 +3,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import LeaseDownloadButton from './LeaseDownloadButton'
 
-// --- Formatting helpers ---
 function formatDate(dateStr: string): string {
-  // Parse YYYY-MM-DD as local date to avoid UTC-offset day shift
   const [year, month, day] = dateStr.split('-').map(Number)
   const date = new Date(year, month - 1, day)
   return date.toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' })
@@ -18,11 +16,11 @@ function formatCurrency(amount: number): string {
 export default async function MyHomePage() {
   const supabase = await createClient()
 
-  // 1. Session guard
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // 2. Resolve person row
   const { data: person } = await supabase
     .from('people')
     .select('id, first_name, last_name')
@@ -30,7 +28,6 @@ export default async function MyHomePage() {
     .single()
   if (!person) redirect('/login')
 
-  // 3. Fetch active lease (maybeSingle — tenant may have no lease yet)
   const { data: lease } = await supabase
     .from('leases')
     .select(`
@@ -48,101 +45,82 @@ export default async function MyHomePage() {
     .eq('status', 'active')
     .maybeSingle()
 
-  // Narrow nested join types (Supabase returns arrays for joined tables)
-  const unit = lease
-    ? (Array.isArray(lease.units) ? lease.units[0] : lease.units)
-    : null
+  const unit = lease ? (Array.isArray(lease.units) ? lease.units[0] : lease.units) : null
   const property = unit
-    ? (Array.isArray(unit.properties) ? unit.properties[0] : unit.properties)
+    ? Array.isArray(unit.properties)
+      ? unit.properties[0]
+      : unit.properties
     : null
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-8 md:px-8">
-      <h1 className="mb-8 text-xl font-semibold text-stone-900">My Home</h1>
+    <div className="cy-portal-page" style={{ maxWidth: 560 }}>
+      <div className="cy-portal-page-head">
+        <div>
+          <p className="cy-eyebrow">My home</p>
+          <h1 className="cy-portal-title">Lease overview</h1>
+        </div>
+      </div>
 
       {!lease ? (
-        // Empty state
-        <div className="rounded-xl border border-dashed border-stone-300 py-12 text-center">
-          <p className="text-base font-medium text-stone-700">No active lease found</p>
-          <p className="mt-1 text-sm text-stone-500">
+        <div className="cy-portal-empty">
+          <p className="cy-portal-empty-title">No active lease found</p>
+          <p className="cy-portal-empty-sub">
             Contact your property manager for assistance.
           </p>
         </div>
       ) : (
-        // Lease card
-        <div className="rounded-xl border border-stone-200 bg-white p-6">
-          <h2 className="mb-4 text-base font-semibold text-stone-900">Your Current Lease</h2>
+        <div className="cy-portal-card">
+          <h2 className="cy-portal-card-title">Your current lease</h2>
 
-          <dl className="space-y-3">
-            <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4">
-              <dt className="w-32 shrink-0 text-sm font-medium text-stone-500">Property</dt>
-              <dd className="text-sm text-stone-900">
+          <dl className="cy-portal-dl">
+            <div>
+              <dt>Property</dt>
+              <dd>
                 {property
                   ? `${property.street_address}${unit ? ` — Unit ${unit.unit_number}` : ''}, ${property.city}, ${property.province}`
                   : '—'}
               </dd>
             </div>
-
-            <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4">
-              <dt className="w-32 shrink-0 text-sm font-medium text-stone-500">Tenant</dt>
-              <dd className="text-sm text-stone-900">
+            <div>
+              <dt>Tenant</dt>
+              <dd>
                 {person.first_name} {person.last_name}
               </dd>
             </div>
-
-            <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4">
-              <dt className="w-32 shrink-0 text-sm font-medium text-stone-500">Term</dt>
-              <dd className="text-sm text-stone-900">
+            <div>
+              <dt>Term</dt>
+              <dd>
                 {lease.start_date && lease.end_date
                   ? `${formatDate(lease.start_date)} – ${formatDate(lease.end_date)}`
                   : '—'}
               </dd>
             </div>
-
-            <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4">
-              <dt className="w-32 shrink-0 text-sm font-medium text-stone-500">Monthly Rent</dt>
-              <dd className="text-sm text-stone-900">
+            <div>
+              <dt>Monthly rent</dt>
+              <dd>
                 {lease.monthly_rent != null ? formatCurrency(Number(lease.monthly_rent)) : '—'}
               </dd>
             </div>
           </dl>
 
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <LeaseDownloadButton
-              leaseId={lease.id}
-              hasDocument={!!lease.document_path}
-            />
-            <Link
-              href="/my-home/pay"
-              className="inline-flex items-center justify-center rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-stone-700"
-            >
-              Pay Rent
+          <div className="cy-portal-actions">
+            <LeaseDownloadButton leaseId={lease.id} hasDocument={!!lease.document_path} />
+            <Link href="/my-home/pay" className="cy-btn-primary">
+              Pay rent
             </Link>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
-            <Link
-              href="/my-home/payments"
-              className="text-stone-600 underline underline-offset-2 hover:text-stone-900"
-            >
+          <div className="cy-portal-links">
+            <Link href="/my-home/payments" className="cy-portal-link">
               Payment history
             </Link>
-            <Link
-              href="/my-home/maintenance"
-              className="text-stone-600 underline underline-offset-2 hover:text-stone-900"
-            >
+            <Link href="/my-home/maintenance" className="cy-portal-link">
               Maintenance
             </Link>
-            <Link
-              href="/my-home/checklist"
-              className="text-stone-600 underline underline-offset-2 hover:text-stone-900"
-            >
+            <Link href="/my-home/checklist" className="cy-portal-link">
               Move-in checklist
             </Link>
-            <Link
-              href="/my-home/announcements"
-              className="text-stone-600 underline underline-offset-2 hover:text-stone-900"
-            >
+            <Link href="/my-home/announcements" className="cy-portal-link">
               Announcements
             </Link>
           </div>

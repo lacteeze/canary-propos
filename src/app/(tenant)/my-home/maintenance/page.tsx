@@ -1,10 +1,10 @@
-// src/app/(tenant)/my-home/maintenance/page.tsx
 // Tenant work order list — RSC. RLS tenants_select_own policy scopes to created_by automatically.
 // T-05-20: NEVER select vendor_cost, billed_amount, estimated_cost, vendor_token, owner_approve_token,
 //          owner_decline_token, assigned_vendor_id.
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import type { CSSProperties } from 'react'
 
 const PRIORITY_LABELS: Record<string, string> = {
   low: 'Low',
@@ -23,35 +23,51 @@ const STATUS_LABELS: Record<string, string> = {
   closed: 'Closed',
 }
 
-function priorityBadgeClass(priority: string): string {
-  if (priority === 'urgent') return 'inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700'
-  if (priority === 'high') return 'inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700'
-  if (priority === 'medium') return 'inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700'
-  return 'inline-flex items-center rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-medium text-stone-600'
+function priorityChipStyle(priority: string): CSSProperties {
+  if (priority === 'urgent') {
+    return { background: 'color-mix(in srgb, var(--red) 14%, var(--panel))', color: 'var(--red)' }
+  }
+  if (priority === 'high') {
+    return { background: 'color-mix(in srgb, var(--amber) 14%, var(--panel))', color: 'var(--amber)' }
+  }
+  if (priority === 'medium') {
+    return { background: 'color-mix(in srgb, var(--blue) 14%, var(--panel))', color: 'var(--blue)' }
+  }
+  return { background: 'var(--elev)', color: 'var(--dim)' }
 }
 
-function statusBadgeClass(status: string): string {
-  if (status === 'completed') return 'inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700'
-  if (status === 'in_progress') return 'inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700'
-  if (status === 'closed') return 'inline-flex items-center rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-medium text-stone-500'
-  if (status === 'assigned') return 'inline-flex items-center rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-700'
-  if (status === 'pending_approval') return 'inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700'
-  return 'inline-flex items-center rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-medium text-stone-600'
+function statusChipStyle(status: string): CSSProperties {
+  if (status === 'completed') {
+    return { background: 'color-mix(in srgb, var(--green) 14%, var(--panel))', color: 'var(--green)' }
+  }
+  if (status === 'in_progress') {
+    return { background: 'color-mix(in srgb, var(--blue) 14%, var(--panel))', color: 'var(--blue)' }
+  }
+  if (status === 'assigned') {
+    return { background: 'color-mix(in srgb, var(--blue) 14%, var(--panel))', color: 'var(--blue)' }
+  }
+  if (status === 'pending_approval') {
+    return { background: 'color-mix(in srgb, var(--amber) 14%, var(--panel))', color: 'var(--amber)' }
+  }
+  return { background: 'var(--elev)', color: 'var(--dim)' }
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' })
+  return new Date(dateStr).toLocaleDateString('en-CA', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
 }
 
 export default async function TenantMaintenancePage() {
   const supabase = await createClient()
 
-  // 1. Session guard
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // 2. Resolve person row
   const { data: person } = await supabase
     .from('people')
     .select('id, role')
@@ -61,8 +77,6 @@ export default async function TenantMaintenancePage() {
   if (!person) redirect('/login')
   if (!person.role.includes('tenant')) redirect('/login')
 
-  // 3. Fetch work orders — RLS tenants_select_own scopes to created_by = person.id automatically.
-  //    T-05-20: only safe columns selected — no cost fields, no tokens, no vendor FK.
   const { data: workOrders } = await supabase
     .from('work_orders')
     .select(`
@@ -78,29 +92,23 @@ export default async function TenantMaintenancePage() {
     .order('created_at', { ascending: false })
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
-      <div className="mb-6 flex items-center justify-between">
+    <div className="cy-portal-page">
+      <div className="cy-portal-page-head">
         <div>
-          <h1 className="text-xl font-semibold text-stone-900">My Maintenance Requests</h1>
-          <p className="mt-1 text-sm text-stone-500">Track the status of your submitted requests.</p>
+          <h1 className="cy-portal-title">My maintenance requests</h1>
+          <p className="cy-portal-sub">Track the status of your submitted requests.</p>
         </div>
-        <Link
-          href="/my-home/maintenance/new"
-          className="inline-flex items-center justify-center rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-stone-700"
-        >
-          Submit Request
+        <Link href="/my-home/maintenance/new" className="cy-btn-primary">
+          Submit request
         </Link>
       </div>
 
       {!workOrders || workOrders.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-stone-300 py-12 text-center">
-          <p className="text-base font-medium text-stone-700">No maintenance requests yet.</p>
-          <p className="mt-1 text-sm text-stone-500">
+        <div className="cy-portal-empty">
+          <p className="cy-portal-empty-title">No maintenance requests yet.</p>
+          <p className="cy-portal-empty-sub">
             Have a repair or issue?{' '}
-            <Link
-              href="/my-home/maintenance/new"
-              className="underline underline-offset-2 hover:text-stone-800"
-            >
+            <Link href="/my-home/maintenance/new" className="cy-portal-link">
               Submit your first request
             </Link>
             .
@@ -108,38 +116,35 @@ export default async function TenantMaintenancePage() {
         </div>
       ) : (
         <>
-          {/* Desktop table (md+) */}
-          <div className="hidden overflow-hidden rounded-xl border border-stone-200 md:block">
-            <table className="w-full text-sm">
-              <thead className="bg-stone-50 text-left text-xs font-medium uppercase tracking-wider text-stone-500">
+          <div className="cy-portal-table-wrap hidden md:block">
+            <table className="cy-portal-table">
+              <thead>
                 <tr>
-                  <th className="px-4 py-3">Title</th>
-                  <th className="px-4 py-3">Property</th>
-                  <th className="px-4 py-3">Priority</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Submitted</th>
+                  <th>Title</th>
+                  <th>Property</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th>Submitted</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <tbody>
                 {workOrders.map((wo) => {
                   const prop = Array.isArray(wo.properties) ? wo.properties[0] : wo.properties
                   return (
-                    <tr key={wo.id} className="bg-white hover:bg-stone-50">
-                      <td className="px-4 py-3 font-medium text-stone-900">{wo.title}</td>
-                      <td className="px-4 py-3 text-stone-600">
-                        {prop ? `${prop.street_address}, ${prop.city}` : '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={priorityBadgeClass(wo.priority)}>
+                    <tr key={wo.id}>
+                      <td className="strong">{wo.title}</td>
+                      <td>{prop ? `${prop.street_address}, ${prop.city}` : '—'}</td>
+                      <td>
+                        <span className="cy-status-chip" style={priorityChipStyle(wo.priority)}>
                           {PRIORITY_LABELS[wo.priority] ?? wo.priority}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className={statusBadgeClass(wo.status)}>
+                      <td>
+                        <span className="cy-status-chip" style={statusChipStyle(wo.status)}>
                           {STATUS_LABELS[wo.status] ?? wo.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-stone-500">{formatDate(wo.created_at)}</td>
+                      <td>{formatDate(wo.created_at)}</td>
                     </tr>
                   )
                 })}
@@ -147,26 +152,29 @@ export default async function TenantMaintenancePage() {
             </table>
           </div>
 
-          {/* Mobile cards */}
-          <div className="space-y-3 md:hidden">
+          <div className="cy-portal-stack md:hidden">
             {workOrders.map((wo) => {
               const prop = Array.isArray(wo.properties) ? wo.properties[0] : wo.properties
               return (
-                <div key={wo.id} className="rounded-xl border border-stone-200 bg-white p-4">
-                  <div className="mb-2 flex items-start justify-between gap-2">
-                    <p className="font-medium text-stone-900">{wo.title}</p>
-                    <span className={statusBadgeClass(wo.status)}>
+                <div key={wo.id} className="cy-portal-card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                    <p style={{ margin: 0, fontWeight: 700, color: 'var(--text)' }}>{wo.title}</p>
+                    <span className="cy-status-chip" style={statusChipStyle(wo.status)}>
                       {STATUS_LABELS[wo.status] ?? wo.status}
                     </span>
                   </div>
                   {prop && (
-                    <p className="mb-2 text-sm text-stone-500">{prop.street_address}, {prop.city}</p>
+                    <p className="cy-portal-muted" style={{ margin: '0 0 10px' }}>
+                      {prop.street_address}, {prop.city}
+                    </p>
                   )}
-                  <div className="flex items-center justify-between">
-                    <span className={priorityBadgeClass(wo.priority)}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span className="cy-status-chip" style={priorityChipStyle(wo.priority)}>
                       {PRIORITY_LABELS[wo.priority] ?? wo.priority}
                     </span>
-                    <p className="text-xs text-stone-400">{formatDate(wo.created_at)}</p>
+                    <span className="cy-portal-muted" style={{ fontSize: 12 }}>
+                      {formatDate(wo.created_at)}
+                    </span>
                   </div>
                 </div>
               )

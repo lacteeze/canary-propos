@@ -1,7 +1,7 @@
-// src/app/(tenant)/layout.tsx
-// Tenant portal route group — Canary-styled shell with org branding
+// Tenant portal route group — Canary portal shell + fonts
 import type { ReactNode } from 'react'
 import TenantShell from '@/components/layout/TenantShell'
+import CanaryFontShell from '@/components/layout/CanaryFontShell'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -39,8 +39,10 @@ export default async function TenantLayout({ children }: { children: ReactNode }
   }
 
   return (
-    <TenantShell orgName={orgName} tenantName={tenantName}>
-      {children}
-    </TenantShell>
+    <CanaryFontShell>
+      <TenantShell orgName={orgName} tenantName={tenantName}>
+        {children}
+      </TenantShell>
+    </CanaryFontShell>
   )
 }

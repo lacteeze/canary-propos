@@ -1,9 +1,5 @@
 'use client'
 
-// src/app/(vendor-nologin)/vendor/jobs/[token]/VendorActions.tsx
-// Client component for vendor status-update buttons on the no-login page.
-// Calls updateViaVendorToken server action via useTransition.
-
 import { useState, useTransition } from 'react'
 import { updateViaVendorToken } from '@/app/actions/work-orders'
 
@@ -49,31 +45,24 @@ export function VendorActions({ token, status }: VendorActionsProps) {
   }
 
   if (message) {
-    return (
-      <div className="rounded-lg bg-green-50 border border-green-200 p-4">
-        <p className="text-sm font-medium text-green-800">{message}</p>
-      </div>
-    )
+    return <div className="cy-portal-alert cy-portal-alert--ok">{message}</div>
   }
 
   if (status === 'assigned') {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-stone-600">
+      <div style={{ display: 'grid', gap: 12 }}>
+        <p className="cy-portal-muted" style={{ margin: 0 }}>
           Tap &ldquo;Start Work&rdquo; when you are ready to begin, so Canary knows you are on the job.
         </p>
-        {error && (
-          <p role="alert" className="text-sm text-red-600">
-            {error}
-          </p>
-        )}
+        {error && <div className="cy-portal-alert cy-portal-alert--err">{error}</div>}
         <button
           type="button"
           onClick={handleStartWork}
           disabled={isPending}
-          className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          className="cy-btn-primary"
+          style={{ width: '100%', padding: '10px 16px' }}
         >
-          {isPending ? 'Updating…' : 'Start Work'}
+          {isPending ? 'Updating…' : 'Start work'}
         </button>
       </div>
     )
@@ -81,14 +70,17 @@ export function VendorActions({ token, status }: VendorActionsProps) {
 
   if (status === 'in_progress') {
     return (
-      <form onSubmit={handleMarkComplete} className="space-y-4">
-        <p className="text-sm text-stone-600">
-          Mark the job as complete when the work is done. You may optionally provide your invoice amount.
+      <form onSubmit={handleMarkComplete} style={{ display: 'grid', gap: 14 }}>
+        <p className="cy-portal-muted" style={{ margin: 0 }}>
+          Mark the job as complete when the work is done. You may optionally provide your invoice
+          amount.
         </p>
-        <div>
-          <label htmlFor="invoice-amount" className="block text-sm font-medium text-stone-700 mb-1">
-            Invoice Amount ($){' '}
-            <span className="text-stone-400 font-normal">(optional — leave blank if no charge)</span>
+        <div className="cy-portal-field">
+          <label htmlFor="invoice-amount" className="cy-portal-label">
+            Invoice amount ($){' '}
+            <span style={{ color: 'var(--faint)', fontWeight: 500 }}>
+              (optional — leave blank if no charge)
+            </span>
           </label>
           <input
             id="invoice-amount"
@@ -98,25 +90,21 @@ export function VendorActions({ token, status }: VendorActionsProps) {
             value={invoiceAmount}
             onChange={(e) => setInvoiceAmount(e.target.value)}
             placeholder="0.00"
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="cy-input"
           />
         </div>
-        {error && (
-          <p role="alert" className="text-sm text-red-600">
-            {error}
-          </p>
-        )}
+        {error && <div className="cy-portal-alert cy-portal-alert--err">{error}</div>}
         <button
           type="submit"
           disabled={isPending}
-          className="w-full rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+          className="cy-btn-primary"
+          style={{ width: '100%', padding: '10px 16px' }}
         >
-          {isPending ? 'Submitting…' : 'Mark Complete'}
+          {isPending ? 'Submitting…' : 'Mark complete'}
         </button>
       </form>
     )
   }
 
-  // All other statuses: informational only
   return null
 }

@@ -1,10 +1,20 @@
 'use client'
 
 // Shared Canary portal shell — tenant / owner / vendor
-import type { ComponentType, ReactNode } from 'react'
+import { useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { Bell, MessageSquare } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import '@/design-system/macos27/index.css'
 import '@/components/canary/canary.css'
 import './portal.css'
@@ -26,6 +36,13 @@ interface PortalShellProps {
   navItems: PortalNavItem[]
 }
 
+function userInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return 'U'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
 export default function PortalShell({
   children,
   orgName = 'Canary',
@@ -35,7 +52,26 @@ export default function PortalShell({
   navItems,
 }: PortalShellProps) {
   const pathname = usePathname()
-  const initial = (userName.trim()[0] || 'U').toUpperCase()
+  const [theme, setTheme] = useState<'dark' | 'light'>('light')
+
+  useEffect(() => {
+    try {
+      const t = localStorage.getItem('canary_theme')
+      if (t === 'light' || t === 'dark') setTheme(t)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  function toggleTheme() {
+    const next = theme === 'dark' ? 'light' : 'dark'
+    setTheme(next)
+    try {
+      localStorage.setItem('canary_theme', next)
+    } catch {
+      /* ignore */
+    }
+  }
 
   function isActive(item: PortalNavItem) {
     if (item.exact) return pathname === item.href
@@ -49,22 +85,42 @@ export default function PortalShell({
   }
 
   return (
-    <div className="cnry cy-portal" data-ui="macos27" data-theme="light">
+    <div className="cnry cy-portal" data-ui="macos27" data-theme={theme}>
       <header className="cy-portal-header">
         <Link href={homeHref} className="cy-portal-header-brand" title={orgName}>
           <span className="cy-header-brand-logo">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
+              src="/landing/logo-white.png"
+              alt=""
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: 28,
+                height: 28,
+                objectFit: 'contain',
+                display: theme === 'dark' ? 'block' : 'none',
+              }}
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src="/landing/logo-black.png"
               alt=""
-              style={{ position: 'absolute', inset: 0, width: 28, height: 28, objectFit: 'contain' }}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: 28,
+                height: 28,
+                objectFit: 'contain',
+                display: theme === 'dark' ? 'none' : 'block',
+              }}
             />
           </span>
           <span className="cy-portal-header-meta">
             <span className="cy-portal-header-title">
               {orgName.includes('Canary') ? (
                 <>
-                  Canary <span style={{ color: 'var(--dim)', fontWeight: 500 }}>PM</span>
+                  Canary <span className="cy-header-brand-sub">PM</span>
                 </>
               ) : (
                 orgName
@@ -73,9 +129,86 @@ export default function PortalShell({
             <span className="cy-portal-header-sub">{portalLabel}</span>
           </span>
         </Link>
-        <button type="button" className="cy-btn" onClick={() => void signOut()}>
-          Sign out
-        </button>
+
+        <div className="cy-header-tools">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="cy-messages-toggle"
+              aria-label="Messages"
+              title="Messages"
+            >
+              <MessageSquare size={16} strokeWidth={2} aria-hidden />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              sideOffset={8}
+              data-theme={theme}
+              className="cnry cy-menu cy-portal-panel-menu min-w-64"
+            >
+              <DropdownMenuLabel>Messages</DropdownMenuLabel>
+              <div className="cy-portal-panel-empty">
+                No messages yet. Conversations with your property manager will appear here.
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="cy-messages-toggle"
+              aria-label="Notifications"
+              title="Notifications"
+            >
+              <Bell size={16} strokeWidth={2} aria-hidden />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              sideOffset={8}
+              data-theme={theme}
+              className="cnry cy-menu cy-portal-panel-menu min-w-64"
+            >
+              <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+              <div className="cy-portal-panel-empty">
+                No notifications yet. Alerts for payments, approvals, and updates will appear here.
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <div className="cy-header-actions">
+            <DropdownMenu>
+              <DropdownMenuTrigger className="cy-profile-trigger" aria-label="Account menu">
+                <span className="cy-profile-avatar" aria-hidden>
+                  {userInitials(userName)}
+                </span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                sideOffset={8}
+                data-theme={theme}
+                className="cnry cy-menu cy-profile-menu min-w-56"
+              >
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>{userName}</DropdownMenuLabel>
+                  <div className="cy-portal-profile-role">{portalLabel}</div>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={toggleTheme}>
+                    {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+                    <span className="cy-profile-menu-hint" aria-hidden>
+                      {theme === 'dark' ? '☀' : '☾'}
+                    </span>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem variant="destructive" onClick={() => void signOut()}>
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
       </header>
 
       <div className="cy-portal-body">
@@ -99,7 +232,7 @@ export default function PortalShell({
           </nav>
           <div className="cy-portal-user">
             <div className="cy-portal-avatar" aria-hidden>
-              {initial}
+              {userInitials(userName)}
             </div>
             <span className="text-sm truncate" style={{ color: 'var(--text)', fontSize: 13.5 }}>
               {userName}

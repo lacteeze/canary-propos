@@ -17,12 +17,40 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 16px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
   position: sticky;
   top: 0;
   z-index: 40;
+  overflow: visible;
+}
+
+/* Reuse CanaryApp header tool placement on the portal chrome */
+.cnry.cy-portal .cy-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  margin-left: auto;
+}
+
+.cnry .cy-portal-panel-menu {
+  padding-bottom: 8px;
+}
+
+.cnry .cy-portal-panel-empty {
+  padding: 10px 12px 6px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--dim);
+}
+
+.cnry .cy-portal-profile-role {
+  padding: 0 12px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--faint);
 }
 
 .cnry .cy-portal-header-brand {

@@ -503,6 +503,7 @@ function buildInterestNote(parts: {
 const PIPELINE_STATUSES = [
   'new',
   'contacted',
+  'viewing',
   'application_sent',
   'signed',
   'closed',
@@ -513,22 +514,16 @@ const updateStatusSchema = z.object({
   status: z.enum(PIPELINE_STATUSES),
 })
 
-export async function updateInquiryStatus(
-  id: string,
-  status: (typeof PIPELINE_STATUSES)[number]
-): Promise<{ error?: string }> {
-  const parsed = updateStatusSchema.safeParse({ id, status })
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? 'Invalid input' }
-  }
-
+async function requireInquiryManager(): Promise<
+  | { error: string; supabase?: undefined; orgId?: undefined }
+  | { error?: undefined; supabase: Awaited<ReturnType<typeof createClient>>; orgId: string }
+> {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
-  // Resolve caller's org_id (T-03-17 — cross-org update prevention)
   const { data: person } = await supabase
     .from('people')
     .select('org_id, role')
@@ -541,23 +536,107 @@ export async function updateInquiryStatus(
     return { error: 'Not authorized' }
   }
 
-  const { error: updateError } = await supabase
+  return { supabase, orgId: person.org_id }
+}
+
+export async function updateInquiryStatus(
+  id: string,
+  status: (typeof PIPELINE_STATUSES)[number]
+): Promise<{ error?: string }> {
+  const parsed = updateStatusSchema.safeParse({ id, status })
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Invalid input' }
+  }
+
+  const auth = await requireInquiryManager()
+  if (auth.error) return { error: auth.error }
+
+  const { error: updateError } = await auth.supabase
     .from('inquiries')
     .update({
       status: parsed.data.status,
       updated_at: new Date().toISOString(),
     })
     .eq('id', parsed.data.id)
-    .eq('org_id', person.org_id) // T-03-17: guard by org_id
+    .eq('org_id', auth.orgId) // T-03-17: guard by org_id
 
   if (updateError) {
     console.error('[updateInquiryStatus] update error:', updateError)
     return { error: 'Failed to update status. Please try again.' }
   }
 
+  // Light revalidation — client keeps optimistic board; no router.refresh required.
   revalidatePath('/app')
-  revalidatePath('/inquiries')
-  revalidatePath('/dashboard')
+  return {}
+}
+
+/** Hard-delete an inquiry (and cascaded notes). Manager/admin only. */
+export async function deleteInquiry(id: string): Promise<{ error?: string }> {
+  const parsed = z.string().uuid('Invalid inquiry ID').safeParse(id)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Invalid input' }
+  }
+
+  const auth = await requireInquiryManager()
+  if (auth.error) return { error: auth.error }
+
+  const { error: deleteError } = await auth.supabase
+    .from('inquiries')
+    .delete()
+    .eq('id', parsed.data)
+    .eq('org_id', auth.orgId)
+
+  if (deleteError) {
+    console.error('[deleteInquiry] delete error:', deleteError)
+    return { error: 'Failed to delete inquiry. Please try again.' }
+  }
+
+  revalidatePath('/app')
+  return {}
+}
+
+/** Set or clear the scheduled viewing datetime for an inquiry. */
+export async function updateInquiryViewingAt(
+  id: string,
+  viewingAt: string | null
+): Promise<{ error?: string }> {
+  const idParsed = z.string().uuid('Invalid inquiry ID').safeParse(id)
+  if (!idParsed.success) {
+    return { error: idParsed.error.issues[0]?.message ?? 'Invalid input' }
+  }
+
+  let iso: string | null = null
+  if (viewingAt != null && viewingAt.trim() !== '') {
+    const d = new Date(viewingAt)
+    if (Number.isNaN(d.getTime())) return { error: 'Invalid viewing date.' }
+    iso = d.toISOString()
+  }
+
+  const auth = await requireInquiryManager()
+  if (auth.error) return { error: auth.error }
+
+  const patch: {
+    viewing_at: string | null
+    updated_at: string
+    status?: 'viewing'
+  } = {
+    viewing_at: iso,
+    updated_at: new Date().toISOString(),
+  }
+  if (iso) patch.status = 'viewing'
+
+  const { error: updateError } = await auth.supabase
+    .from('inquiries')
+    .update(patch)
+    .eq('id', idParsed.data)
+    .eq('org_id', auth.orgId)
+
+  if (updateError) {
+    console.error('[updateInquiryViewingAt] update error:', updateError)
+    return { error: 'Failed to save viewing time. Please try again.' }
+  }
+
+  revalidatePath('/app')
   return {}
 }
 

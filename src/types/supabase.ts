@@ -477,6 +477,7 @@ export type Database = {
           status: Database["public"]["Enums"]["inquiry_status"]
           type: Database["public"]["Enums"]["inquiry_type"]
           updated_at: string
+          viewing_at: string | null
         }
         Insert: {
           budget?: number | null
@@ -493,6 +494,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["inquiry_status"]
           type?: Database["public"]["Enums"]["inquiry_type"]
           updated_at?: string
+          viewing_at?: string | null
         }
         Update: {
           budget?: number | null
@@ -509,6 +511,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["inquiry_status"]
           type?: Database["public"]["Enums"]["inquiry_type"]
           updated_at?: string
+          viewing_at?: string | null
         }
         Relationships: [
           {
@@ -1931,6 +1934,7 @@ export type Database = {
       inquiry_status:
         | "new"
         | "contacted"
+        | "viewing"
         | "application_sent"
         | "signed"
         | "closed"
@@ -2093,6 +2097,7 @@ export const Constants = {
       inquiry_status: [
         "new",
         "contacted",
+        "viewing",
         "application_sent",
         "signed",
         "closed",

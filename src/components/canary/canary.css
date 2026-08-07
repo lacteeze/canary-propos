@@ -3058,10 +3058,55 @@
   border: 1px solid color-mix(in srgb, var(--red) 40%, var(--border));
   color: var(--text);
   font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cnry .cy-pipeline-error-dismiss {
+  border: none;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  flex: none;
+}
+.cnry .cy-pipeline-head-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.cnry .cy-pipeline-save-pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--elev);
+  color: var(--dim);
+  white-space: nowrap;
+}
+.cnry .cy-pipeline-save-pill.is-saving {
+  color: var(--blue);
+  border-color: color-mix(in srgb, var(--blue) 40%, var(--border));
+  background: color-mix(in srgb, var(--blue) 12%, var(--panel));
+}
+.cnry .cy-pipeline-save-pill.is-saved {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 40%, var(--border));
+  background: color-mix(in srgb, var(--green) 12%, var(--panel));
+}
+.cnry .cy-pipeline-save-pill.is-error {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 40%, var(--border));
+  background: color-mix(in srgb, var(--red) 12%, var(--panel));
 }
 .cnry .cy-pipeline-board {
   display: grid;
-  grid-template-columns: repeat(4, minmax(240px, 1fr));
+  grid-template-columns: repeat(5, minmax(220px, 1fr));
   gap: 12px;
   overflow-x: auto;
   padding-bottom: 8px;
@@ -3213,6 +3258,32 @@
   display: grid;
   place-items: center;
   cursor: pointer;
+}
+.cnry .cy-pipeline-icon-btn.is-danger {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 35%, var(--border));
+}
+.cnry .cy-pipeline-datetime {
+  width: 100%;
+  margin-top: 4px;
+  background: var(--elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 7px 10px;
+  font-size: 13px;
+}
+.cnry .cy-pipeline-drawer-foot {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cnry .cy-pipeline-delete-btn {
+  color: var(--red) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .cnry .cy-pipeline-card-btns {
   display: flex;

@@ -1,11 +1,13 @@
 'use client'
 
-import React, { useEffect, useMemo, useState, useTransition } from 'react'
-import { Calendar, Mail, Phone, Plus, ArrowRight } from 'lucide-react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowRight, Calendar, Mail, Phone, Plus, Trash2 } from 'lucide-react'
 import {
   addInquiryNote,
+  deleteInquiry,
   listInquiryNotes,
   updateInquiryStatus,
+  updateInquiryViewingAt,
 } from '@/app/actions/inquiries'
 import {
   INQUIRY_PIPELINE_LABELS,
@@ -34,6 +36,26 @@ function formatMoveIn(moveIn: string): string {
   return `Wants ${d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}`
 }
 
+function formatViewingAt(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleString('en-CA', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+function toDatetimeLocalValue(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 function initials(name: string): string {
   return name
     .split(/\s+/)
@@ -48,8 +70,11 @@ function shortProperty(address: string): string {
   return street.length > 42 ? `${street.slice(0, 40)}…` : street
 }
 
+type SaveTone = 'idle' | 'saving' | 'saved' | 'error'
+
 type Props = {
   inquiries: CanaryInquiry[]
+  /** Debounced background sync only — never awaited for UI. */
   onChanged?: () => void
 }
 
@@ -58,13 +83,80 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
-  const [pending, startTransition] = useTransition()
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({})
   const [detailNotes, setDetailNotes] = useState<CanaryInquiryNote[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [saveTone, setSaveTone] = useState<SaveTone>('idle')
+  const [saveMessage, setSaveMessage] = useState('')
 
+  /** Inquiry ids with in-flight optimistic mutations — protect from parent prop clobber. */
+  const dirtyIds = useRef(new Set<string>())
+  /** Deleted locally while server delete is in flight. */
+  const deletedIds = useRef(new Set<string>())
+  /** Latest desired status per inquiry (coalesces rapid moves). */
+  const statusQueue = useRef(new Map<string, InquiryStatus>())
+  const statusFlushing = useRef(new Set<string>())
+  const inFlightCount = useRef(0)
+  const savedClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const parentSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const snapshots = useRef(new Map<string, CanaryInquiry>())
+
+  const bumpSaving = useCallback(() => {
+    inFlightCount.current += 1
+    if (savedClearTimer.current) clearTimeout(savedClearTimer.current)
+    setSaveTone('saving')
+    setSaveMessage('Saving…')
+  }, [])
+
+  const bumpDone = useCallback((ok: boolean, message?: string) => {
+    inFlightCount.current = Math.max(0, inFlightCount.current - 1)
+    if (!ok) {
+      setSaveTone('error')
+      setSaveMessage(message || 'Save failed')
+      setError(message || 'Save failed')
+      return
+    }
+    if (inFlightCount.current === 0) {
+      setSaveTone('saved')
+      setSaveMessage('Saved')
+      if (savedClearTimer.current) clearTimeout(savedClearTimer.current)
+      savedClearTimer.current = setTimeout(() => {
+        setSaveTone('idle')
+        setSaveMessage('')
+      }, 1600)
+    }
+  }, [])
+
+  const scheduleParentSync = useCallback(() => {
+    if (!onChanged) return
+    if (parentSyncTimer.current) clearTimeout(parentSyncTimer.current)
+    parentSyncTimer.current = setTimeout(() => {
+      onChanged()
+    }, 2800)
+  }, [onChanged])
+
+  // Soft-merge server props; never wipe optimistic dirty rows mid-save.
   useEffect(() => {
-    setItems(initial)
+    setItems((prev) => {
+      const prevById = new Map(prev.map((i) => [i.id, i]))
+      const next: CanaryInquiry[] = []
+      for (const server of initial) {
+        if (deletedIds.current.has(server.id)) continue
+        if (dirtyIds.current.has(server.id)) {
+          next.push(prevById.get(server.id) ?? server)
+        } else {
+          next.push(server)
+        }
+      }
+      // Keep optimistic rows that parent hasn't caught up with yet (e.g. just created notes only)
+      for (const local of prev) {
+        if (deletedIds.current.has(local.id)) continue
+        if (!next.some((i) => i.id === local.id) && dirtyIds.current.has(local.id)) {
+          next.push(local)
+        }
+      }
+      return next
+    })
   }, [initial])
 
   const selected = items.find((i) => i.id === selectedId) ?? null
@@ -85,9 +177,9 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return items.filter((i) => i.status !== 'closed')
     return items.filter((i) => {
       if (i.status === 'closed') return false
+      if (!q) return true
       return (
         i.name.toLowerCase().includes(q) ||
         i.email.toLowerCase().includes(q) ||
@@ -107,19 +199,62 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
     return map
   }, [filtered])
 
-  function moveInquiry(id: string, status: InquiryStatus) {
-    const prev = items
-    setItems((list) => list.map((i) => (i.id === id ? { ...i, status } : i)))
-    setError(null)
-    startTransition(async () => {
-      const result = await updateInquiryStatus(id, status)
-      if (result.error) {
-        setItems(prev)
-        setError(result.error)
-        return
+  const flushStatus = useCallback(
+    async (id: string) => {
+      if (statusFlushing.current.has(id)) return
+      statusFlushing.current.add(id)
+      bumpSaving()
+      try {
+        while (statusQueue.current.has(id)) {
+          const status = statusQueue.current.get(id)!
+          statusQueue.current.delete(id)
+          const result = await updateInquiryStatus(id, status)
+          if (result.error) {
+            const snap = snapshots.current.get(id)
+            if (snap) {
+              setItems((list) => list.map((i) => (i.id === id ? snap : i)))
+            }
+            dirtyIds.current.delete(id)
+            bumpDone(false, result.error)
+            statusFlushing.current.delete(id)
+            return
+          }
+        }
+        dirtyIds.current.delete(id)
+        snapshots.current.delete(id)
+        bumpDone(true)
+        scheduleParentSync()
+      } catch (e) {
+        const snap = snapshots.current.get(id)
+        if (snap) {
+          setItems((list) => list.map((i) => (i.id === id ? snap : i)))
+        }
+        dirtyIds.current.delete(id)
+        bumpDone(false, e instanceof Error ? e.message : 'Save failed')
+      } finally {
+        statusFlushing.current.delete(id)
+        // Another move queued while we were finishing
+        if (statusQueue.current.has(id)) {
+          void flushStatus(id)
+        }
       }
-      onChanged?.()
-    })
+    },
+    [bumpDone, bumpSaving, scheduleParentSync],
+  )
+
+  function moveInquiry(id: string, status: InquiryStatus) {
+    const current = items.find((i) => i.id === id)
+    if (!current || current.status === status) return
+
+    if (!snapshots.current.has(id)) {
+      snapshots.current.set(id, current)
+    }
+    dirtyIds.current.add(id)
+    setError(null)
+    setItems((list) => list.map((i) => (i.id === id ? { ...i, status } : i)))
+
+    statusQueue.current.set(id, status)
+    void flushStatus(id)
   }
 
   function advance(inquiry: CanaryInquiry) {
@@ -132,26 +267,133 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
     if (!body) return
     setNoteDrafts((d) => ({ ...d, [inquiryId]: '' }))
     setError(null)
-    startTransition(async () => {
-      const result = await addInquiryNote(inquiryId, body)
+
+    const created: CanaryInquiryNote = {
+      id: crypto.randomUUID(),
+      body,
+      createdAt: new Date().toISOString(),
+      authorName: 'You',
+    }
+    dirtyIds.current.add(inquiryId)
+    setItems((list) =>
+      list.map((i) => (i.id === inquiryId ? { ...i, latestNote: created } : i)),
+    )
+    if (selectedId === inquiryId) {
+      setDetailNotes((n) => [created, ...n])
+    }
+
+    bumpSaving()
+    void addInquiryNote(inquiryId, body).then((result) => {
       if (result.error) {
-        setError(result.error)
         setNoteDrafts((d) => ({ ...d, [inquiryId]: body }))
+        setItems((list) =>
+          list.map((i) =>
+            i.id === inquiryId && i.latestNote?.id === created.id
+              ? { ...i, latestNote: null }
+              : i,
+          ),
+        )
+        if (selectedId === inquiryId) {
+          setDetailNotes((n) => n.filter((x) => x.id !== created.id))
+        }
+        dirtyIds.current.delete(inquiryId)
+        bumpDone(false, result.error)
         return
       }
-      const created: CanaryInquiryNote = {
-        id: result.noteId ?? crypto.randomUUID(),
-        body,
-        createdAt: new Date().toISOString(),
-        authorName: 'You',
+      if (result.noteId) {
+        const realId = result.noteId
+        setItems((list) =>
+          list.map((i) =>
+            i.id === inquiryId && i.latestNote?.id === created.id
+              ? { ...i, latestNote: { ...created, id: realId } }
+              : i,
+          ),
+        )
+        if (selectedId === inquiryId) {
+          setDetailNotes((n) =>
+            n.map((x) => (x.id === created.id ? { ...x, id: realId } : x)),
+          )
+        }
       }
-      setItems((list) =>
-        list.map((i) => (i.id === inquiryId ? { ...i, latestNote: created } : i)),
-      )
-      if (selectedId === inquiryId) {
-        setDetailNotes((n) => [created, ...n])
+      dirtyIds.current.delete(inquiryId)
+      bumpDone(true)
+      scheduleParentSync()
+    })
+  }
+
+  function removeInquiry(inquiry: CanaryInquiry) {
+    const ok = window.confirm(
+      `Remove ${inquiry.name} from the pipeline?\n\nThis permanently deletes the inquiry.`,
+    )
+    if (!ok) return
+
+    const snap = inquiry
+    deletedIds.current.add(inquiry.id)
+    dirtyIds.current.add(inquiry.id)
+    setItems((list) => list.filter((i) => i.id !== inquiry.id))
+    if (selectedId === inquiry.id) setSelectedId(null)
+    setError(null)
+
+    bumpSaving()
+    void deleteInquiry(inquiry.id).then((result) => {
+      if (result.error) {
+        deletedIds.current.delete(inquiry.id)
+        dirtyIds.current.delete(inquiry.id)
+        setItems((list) => {
+          if (list.some((i) => i.id === snap.id)) return list
+          return [snap, ...list]
+        })
+        bumpDone(false, result.error)
+        return
       }
-      onChanged?.()
+      dirtyIds.current.delete(inquiry.id)
+      snapshots.current.delete(inquiry.id)
+      bumpDone(true)
+      scheduleParentSync()
+    })
+  }
+
+  function saveViewingAt(inquiryId: string, value: string) {
+    const iso = value ? new Date(value).toISOString() : null
+    if (value && (!iso || Number.isNaN(new Date(value).getTime()))) {
+      setError('Invalid viewing date.')
+      return
+    }
+
+    const current = items.find((i) => i.id === inquiryId)
+    if (!current) return
+    if (!snapshots.current.has(inquiryId)) {
+      snapshots.current.set(inquiryId, current)
+    }
+    dirtyIds.current.add(inquiryId)
+    setItems((list) =>
+      list.map((i) =>
+        i.id === inquiryId
+          ? {
+              ...i,
+              viewingAt: iso,
+              status: iso ? 'viewing' : i.status,
+            }
+          : i,
+      ),
+    )
+    setError(null)
+
+    bumpSaving()
+    void updateInquiryViewingAt(inquiryId, iso).then((result) => {
+      if (result.error) {
+        const snap = snapshots.current.get(inquiryId)
+        if (snap) {
+          setItems((list) => list.map((i) => (i.id === inquiryId ? snap : i)))
+        }
+        dirtyIds.current.delete(inquiryId)
+        bumpDone(false, result.error)
+        return
+      }
+      dirtyIds.current.delete(inquiryId)
+      snapshots.current.delete(inquiryId)
+      bumpDone(true)
+      scheduleParentSync()
     })
   }
 
@@ -161,20 +403,37 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
         <div>
           <h2 className="cy-pipeline-title">Leasing pipeline</h2>
         </div>
-        <label className="cy-pipeline-search">
-          <span aria-hidden>⌕</span>
-          <input
-            type="search"
-            placeholder="Search prospects…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </label>
+        <div className="cy-pipeline-head-right">
+          {saveTone !== 'idle' && (
+            <span
+              className={`cy-pipeline-save-pill is-${saveTone}`}
+              aria-live="polite"
+            >
+              {saveMessage}
+            </span>
+          )}
+          <label className="cy-pipeline-search">
+            <span aria-hidden>⌕</span>
+            <input
+              type="search"
+              placeholder="Search prospects…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </label>
+        </div>
       </div>
 
       {error && (
         <div className="cy-pipeline-error" role="alert">
           {error}
+          <button
+            type="button"
+            className="cy-pipeline-error-dismiss"
+            onClick={() => setError(null)}
+          >
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -208,7 +467,7 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
                   className={`cy-pipeline-card${selectedId === inquiry.id ? ' is-selected' : ''}${
                     dragId === inquiry.id ? ' is-dragging' : ''
                   }`}
-                  draggable={!pending}
+                  draggable
                   onDragStart={(e) => {
                     setDragId(inquiry.id)
                     e.dataTransfer.setData('text/inquiry-id', inquiry.id)
@@ -237,7 +496,11 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
 
                   <div className="cy-pipeline-card-meta">
                     <Calendar size={13} aria-hidden />
-                    <span>{formatMoveIn(inquiry.moveIn)}</span>
+                    <span>
+                      {inquiry.status === 'viewing' && inquiry.viewingAt
+                        ? `Viewing ${formatViewingAt(inquiry.viewingAt)}`
+                        : formatMoveIn(inquiry.moveIn)}
+                    </span>
                   </div>
 
                   {inquiry.latestNote && (
@@ -275,7 +538,6 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
                         type="button"
                         className="cy-pipeline-icon-btn"
                         aria-label="Add note"
-                        disabled={pending}
                         onClick={() => submitNote(inquiry.id)}
                       >
                         <Plus size={14} />
@@ -284,9 +546,17 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
                     <div className="cy-pipeline-card-btns">
                       <button
                         type="button"
+                        className="cy-pipeline-icon-btn is-danger"
+                        aria-label="Delete inquiry"
+                        onClick={() => removeInquiry(inquiry)}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                      <button
+                        type="button"
                         className="cy-pipeline-advance"
                         aria-label="Advance stage"
-                        disabled={pending || !nextInquiryStage(inquiry.status)}
+                        disabled={!nextInquiryStage(inquiry.status)}
                         onClick={() => advance(inquiry)}
                       >
                         <ArrowRight size={16} />
@@ -361,6 +631,17 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
                 <dt>Wants</dt>
                 <dd>{formatMoveIn(selected.moveIn)}</dd>
               </div>
+              <div>
+                <dt>Viewing</dt>
+                <dd>
+                  <input
+                    type="datetime-local"
+                    className="cy-pipeline-datetime"
+                    value={toDatetimeLocalValue(selected.viewingAt)}
+                    onChange={(e) => saveViewingAt(selected.id, e.target.value)}
+                  />
+                </dd>
+              </div>
               {selected.note ? (
                 <div>
                   <dt>Their note</dt>
@@ -379,7 +660,6 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
                     key={stage}
                     type="button"
                     className={`cy-pipeline-stage${active ? ' is-active' : ''}${done ? ' is-done' : ''}`}
-                    disabled={pending}
                     onClick={() => moveInquiry(selected.id, stage)}
                   >
                     <span className="cy-pipeline-stage-dot" />
@@ -411,7 +691,6 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
                 <button
                   type="button"
                   className="cy-btn"
-                  disabled={pending}
                   onClick={() => submitNote(selected.id)}
                 >
                   Add
@@ -435,18 +714,26 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
               )}
             </div>
 
-            <button
-              type="button"
-              className="cy-btn"
-              style={{ marginTop: 16, color: 'var(--dim)' }}
-              disabled={pending}
-              onClick={() => {
-                moveInquiry(selected.id, 'closed')
-                setSelectedId(null)
-              }}
-            >
-              Close / mark lost
-            </button>
+            <div className="cy-pipeline-drawer-foot">
+              <button
+                type="button"
+                className="cy-btn"
+                style={{ color: 'var(--dim)' }}
+                onClick={() => {
+                  moveInquiry(selected.id, 'closed')
+                  setSelectedId(null)
+                }}
+              >
+                Close / mark lost
+              </button>
+              <button
+                type="button"
+                className="cy-btn cy-pipeline-delete-btn"
+                onClick={() => removeInquiry(selected)}
+              >
+                <Trash2 size={14} aria-hidden /> Delete
+              </button>
+            </div>
           </aside>
         </>
       )}

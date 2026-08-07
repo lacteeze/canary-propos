@@ -219,6 +219,7 @@ export type InquiryType = 'inquiry' | 'application'
 export type InquiryStatus =
   | 'new'
   | 'contacted'
+  | 'viewing'
   | 'application_sent'
   | 'signed'
   | 'closed'
@@ -227,6 +228,7 @@ export type InquiryStatus =
 export const INQUIRY_PIPELINE_STAGES: InquiryStatus[] = [
   'new',
   'contacted',
+  'viewing',
   'application_sent',
   'signed',
 ]
@@ -234,6 +236,7 @@ export const INQUIRY_PIPELINE_STAGES: InquiryStatus[] = [
 export const INQUIRY_PIPELINE_LABELS: Record<InquiryStatus, string> = {
   new: 'New',
   contacted: 'Contacted',
+  viewing: 'Viewing',
   application_sent: 'Application sent',
   signed: 'Signed',
   closed: 'Closed',
@@ -257,6 +260,8 @@ export interface CanaryInquiry {
   submittedAt: string
   property: string
   moveIn: string
+  /** Scheduled viewing datetime (ISO), when set */
+  viewingAt: string | null
   /** Visitor message from the public form */
   note: string
   /** True when note is a “what I’m looking for” general-interest submit */
@@ -279,6 +284,7 @@ export function inquiryTypeLabel(inquiry: Pick<CanaryInquiry, 'type' | 'isGenera
 export function inquiryStatusBadge(status: InquiryStatus): { label: string; color: string } {
   if (status === 'new') return { label: 'NEW', color: 'var(--green)' }
   if (status === 'contacted') return { label: 'CONTACTED', color: 'var(--blue)' }
+  if (status === 'viewing') return { label: 'VIEWING', color: 'var(--blue)' }
   if (status === 'application_sent') return { label: 'APP SENT', color: 'var(--amber)' }
   if (status === 'signed') return { label: 'SIGNED', color: 'var(--accent)' }
   return { label: 'CLOSED', color: 'var(--dim)' }

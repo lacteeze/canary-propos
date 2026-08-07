@@ -234,7 +234,7 @@ export async function loadCanaryDb(
       supabase
         .from('inquiries')
         .select(
-          `id, listing_id, property_id, type, name, email, phone, status, created_at, move_in_date, note,
+          `id, listing_id, property_id, type, name, email, phone, status, created_at, move_in_date, note, viewing_at,
            listings!listing_id(
              id,
              units!unit_id(
@@ -603,6 +603,7 @@ export async function loadCanaryDb(
         submittedAt: String(i.created_at),
         property: fullAddress(prop.street_address, prop.city),
         moveIn: i.move_in_date ?? '',
+        viewingAt: i.viewing_at ? String(i.viewing_at) : null,
         note,
         isGeneralInterest: isGeneralInterestNote(note),
         orgSlug,

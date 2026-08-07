@@ -862,7 +862,7 @@ export default function CanaryApp({
     [scoped.inquiries, sortInquiries],
   )
   const leasingViewings = useMemo(
-    () => sortInquiries(scoped.inquiries.filter((i) => i.status === 'contacted')),
+    () => sortInquiries(scoped.inquiries.filter((i) => i.status === 'viewing')),
     [scoped.inquiries, sortInquiries],
   )
   const leasingApplications = useMemo(
@@ -889,7 +889,7 @@ export default function CanaryApp({
   )
   const leasingKpis: { id: NonNullable<typeof leasingListOpen>; label: string; value: string; color: string }[] = [
     { id: 'new_inquiry', label: 'New', value: String(leasingNewInquiries.length), color: 'var(--green)' },
-    { id: 'viewings', label: 'Contacted', value: String(leasingViewings.length), color: 'var(--blue)' },
+    { id: 'viewings', label: 'Viewing', value: String(leasingViewings.length), color: 'var(--blue)' },
     { id: 'applications', label: 'Apps. Sent', value: String(leasingApplications.length), color: 'var(--amber)' },
     { id: 'signed', label: 'Signed', value: String(leasingSignedPipeline.length), color: 'var(--accent)' },
     { id: 'expiring', label: 'Expiring', value: String(leasingExpiring.length), color: 'var(--red)' },
@@ -3729,7 +3729,7 @@ export default function CanaryApp({
       {leasingListOpen && (() => {
         const meta: Record<NonNullable<typeof leasingListOpen>, { title: string; sub: string }> = {
           new_inquiry: { title: 'New', sub: 'Fresh leads awaiting first contact.' },
-          viewings: { title: 'Contacted', sub: 'Prospects you have reached out to.' },
+          viewings: { title: 'Viewing', sub: 'Prospects with a viewing scheduled.' },
           applications: { title: 'Application sent', sub: 'Prospects who received an application link.' },
           signed: { title: 'Signed', sub: 'Leads marked signed in the leasing pipeline.' },
           expiring: { title: 'Leases expiring', sub: 'Ending within 90 days with no upcoming renewal on the same property.' },

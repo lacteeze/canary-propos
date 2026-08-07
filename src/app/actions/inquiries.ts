@@ -515,8 +515,8 @@ const updateStatusSchema = z.object({
 })
 
 async function requireInquiryManager(): Promise<
-  | { error: string; supabase?: undefined; orgId?: undefined }
-  | { error?: undefined; supabase: Awaited<ReturnType<typeof createClient>>; orgId: string }
+  | { error: string }
+  | { supabase: Awaited<ReturnType<typeof createClient>>; orgId: string }
 > {
   const supabase = await createClient()
   const {
@@ -549,7 +549,7 @@ export async function updateInquiryStatus(
   }
 
   const auth = await requireInquiryManager()
-  if (auth.error) return { error: auth.error }
+  if ('error' in auth) return { error: auth.error }
 
   const { error: updateError } = await auth.supabase
     .from('inquiries')
@@ -578,7 +578,7 @@ export async function deleteInquiry(id: string): Promise<{ error?: string }> {
   }
 
   const auth = await requireInquiryManager()
-  if (auth.error) return { error: auth.error }
+  if ('error' in auth) return { error: auth.error }
 
   const { error: deleteError } = await auth.supabase
     .from('inquiries')
@@ -613,7 +613,7 @@ export async function updateInquiryViewingAt(
   }
 
   const auth = await requireInquiryManager()
-  if (auth.error) return { error: auth.error }
+  if ('error' in auth) return { error: auth.error }
 
   const patch: {
     viewing_at: string | null

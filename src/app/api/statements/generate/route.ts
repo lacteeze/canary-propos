@@ -146,6 +146,7 @@ export async function POST(request: NextRequest) {
     .upload(storagePath, pdfBuffer, {
       contentType: 'application/pdf',
       upsert: false, // CRITICAL: never overwrite historical statements (T-04-16)
+      cacheControl: '31536000',
     })
 
   if (uploadError) {

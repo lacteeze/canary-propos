@@ -83,7 +83,7 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
     ).filter((p: string) => !!p && !/^https?:\/\//i.test(p))
     return resolveListingGalleryPhotos(photoPaths)
   })()
-  const [{ all: listingPhotos }, allPublished] = await Promise.all([
+  const [{ all: listingPhotos, full: listingPhotosFull }, allPublished] = await Promise.all([
     galleryPromise,
     getPublishedListings(orgSlug),
   ])
@@ -106,6 +106,7 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
     <ListingDetailView
       listing={listing}
       listingPhotos={listingPhotos}
+      listingPhotosFull={listingPhotosFull}
       carouselGroups={carouselGroups}
       orgSlug={orgSlug}
       listingCardCopy={listingCardCopy}

@@ -230,7 +230,11 @@ export async function closePortfolioMonth(input: {
     const path = `${ctx.person.org_id}/statements/portfolio/${input.portfolioId}/${input.year}-${String(input.month).padStart(2, '0')}.pdf`
     const { error: uploadError } = await admin.storage
       .from('org-assets')
-      .upload(path, buffer, { contentType: 'application/pdf', upsert: true })
+      .upload(path, buffer, {
+        contentType: 'application/pdf',
+        upsert: true,
+        cacheControl: '31536000',
+      })
     if (!uploadError) pdfPath = path
   } catch (err) {
     console.warn('[closePortfolioMonth] PDF failed', err)

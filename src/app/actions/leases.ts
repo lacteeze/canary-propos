@@ -204,7 +204,7 @@ export async function updateLeaseDocumentPath(
   // Verify lease ownership via org_id
   const { data: lease, error: fetchError } = await ctx.supabase
     .from('leases')
-    .select('id')
+    .select('id, document_path')
     .eq('id', leaseId)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -212,6 +212,8 @@ export async function updateLeaseDocumentPath(
   if (fetchError || !lease) {
     return { success: false, error: 'Lease not found in your organization.' }
   }
+
+  const previousPath = lease.document_path
 
   const { error: updateError } = await ctx.supabase
     .from('leases')
@@ -221,6 +223,15 @@ export async function updateLeaseDocumentPath(
   if (updateError) {
     console.error('[updateLeaseDocumentPath] update error:', updateError)
     return { success: false, error: 'Failed to update document path. Please try again.' }
+  }
+
+  if (previousPath && previousPath !== documentPath) {
+    const { error: storageError } = await ctx.supabase.storage
+      .from('org-assets')
+      .remove([previousPath])
+    if (storageError) {
+      console.error('[updateLeaseDocumentPath:storage]', storageError)
+    }
   }
 
   revalidatePath('/leases/' + leaseId)

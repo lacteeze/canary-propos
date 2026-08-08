@@ -14,6 +14,7 @@ export async function getListingPhotoPathsForProperty(
     .eq('property_id', propertyId)
     .eq('visibility', 'listing')
     .order('sort_order', { ascending: true })
+    .limit(100)
 
   if (error) {
     console.error('[getListingPhotoPathsForProperty]', error.message)
@@ -38,6 +39,7 @@ export async function getListingPhotoPathsByPropertyIds(
     .in('property_id', ids)
     .eq('visibility', 'listing')
     .order('sort_order', { ascending: true })
+    .limit(3000)
 
   if (error) {
     console.error('[getListingPhotoPathsByPropertyIds]', error.message)

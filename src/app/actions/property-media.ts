@@ -485,9 +485,19 @@ export async function updatePropertyPhotos(
   const nextPaths = photoPaths.filter(Boolean)
   const nextSet = new Set(nextPaths)
 
+  const removedPaths: string[] = []
   for (const row of currentListing ?? []) {
     if (!nextSet.has(row.storage_path)) {
+      removedPaths.push(row.storage_path)
       await ctx.supabase.from('property_media').delete().eq('id', row.id)
+    }
+  }
+  if (removedPaths.length) {
+    const { error: storageError } = await ctx.supabase.storage
+      .from('org-assets')
+      .remove(removedPaths)
+    if (storageError) {
+      console.error('[updatePropertyPhotos:storage]', storageError)
     }
   }
 

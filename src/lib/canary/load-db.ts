@@ -175,7 +175,9 @@ export async function loadCanaryDb(
   const redactForVendor = options?.redactForVendor === true
   const vendorPersonId = options?.vendorPersonId?.trim() || ''
 
-  const [orgRes, unitsRes, leasesRes, portfoliosRes, workOrdersRes, peopleRes, listingsRes, inquiriesRes, inquiryNotesRes, paymentsRes, expensesRes, mediaRes] =
+  // Safety caps keep a single Canary shell load from unbounded egress.
+  // Portfolio tables (units/leases/people) stay generous so the app remains complete for ~150+ units.
+  const [orgRes, unitsRes, leasesRes, portfoliosRes, workOrdersRes, peopleRes, listingsRes, inquiriesRes, paymentsRes, expensesRes, mediaRes] =
     await Promise.all([
       supabase.from('organizations').select('slug').eq('id', orgId).maybeSingle(),
       supabase
@@ -184,7 +186,8 @@ export async function loadCanaryDb(
           `id, unit_number, bedrooms, bathrooms, status, asking_rent, amenities, hospitable_property_id, archived_at,
            properties!property_id(id, slug, street_address, city, province, property_type, portfolio_id, owner_id, management_fee_type, management_fee_value, listing_brief)`
         )
-        .eq('org_id', orgId),
+        .eq('org_id', orgId)
+        .limit(2000),
       supabase
         .from('leases')
         .select(
@@ -198,11 +201,13 @@ export async function loadCanaryDb(
            tenant_id, people!tenant_id(id, first_name, last_name, email, phone),
            units!unit_id(id, unit_number, properties!property_id(street_address, city))`
         )
-        .eq('org_id', orgId),
+        .eq('org_id', orgId)
+        .limit(2000),
       supabase
         .from('portfolios')
         .select('id, name, owner_id, created_at')
-        .eq('org_id', orgId),
+        .eq('org_id', orgId)
+        .limit(500),
       supabase
         .from('work_orders')
         .select(
@@ -213,7 +218,9 @@ export async function loadCanaryDb(
            property_id, assigned_vendor_id, people!assigned_vendor_id(first_name, last_name),
            properties!property_id(street_address, city)`
         )
-        .eq('org_id', orgId),
+        .eq('org_id', orgId)
+        .order('updated_at', { ascending: false })
+        .limit(500),
       supabase
         .from('people')
         .select(
@@ -221,7 +228,8 @@ export async function loadCanaryDb(
            website, services, rating, notes, status, min_bedrooms, min_bathrooms, min_parking,
            pet_preference, move_in_date, lease_type, max_price`
         )
-        .eq('org_id', orgId),
+        .eq('org_id', orgId)
+        .limit(2000),
       supabase
         .from('listings')
         .select(
@@ -230,7 +238,8 @@ export async function loadCanaryDb(
              properties!property_id(id, street_address, city, listing_brief))`
         )
         .eq('org_id', orgId)
-        .in('status', ['draft', 'published', 'renewal_sent']),
+        .in('status', ['draft', 'published', 'renewal_sent'])
+        .limit(500),
       supabase
         .from('inquiries')
         .select(
@@ -246,15 +255,6 @@ export async function loadCanaryDb(
         .eq('org_id', orgId)
         .order('created_at', { ascending: false })
         .limit(200),
-      supabase
-        .from('inquiry_notes')
-        .select(
-          `id, inquiry_id, body, created_at,
-           people!author_id(first_name, last_name)`
-        )
-        .eq('org_id', orgId)
-        .order('created_at', { ascending: false })
-        .limit(500),
       supabase
         .from('payments')
         .select(
@@ -277,7 +277,8 @@ export async function loadCanaryDb(
         .from('property_media')
         .select('property_id, storage_path, visibility, sort_order')
         .eq('org_id', orgId)
-        .order('sort_order', { ascending: true }),
+        .order('sort_order', { ascending: true })
+        .limit(3000),
     ])
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -288,12 +289,37 @@ export async function loadCanaryDb(
   const peopleRows = (peopleRes.data ?? []) as any[]
   const listingRows = (listingsRes.data ?? []) as any[]
   const inquiryRows = (inquiriesRes.data ?? []) as any[]
-  const inquiryNoteRows = (inquiryNotesRes.data ?? []) as any[]
   const paymentRows = (paymentsRes.data ?? []) as any[]
   const expenseRows = (expensesRes.data ?? []) as any[]
   const mediaRows = (mediaRes.data ?? []) as any[]
   const orgSlug = (orgRes.data as { slug?: string } | null)?.slug ?? 'canary'
   /* eslint-enable @typescript-eslint/no-explicit-any */
+
+  // Only fetch notes for the inquiries we already loaded (latest-per-inquiry in memory).
+  const inquiryIds = inquiryRows.map((i) => i.id as string).filter(Boolean)
+  let inquiryNoteRows: Array<{
+    id: string
+    inquiry_id: string
+    body: string
+    created_at: string
+    people?: { first_name?: string | null; last_name?: string | null } | null
+  }> = []
+  if (inquiryIds.length) {
+    const inquiryNotesRes = await supabase
+      .from('inquiry_notes')
+      .select(
+        `id, inquiry_id, body, created_at,
+         people!author_id(first_name, last_name)`
+      )
+      .eq('org_id', orgId)
+      .in('inquiry_id', inquiryIds)
+      .order('created_at', { ascending: false })
+      .limit(500)
+    if (inquiryNotesRes.error) {
+      console.error('[loadCanaryDb:inquiry_notes]', inquiryNotesRes.error.message)
+    }
+    inquiryNoteRows = (inquiryNotesRes.data ?? []) as typeof inquiryNoteRows
+  }
 
   if (listingsRes.error) {
     console.error('[loadCanaryDb:listings]', listingsRes.error.message)
@@ -301,11 +327,11 @@ export async function loadCanaryDb(
   if (inquiriesRes.error) {
     console.error('[loadCanaryDb:inquiries]', inquiriesRes.error.message)
   }
-  if (inquiryNotesRes.error) {
-    console.error('[loadCanaryDb:inquiry_notes]', inquiryNotesRes.error.message)
-  }
   if (mediaRes.error) {
     console.error('[loadCanaryDb:property_media]', mediaRes.error.message)
+  }
+  if (workOrdersRes.error) {
+    console.error('[loadCanaryDb:work_orders]', workOrdersRes.error.message)
   }
 
   const latestNoteByInquiry = new Map<

@@ -8,21 +8,36 @@ const MAX_ZOOM = 4
 const ZOOM_STEP = 0.5
 
 type ListingPhotoGalleryProps = {
+  /** Page hero + strip (prefer preview / transformed URLs). */
   photos: string[]
+  /**
+   * Full-resolution URLs for lightbox, same order as `photos`.
+   * When omitted, lightbox uses `photos` (legacy / single-variant callers).
+   */
+  fullPhotos?: string[]
   title: string
   children: ReactNode
   /** Anchored to the top of the hero (e.g. back link) */
   topBar?: ReactNode
 }
 
-export function ListingPhotoGallery({ photos, title, children, topBar }: ListingPhotoGalleryProps) {
+export function ListingPhotoGallery({
+  photos,
+  fullPhotos,
+  title,
+  children,
+  topBar,
+}: ListingPhotoGalleryProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
   const [zoom, setZoom] = useState(1)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [mounted, setMounted] = useState(false)
   const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null)
   const open = openIndex !== null
-  const active = openIndex !== null ? photos[openIndex] ?? null : null
+  const active =
+    openIndex !== null
+      ? (fullPhotos?.[openIndex] || photos[openIndex] || null)
+      : null
   const stripPhotos = photos.slice(1)
 
   useEffect(() => {

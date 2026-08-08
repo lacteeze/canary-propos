@@ -41,7 +41,10 @@ export function LeaseDocUpload({
 
     const { error: uploadError } = await supabase.storage
       .from('org-assets')
-      .upload(storagePath, file, { upsert: true })
+      .upload(storagePath, file, {
+        upsert: true,
+        cacheControl: '31536000',
+      })
 
     if (uploadError) {
       console.error('[LeaseDocUpload] upload error:', uploadError)

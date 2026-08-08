@@ -352,19 +352,38 @@ export async function resolveListingCoverPhoto(
 ): Promise<string | null> {
   if (!path?.trim()) return null
   if (isHttpUrl(path)) return null
-  const [signed] = await signListingPhotoPaths([path], 'full')
+  // Covers are card/hero thumbs — prefer transformed preview to cut cached egress.
+  const [signed] = await signListingPhotoPaths([path], 'preview')
   return signed || null
 }
 
+/**
+ * Sign gallery paths as preview (page hero + strip) and full (lightbox).
+ * `all` / `hero` / `gallery` are preview URLs (fallback to full if transform fails).
+ * `full` is index-aligned with `all` for zoom/lightbox without shipping originals on first paint.
+ */
 export async function resolveListingGalleryPhotos(
   paths: string[]
-): Promise<{ hero: string | null; gallery: string[]; all: string[] }> {
+): Promise<{ hero: string | null; gallery: string[]; all: string[]; full: string[] }> {
   if (!paths.length) {
-    return { hero: null, gallery: [], all: [] }
+    return { hero: null, gallery: [], all: [], full: [] }
   }
-  const signed = (await signListingPhotoPaths(paths, 'full')).filter(Boolean)
-  if (!signed.length) {
-    return { hero: null, gallery: [], all: [] }
+  const [previews, fulls] = await Promise.all([
+    signListingPhotoPaths(paths, 'preview'),
+    signListingPhotoPaths(paths, 'full'),
+  ])
+  const pairs = paths
+    .map((_, i) => {
+      const preview = previews[i] || fulls[i] || ''
+      const full = fulls[i] || previews[i] || ''
+      return preview || full ? { preview: preview || full, full: full || preview } : null
+    })
+    .filter((p): p is { preview: string; full: string } => p != null)
+
+  if (!pairs.length) {
+    return { hero: null, gallery: [], all: [], full: [] }
   }
-  return { hero: signed[0], gallery: signed.slice(1), all: signed }
+  const all = pairs.map((p) => p.preview)
+  const full = pairs.map((p) => p.full)
+  return { hero: all[0], gallery: all.slice(1), all, full }
 }

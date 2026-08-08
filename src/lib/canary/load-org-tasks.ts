@@ -67,6 +67,7 @@ export async function loadOrgTasks(
     .eq('org_id', orgId)
     .order('due_date', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: false })
+    .limit(500)
 
   if (options?.assigneeOnlyPersonId) {
     query = query.eq('assignee_person_id', options.assigneeOnlyPersonId)

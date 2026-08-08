@@ -125,7 +125,11 @@ export async function importDriveFileToProperty(opts: {
 
   const { error: uploadError } = await supabase.storage
     .from('org-assets')
-    .upload(path, buffer, { upsert: false, contentType: mimeType })
+    .upload(path, buffer, {
+      upsert: false,
+      contentType: mimeType,
+      cacheControl: '31536000',
+    })
 
   if (uploadError) {
     throw new Error(uploadError.message)

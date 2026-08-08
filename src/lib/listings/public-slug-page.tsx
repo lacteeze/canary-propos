@@ -57,7 +57,7 @@ export async function renderPublishedListingPage(opts: {
     ).filter((p: string) => !!p && !/^https?:\/\//i.test(p))
     return resolveListingGalleryPhotos(photoPaths)
   })()
-  const [{ all: listingPhotos }, allPublished] = await Promise.all([
+  const [{ all: listingPhotos, full: listingPhotosFull }, allPublished] = await Promise.all([
     galleryPromise,
     getPublishedListings(orgSlug),
   ])
@@ -72,6 +72,7 @@ export async function renderPublishedListingPage(opts: {
     <ListingDetailView
       listing={listing}
       listingPhotos={listingPhotos}
+      listingPhotosFull={listingPhotosFull}
       carouselGroups={carouselGroups}
       orgSlug={orgSlug}
       listingCardCopy={listingCardCopyFromLanding()}
@@ -181,7 +182,7 @@ export async function renderPropertyPublicPage(opts: {
   const photoPaths: string[] = (
     fromMedia.length > 0 ? fromMedia : (property.photo_paths ?? [])
   ).filter((p: string) => !!p && !/^https?:\/\//i.test(p))
-  const { all: photos } = await resolveListingGalleryPhotos(photoPaths)
+  const { all: photos, full: photosFull } = await resolveListingGalleryPhotos(photoPaths)
 
   if (photos[0]) {
     preload(photos[0], { as: 'image', fetchPriority: 'high' })
@@ -195,6 +196,7 @@ export async function renderPropertyPublicPage(opts: {
       property={property}
       unit={unit}
       photos={photos}
+      photosFull={photosFull}
       availabilityLabel={availabilityLabel}
       carouselGroups={carouselGroups}
       orgSlug={orgSlug}

@@ -653,7 +653,9 @@ export async function deleteLease(leaseId: string): Promise<ActionResult> {
 
   const { data: lease } = await ctx.supabase
     .from('leases')
-    .select('id, start_date, end_date, status, units!unit_id(properties!property_id(street_address, city))')
+    .select(
+      'id, start_date, end_date, status, document_path, units!unit_id(properties!property_id(street_address, city))',
+    )
     .eq('id', leaseId)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -699,6 +701,14 @@ export async function deleteLease(leaseId: string): Promise<ActionResult> {
       return { success: false, error: 'Cannot delete — this lease is referenced by other records.' }
     }
     return { success: false, error: 'Failed to delete lease.' }
+  }
+
+  const docPath = (lease as { document_path?: string | null }).document_path
+  if (docPath) {
+    const { error: storageError } = await ctx.supabase.storage.from('org-assets').remove([docPath])
+    if (storageError) {
+      console.error('[deleteLease:storage]', storageError)
+    }
   }
 
   revalidatePath('/app')

@@ -9,7 +9,8 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const FALLBACK_PATH = path.join(process.cwd(), 'public', 'landing', 'logo-black.png')
-const CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=86400'
+// Logo paths are timestamped on upload — long CDN cache is safe and cuts repeat egress.
+const CACHE_CONTROL = 'public, max-age=86400, stale-while-revalidate=604800, immutable'
 
 async function fallbackIcon(): Promise<NextResponse> {
   try {

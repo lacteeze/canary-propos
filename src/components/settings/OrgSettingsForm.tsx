@@ -84,7 +84,7 @@ export function OrgSettingsForm({
         .upload(storagePath, file, {
           contentType: file.type,
           upsert: true,
-          cacheControl: '3600',
+          cacheControl: '31536000',
         })
 
       if (uploadError) {

@@ -141,11 +141,19 @@ export function PropertyPhotoUpload({
       ? result.items.filter((i) => i.visibility === visibility)
       : result.items
 
+    // Prefer Image Transformations for grid thumbs; fall back to full if transform fails.
     const withUrls = await Promise.all(
       filtered.map(async (item) => {
-        const { data } = await supabase.storage
-          .from('org-assets')
-          .createSignedUrl(item.storagePath, 3600)
+        const bucket = supabase.storage.from('org-assets')
+        const { data: preview, error: previewError } = await bucket.createSignedUrl(
+          item.storagePath,
+          3600,
+          { transform: { width: 720, quality: 70, resize: 'contain' } },
+        )
+        if (!previewError && preview?.signedUrl) {
+          return { ...item, url: preview.signedUrl }
+        }
+        const { data } = await bucket.createSignedUrl(item.storagePath, 3600)
         return { ...item, url: data?.signedUrl ?? '' }
       })
     )
@@ -215,7 +223,11 @@ export function PropertyPhotoUpload({
 
     const { error: uploadError } = await supabase.storage
       .from('org-assets')
-      .upload(path, file, { upsert: false, contentType: file.type || undefined })
+      .upload(path, file, {
+        upsert: false,
+        contentType: file.type || undefined,
+        cacheControl: '31536000',
+      })
 
     if (uploadError) {
       throw new Error(`${file.name}: ${uploadError.message}`)

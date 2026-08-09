@@ -509,7 +509,6 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
 
       <section id="homes" data-screen-label="Available homes" style={{ maxWidth: 1380, margin: '0 auto', padding: '96px clamp(16px, 4vw, 26px) 30px', width: '100%', minWidth: 0 }}>
         <div style={{ marginBottom: 8 }}>
-          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--faint)', marginBottom: 14 }}>{copy.tHomesKicker}</div>
           <h2 style={{ margin: 0, fontSize: 'clamp(30px, 4.4vw, 54px)', fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.05 }}>{copy.tHomes1} <em style={displayAccentStyle}>{copy.tHomes2}</em></h2>
         </div>
         <p style={{ margin: '0 0 26px', color: 'var(--dim)', maxWidth: '56ch' }}>{copy.tHomesIntro}</p>

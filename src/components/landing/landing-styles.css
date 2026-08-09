@@ -291,14 +291,6 @@ html:has(.cland2.cl2-dark) body {
   width: 100%;
 }
 
-.cland2 .cl2-big-num {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 13px;
-  color: var(--ink-dim);
-  flex: none;
-  width: 36px;
-}
-
 .cland2 .cl2-big-word {
   font-size: clamp(42px, 7vw, 96px);
   font-weight: 700;
@@ -393,19 +385,13 @@ html:has(.cland2.cl2-dark) body {
 
   .cland2 .cl2-big-row {
     display: grid !important;
-    grid-template-columns: 32px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
-      'num word'
-      'sub sub';
+      'word'
+      'sub';
     gap: 8px 12px;
     align-items: start;
     padding: 22px 0 !important;
-  }
-
-  .cland2 .cl2-big-num {
-    grid-area: num;
-    align-self: start;
-    padding-top: 6px;
   }
 
   .cland2 .cl2-big-word {

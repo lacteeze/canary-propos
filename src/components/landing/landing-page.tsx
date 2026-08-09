@@ -491,7 +491,6 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
           <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--ink-dim)', marginBottom: 26 }}>{copy.tBigKicker}</div>
           {copy.bigRows.map((row) => (
             <a key={row.num} href={row.href} className="cl2-big-row">
-              <span className="cl2-big-num">{row.num}</span>
               <span className="cl2-big-word"><span className="cl2-big-title">{row.word}</span><em>{row.tail}</em></span>
               <span className="cl2-big-sub">
                 <span className="cl2-big-sub-text">{row.sub}</span>

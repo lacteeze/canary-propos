@@ -258,6 +258,27 @@ html:has(.cland2.cl2-dark) body {
   background: color-mix(in srgb, var(--accent) 12%, var(--panel));
 }
 
+.cland2 .cl2-fees-plan {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  min-width: 0;
+  margin-top: 6px;
+}
+
+.cland2 .cl2-fees-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.cland2 .cl2-plan-col {
+  min-width: 0;
+  height: 100%;
+}
+
 .cland2 .cl2-services-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -377,6 +398,10 @@ html:has(.cland2.cl2-dark) body {
   .cland2 .cl2-grid2 {
     grid-template-columns: 1fr !important;
     min-width: 0;
+  }
+
+  .cland2 .cl2-fees-plan {
+    grid-template-columns: 1fr;
   }
 
   .cland2 .cl2-sticky {

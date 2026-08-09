@@ -156,7 +156,7 @@ export function getLandingCopy(lang: LandingLang) {
       services: [
         { name: 'Gestion long terme', price: '12 % du loyer mensuel', features: 'Propriétés individuelles\nPerception et rapports\nSoutien 24/7' },
         { name: 'Rabais multi-unités', price: '10 % du loyer mensuel', features: 'Pour plusieurs unités\nou propriétés' },
-        { name: 'Courte durée (Airbnb)', price: '25 % des revenus', features: 'Annonce et marketing\nRotations d\'invités\nSoutien 24/7' },
+        { name: 'Gestion courte durée', price: '25 % des revenus', features: 'Annonce et marketing\nRotations d\'invités\nSoutien 24/7' },
         { name: 'Frais de location', price: '100 % — ou 50 % pour les clients en gestion', features: 'Publicité et visites\nSélection des locataires\nBail et emménagement\nBasé sur un bail de 12 mois' },
       ],
       checklist: [
@@ -289,7 +289,7 @@ export function getLandingCopy(lang: LandingLang) {
     services: [
       { name: 'Long-Term Management', price: '12% of monthly rent', features: 'For single properties\nRent collection & reports\n24/7 tenant support' },
       { name: 'Multi-Unit Discount', price: '10% of monthly rent', features: 'When managing multiple\nunits or properties' },
-      { name: 'Short-Term (Airbnb)', price: '25% of rental revenue', features: 'Listing & marketing\nGuest turnovers\n24/7 guest support' },
+      { name: 'Short-Term Management', price: '25% of rental revenue', features: 'Listing & marketing\nGuest turnovers\n24/7 guest support' },
       { name: 'Leasing Fee', price: '100% — or 50% for management clients', features: 'Advertising & showings\nTenant screening\nLease prep & move-in\nBased on a 12-month lease' },
     ],
     checklist: [

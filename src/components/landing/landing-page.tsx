@@ -580,24 +580,28 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
                 </div>
               </div>
             ))}
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: '.12em', color: 'var(--faint)', margin: '14px 0 -2px' }}>{copy.tFeeKicker}</div>
-            <div className="cl2-services-grid">
-              {copy.services.map((service) => (
-                <div key={service.name} style={{ background: 'var(--ink)', color: 'var(--ink-text)', borderRadius: 16, padding: '18px 20px' }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>{service.name}</div>
-                  <div style={{ color: 'var(--yellow)', fontWeight: 700, fontSize: 14, marginBottom: 8 }}>{service.price}</div>
-                  <div style={{ color: 'var(--ink-dim)', fontSize: '12.5px', whiteSpace: 'pre-line' }}>{service.features}</div>
+            <div className="cl2-fees-plan">
+              <div className="cl2-fees-col">
+                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: '.12em', color: 'var(--faint)' }}>{copy.tFeeKicker}</div>
+                <div className="cl2-services-grid">
+                  {copy.services.map((service) => (
+                    <div key={service.name} style={{ background: 'var(--ink)', color: 'var(--ink-text)', borderRadius: 16, padding: '18px 20px' }}>
+                      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>{service.name}</div>
+                      <div style={{ color: 'var(--yellow)', fontWeight: 700, fontSize: 14, marginBottom: 8 }}>{service.price}</div>
+                      <div style={{ color: 'var(--ink-dim)', fontSize: '12.5px', whiteSpace: 'pre-line' }}>{service.features}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 20, padding: 'clamp(18px, 4vw, 26px) clamp(16px, 4vw, 28px)', marginTop: 6, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: '16.5px', marginBottom: 14 }}>{copy.tPlanIncl}</div>
-              <div className="cl2-check-grid">
-                {copy.checklist.map((item) => (
-                  <div key={item} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: '13.5px', color: 'var(--dim)', lineHeight: 1.4 }}>
-                    <span aria-hidden="true" style={{ flex: 'none', color: 'var(--green)', fontWeight: 700, marginTop: 1 }}>✓</span>{item}
-                  </div>
-                ))}
+              </div>
+              <div className="cl2-plan-col" style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 20, padding: 'clamp(18px, 4vw, 26px) clamp(16px, 4vw, 28px)', minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: '16.5px', marginBottom: 14 }}>{copy.tPlanIncl}</div>
+                <div className="cl2-check-grid">
+                  {copy.checklist.map((item) => (
+                    <div key={item} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: '13.5px', color: 'var(--dim)', lineHeight: 1.4 }}>
+                      <span aria-hidden="true" style={{ flex: 'none', color: 'var(--green)', fontWeight: 700, marginTop: 1 }}>✓</span>{item}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="cl2-fee-grid">

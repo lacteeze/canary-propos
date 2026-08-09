@@ -2,6 +2,7 @@ import { unstable_cache } from 'next/cache'
 import { fetchListedProperties } from '@/lib/hospitable/client'
 import { mapPropertiesToStays } from '@/lib/hospitable/map-property-to-stay'
 import { getDefaultStays, type LandingStay } from './content'
+import { loadStayCoverLookup, signStayCoverOverrides } from './stay-cover-photos'
 
 const fetchCachedListedProperties = unstable_cache(
   async () => fetchListedProperties(),
@@ -16,7 +17,12 @@ export async function getHospitableStays(): Promise<LandingStay[]> {
 
   try {
     const properties = await fetchCachedListedProperties()
-    const stays = mapPropertiesToStays(properties)
+    // Prefer PropOS listing covers (signed preview transforms) when we can
+    // match a Hospitable property to a slugged property with uploaded photos.
+    // Hospitable `picture` is often an Airbnb aki_policy=small or CDN thumb.
+    const lookup = await loadStayCoverLookup()
+    const photoOverrides = await signStayCoverOverrides(properties, lookup)
+    const stays = mapPropertiesToStays(properties, photoOverrides)
     return stays.length > 0 ? stays : getDefaultStays()
   } catch (error) {
     console.error('[getHospitableStays] Falling back to default stays:', error)

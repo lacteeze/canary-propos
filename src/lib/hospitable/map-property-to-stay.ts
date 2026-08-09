@@ -9,9 +9,33 @@ function formatCount(value: number | null | undefined): string {
   return Number.isInteger(value) ? String(value) : String(value)
 }
 
+/** Prefer a sharper remote Hospitable/Airbnb picture when no PropOS cover exists. */
+export function upgradeHospitablePictureUrl(url: string | null | undefined): string | null {
+  const trimmed = url?.trim()
+  if (!trimmed) return null
+
+  try {
+    const parsed = new URL(trimmed)
+    if (parsed.hostname.endsWith('muscache.com') && parsed.searchParams.get('aki_policy') === 'small') {
+      parsed.searchParams.set('aki_policy', 'large')
+      return parsed.toString()
+    }
+  } catch {
+    // fall through
+  }
+
+  // Hospitable CDN thumbs: …/thumb-xyz.jpg → try non-thumb sibling
+  if (/\/thumb-[^/]+$/i.test(trimmed)) {
+    return trimmed.replace(/\/thumb-/i, '/')
+  }
+
+  return trimmed
+}
+
 export function mapPropertyToStay(
   property: HospitableProperty,
-  photoFallbackIndex = 0
+  photoFallbackIndex = 0,
+  photoOverride?: string | null
 ): LandingStay | null {
   const short = (property.public_name || property.name || '').trim()
   const town = (property.address?.city || '').trim()
@@ -26,14 +50,20 @@ export function mapPropertyToStay(
   const siteUrl = property.bookings?.site_urls?.find(Boolean)
   const href = siteUrl?.trim() || DEFAULT_STAYS_HREF
   const photo =
-    property.picture?.trim() ||
+    photoOverride?.trim() ||
+    upgradeHospitablePictureUrl(property.picture) ||
     STAY_PHOTOS[photoFallbackIndex % STAY_PHOTOS.length]
 
   return { short, town, beds, baths, sleeps, extra: '', photo, href }
 }
 
-export function mapPropertiesToStays(properties: HospitableProperty[]): LandingStay[] {
+export function mapPropertiesToStays(
+  properties: HospitableProperty[],
+  photoOverrides?: Map<string, string>
+): LandingStay[] {
   return properties
-    .map((property, index) => mapPropertyToStay(property, index))
+    .map((property, index) =>
+      mapPropertyToStay(property, index, photoOverrides?.get(property.id))
+    )
     .filter((stay): stay is LandingStay => stay != null)
 }

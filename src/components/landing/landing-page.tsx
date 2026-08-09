@@ -529,7 +529,6 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
         <div style={{ maxWidth: 1380, margin: '0 auto', padding: '70px clamp(16px, 4vw, 26px) 90px' }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 8 }}>
             <div>
-              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--ink-dim)', marginBottom: 14 }}>{copy.tStaysKicker}</div>
               <h2 style={{ margin: 0, fontSize: 'clamp(30px, 4.4vw, 54px)', fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.05 }}>{copy.tStays1} <em style={displayAccentStyle}>{copy.tStays2}</em></h2>
             </div>
             <a href={staysCtaHref} target="_blank" rel="noopener noreferrer" className="cl2-btn-outline" style={{ color: 'var(--ink-text)', border: '1.5px solid rgba(244,239,230,.35)', borderRadius: 999, padding: '12px 22px', fontWeight: 700, textDecoration: 'none', fontSize: '14.5px', whiteSpace: 'nowrap' }}>{copy.tSeeAllStays}</a>

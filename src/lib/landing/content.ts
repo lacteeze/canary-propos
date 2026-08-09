@@ -142,7 +142,7 @@ export function getLandingCopy(lang: LandingLang) {
       midTerm: 'MOYEN TERME',
       sleeps: 'pour ',
       revealText: 'Louer à St. John\'s devrait être simple. Nous vérifions chaque maison, répondons à chaque appel à toute heure, et traitons votre propriété comme la nôtre — c\'est toute l\'idée.',
-      marquee: ' La location, enfin bien faite · Maisons vérifiées · Au mois, sans engagement · Une équipe locale · St. John\'s, Terre-Neuve · Fièrement local · ',
+      marquee: ' LOCATION · GESTION LONG TERME · GESTION AIRBNB · ENTRETIEN · SOUTIEN 24/7 · ST. JOHN\'S · MOUNT PEARL · PARADISE · ',
       bigRows: [
         { word: 'Louer', tail: 'une maison que vous aimerez', sub: 'Des annonces vérifiées avec photos exactes — ce que vous voyez est ce que vous louez.', href: '#homes' },
         { word: 'Posséder', tail: 'sans le stress', sub: 'Gestion complète à partir de 10 % du loyer. Au mois, sans engagement.', href: '#how' },
@@ -275,7 +275,7 @@ export function getLandingCopy(lang: LandingLang) {
     midTerm: 'MID TERM',
     sleeps: 'sleeps ',
     revealText: 'Renting in St. John\'s should feel effortless. We verify every home, answer every call at any hour, and treat your property like it\'s our own — that\'s the whole idea.',
-    marquee: ' Renting, finally done right · Verified homes · Month to month, no lock-in · One local team · St. John\'s, Newfoundland · Proudly local · ',
+    marquee: ' LEASING · LONG-TERM MANAGEMENT · AIRBNB MANAGEMENT · MAINTENANCE · 24/7 SUPPORT · ST. JOHN\'S · MOUNT PEARL · PARADISE · ',
     bigRows: [
       { word: 'Rent', tail: 'a home you\'ll love', sub: 'Verified listings with accurate photos — what you see is what you rent.', href: '#homes' },
       { word: 'Own', tail: 'without the stress', sub: 'Full-service management from 10% of rent. Month to month, no lock-in.', href: '#how' },

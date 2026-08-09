@@ -8,7 +8,7 @@ import path from 'node:path'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const FALLBACK_PATH = path.join(process.cwd(), 'public', 'landing', 'logo-black.png')
+const FALLBACK_PATH = path.join(process.cwd(), 'public', 'icon.png')
 // Logo paths are timestamped on upload — long CDN cache is safe and cuts repeat egress.
 const CACHE_CONTROL = 'public, max-age=86400, stale-while-revalidate=604800, immutable'
 
@@ -23,7 +23,7 @@ async function fallbackIcon(): Promise<NextResponse> {
       },
     })
   } catch {
-    return NextResponse.redirect(new URL('/landing/logo-black.png', process.env.NEXT_PUBLIC_APP_URL || 'https://canarypm.ca'))
+    return NextResponse.redirect(new URL('/icon.png', process.env.NEXT_PUBLIC_APP_URL || 'https://canarypm.ca'))
   }
 }
 

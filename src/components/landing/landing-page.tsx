@@ -502,7 +502,7 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
         </div>
         <div aria-hidden="true" style={{ overflow: 'hidden', borderTop: '1px solid var(--ink-border)', padding: '16px 0', whiteSpace: 'nowrap' }}>
           <div style={{ display: 'inline-flex', gap: 0, animation: 'cl2marq 28s linear infinite', willChange: 'transform' }}>
-            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12.5px', letterSpacing: '.06em', color: 'var(--ink-dim)', paddingRight: 0 }}>{copy.marquee}{copy.marquee}</span>
+            <span style={{ fontFamily: "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif", fontSize: '12.5px', letterSpacing: '.06em', color: 'var(--ink-dim)', paddingRight: 0 }}>{copy.marquee}{copy.marquee}</span>
           </div>
         </div>
       </section>
@@ -580,40 +580,40 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
                 </div>
               </div>
             ))}
-            <div className="cl2-fees-plan">
-              <div className="cl2-fees-col">
-                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: '.12em', color: 'var(--faint)' }}>{copy.tFeeKicker}</div>
-                <div className="cl2-services-grid">
-                  {copy.services.map((service) => (
-                    <div key={service.name} style={{ background: 'var(--ink)', color: 'var(--ink-text)', borderRadius: 16, padding: '18px 20px' }}>
-                      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>{service.name}</div>
-                      <div style={{ color: 'var(--yellow)', fontWeight: 700, fontSize: 14, marginBottom: 8 }}>{service.price}</div>
-                      <div style={{ color: 'var(--ink-dim)', fontSize: '12.5px', whiteSpace: 'pre-line' }}>{service.features}</div>
-                    </div>
-                  ))}
+          </div>
+        </div>
+        <div className="cl2-fees-plan">
+          <div className="cl2-fees-col">
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: '.12em', color: 'var(--faint)' }}>{copy.tFeeKicker}</div>
+            <div className="cl2-services-grid">
+              {copy.services.map((service) => (
+                <div key={service.name} style={{ background: 'var(--ink)', color: 'var(--ink-text)', borderRadius: 16, padding: '18px 20px' }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>{service.name}</div>
+                  <div style={{ color: 'var(--yellow)', fontWeight: 700, fontSize: 14, marginBottom: 8 }}>{service.price}</div>
+                  <div style={{ color: 'var(--ink-dim)', fontSize: '12.5px', whiteSpace: 'pre-line' }}>{service.features}</div>
                 </div>
-              </div>
-              <div className="cl2-plan-col" style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 20, padding: 'clamp(18px, 4vw, 26px) clamp(16px, 4vw, 28px)', minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: '16.5px', marginBottom: 14 }}>{copy.tPlanIncl}</div>
-                <div className="cl2-check-grid">
-                  {copy.checklist.map((item) => (
-                    <div key={item} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: '13.5px', color: 'var(--dim)', lineHeight: 1.4 }}>
-                      <span aria-hidden="true" style={{ flex: 'none', color: 'var(--green)', fontWeight: 700, marginTop: 1 }}>✓</span>{item}
-                    </div>
-                  ))}
+              ))}
+            </div>
+          </div>
+          <div className="cl2-plan-col" style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 20, padding: 'clamp(18px, 4vw, 26px) clamp(16px, 4vw, 28px)', minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: '16.5px', marginBottom: 14 }}>{copy.tPlanIncl}</div>
+            <div className="cl2-check-grid">
+              {copy.checklist.map((item) => (
+                <div key={item} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: '13.5px', color: 'var(--dim)', lineHeight: 1.4 }}>
+                  <span aria-hidden="true" style={{ flex: 'none', color: 'var(--green)', fontWeight: 700, marginTop: 1 }}>✓</span>{item}
                 </div>
-              </div>
+              ))}
             </div>
-            <div className="cl2-fee-grid">
-              <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 20, padding: '22px 24px' }}>
-                <div style={{ fontWeight: 700, fontSize: '15.5px', marginBottom: 8 }}>{copy.tMaintTitle}</div>
-                <div style={{ color: 'var(--dim)', fontSize: '13.5px', lineHeight: 1.55 }}>{copy.tMaintBody}</div>
-              </div>
-              <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 20, padding: '22px 24px' }}>
-                <div style={{ fontWeight: 700, fontSize: '15.5px', marginBottom: 8 }}>{copy.tTermsTitle}</div>
-                <div style={{ color: 'var(--dim)', fontSize: '13.5px', lineHeight: 1.55 }}>{copy.tTermsBody}</div>
-              </div>
-            </div>
+          </div>
+        </div>
+        <div className="cl2-fee-grid">
+          <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 20, padding: '22px 24px' }}>
+            <div style={{ fontWeight: 700, fontSize: '15.5px', marginBottom: 8 }}>{copy.tMaintTitle}</div>
+            <div style={{ color: 'var(--dim)', fontSize: '13.5px', lineHeight: 1.55 }}>{copy.tMaintBody}</div>
+          </div>
+          <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 20, padding: '22px 24px' }}>
+            <div style={{ fontWeight: 700, fontSize: '15.5px', marginBottom: 8 }}>{copy.tTermsTitle}</div>
+            <div style={{ color: 'var(--dim)', fontSize: '13.5px', lineHeight: 1.55 }}>{copy.tTermsBody}</div>
           </div>
         </div>
       </section>

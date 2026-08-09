@@ -17,9 +17,13 @@ export const metadata: Metadata = {
   title: "Canary PropOS",
   description: "Property management operating system",
   icons: {
-    // Prefer org company logo when present; falls back to static Canary mark.
-    icon: [{ url: "/api/org-icon" }, { url: "/landing/logo-black.png" }],
-    apple: [{ url: "/api/org-icon" }, { url: "/landing/logo-black.png" }],
+    // Prefer org company logo when present; falls back to Canary mark (white-on-black).
+    icon: [
+      { url: "/api/org-icon" },
+      { url: "/icon.png", type: "image/png" },
+      { url: "/favicon.ico" },
+    ],
+    apple: [{ url: "/api/org-icon" }, { url: "/apple-touch-icon.png" }],
   },
 };
 

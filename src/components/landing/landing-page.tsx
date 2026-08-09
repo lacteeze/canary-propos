@@ -563,7 +563,6 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
       <section id="how" data-screen-label="How it works" style={{ maxWidth: 1380, margin: '0 auto', padding: '100px clamp(16px, 4vw, 26px) 60px', width: '100%', minWidth: 0 }}>
         <div className="cl2-grid2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.6fr)', gap: 40, alignItems: 'start', minWidth: 0 }}>
           <div className="cl2-sticky" style={{ position: 'sticky', top: 100 }}>
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--faint)', marginBottom: 14 }}>{copy.tOwnKicker}</div>
             <h2 style={{ margin: '0 0 14px', fontSize: 'clamp(30px, 4vw, 50px)', fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.05 }}>{copy.tOwn1}<br /><em style={displayAccentStyle}>{copy.tOwn2}</em></h2>
             <p style={{ margin: '0 0 22px', color: 'var(--dim)', maxWidth: '38ch' }}>{copy.tOwnSub}</p>
             <a href="mailto:info@canarypm.ca?subject=Management%20inquiry" className="cl2-btn-ink" style={{ display: 'inline-block', textDecoration: 'none', background: 'var(--ink)', color: 'var(--ink-text)', borderRadius: 999, padding: '15px 28px', fontWeight: 700, fontSize: '15.5px' }}>{copy.tOwnCta}</a>

@@ -321,17 +321,23 @@ export async function loadCanaryDb(
     inquiryNoteRows = (inquiryNotesRes.data ?? []) as typeof inquiryNoteRows
   }
 
-  if (listingsRes.error) {
-    console.error('[loadCanaryDb:listings]', listingsRes.error.message)
-  }
-  if (inquiriesRes.error) {
-    console.error('[loadCanaryDb:inquiries]', inquiriesRes.error.message)
-  }
-  if (mediaRes.error) {
-    console.error('[loadCanaryDb:property_media]', mediaRes.error.message)
-  }
-  if (workOrdersRes.error) {
-    console.error('[loadCanaryDb:work_orders]', workOrdersRes.error.message)
+  // Surface query failures — empty arrays from RLS/column errors look like "no data".
+  for (const [label, res] of [
+    ['organizations', orgRes],
+    ['units', unitsRes],
+    ['leases', leasesRes],
+    ['portfolios', portfoliosRes],
+    ['work_orders', workOrdersRes],
+    ['people', peopleRes],
+    ['listings', listingsRes],
+    ['inquiries', inquiriesRes],
+    ['payments', paymentsRes],
+    ['expenses', expensesRes],
+    ['property_media', mediaRes],
+  ] as const) {
+    if (res.error) {
+      console.error(`[loadCanaryDb:${label}]`, res.error.message, res.error.code ?? '')
+    }
   }
 
   const latestNoteByInquiry = new Map<

@@ -38,6 +38,14 @@ function primaryRole(roles: string[] | null | undefined): string {
   return primaryRoleFromClaim(roles) ?? 'manager'
 }
 
+function claimsMatchPerson(meta: JwtAppMeta, person: PersonRow, role: string): boolean {
+  return (
+    meta.org_id === person.org_id &&
+    meta.person_id === person.id &&
+    primaryRoleFromClaim(meta.role) === role
+  )
+}
+
 /**
  * Link auth.users → people when managers already uploaded the email
  * (user_id null) or left a pending invite token. Returns the linked row.
@@ -96,11 +104,11 @@ async function linkPersonByEmail(user: User): Promise<PersonRow | null> {
 }
 
 /**
- * If the signed-in user has a people row but the session JWT lacks org/role
- * claims (common right after onboarding), write claims + refresh the session
- * so subsequent RLS queries succeed.
- *
- * Also completes email→people linkage for manager-uploaded tenant/vendor emails.
+ * Keep the signed-in user's JWT org/role/person claims aligned with their
+ * active people row. Covers:
+ * - Missing claims after onboarding / invite accept
+ * - Stale claims pointing at the wrong org (e.g. abandoned onboarding org)
+ * - Email→people linkage for manager-uploaded tenant/vendor emails
  *
  * Safe to call from middleware (can write cookies) or Server Actions.
  */
@@ -112,18 +120,6 @@ export async function ensureJwtClaimsFromPeople(
   const tokenMeta = jwtAppMetadata(accessToken)
   const userMeta = (user.app_metadata ?? {}) as JwtAppMeta
 
-  // JWT already has org membership — nothing to do
-  if (tokenMeta.org_id && tokenMeta.role) {
-    return false
-  }
-
-  // Auth user record has claims but access token is stale → refresh only
-  if (userMeta.org_id && userMeta.role && (!tokenMeta.org_id || !tokenMeta.role)) {
-    const { error } = await supabase.auth.refreshSession()
-    return !error
-  }
-
-  // No claims anywhere — look up people row (bypass RLS) and inject
   const admin = createAdminClient()
   let person: PersonRow | null =
     (
@@ -140,17 +136,45 @@ export async function ensureJwtClaimsFromPeople(
     person = await linkPersonByEmail(user)
   }
 
-  if (!person) return false
+  if (!person) {
+    // No people row yet — only refresh if auth user already has claims the token lacks
+    if (userMeta.org_id && userMeta.role && (!tokenMeta.org_id || !tokenMeta.role)) {
+      const { error } = await supabase.auth.refreshSession()
+      return !error
+    }
+    return false
+  }
 
   const role = primaryRole(person.role as string[] | null)
-  await admin.auth.admin.updateUserById(user.id, {
-    app_metadata: {
-      ...user.app_metadata,
-      role,
-      org_id: person.org_id,
-      person_id: person.id,
-    },
-  })
+  const tokenOk = claimsMatchPerson(tokenMeta, person, role)
+  const userMetaOk = claimsMatchPerson(userMeta, person, role)
+
+  // JWT already matches people — heal stale auth.users metadata if needed
+  if (tokenOk) {
+    if (!userMetaOk) {
+      await admin.auth.admin.updateUserById(user.id, {
+        app_metadata: {
+          ...user.app_metadata,
+          role,
+          org_id: person.org_id,
+          person_id: person.id,
+        },
+      })
+    }
+    return false
+  }
+
+  // Token missing or wrong org/role/person — rewrite app_metadata then refresh
+  if (!userMetaOk) {
+    await admin.auth.admin.updateUserById(user.id, {
+      app_metadata: {
+        ...user.app_metadata,
+        role,
+        org_id: person.org_id,
+        person_id: person.id,
+      },
+    })
+  }
 
   const { error } = await supabase.auth.refreshSession()
   return !error

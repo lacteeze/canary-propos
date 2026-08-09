@@ -49,9 +49,9 @@ AS $$
     AND u.property_id IS NOT NULL;
 $$;
 
-REVOKE ALL ON FUNCTION public.vendor_assigned_property_ids() FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.tenant_active_unit_ids() FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.tenant_active_property_ids() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.vendor_assigned_property_ids() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.tenant_active_unit_ids() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.tenant_active_property_ids() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.vendor_assigned_property_ids() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.tenant_active_unit_ids() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.tenant_active_property_ids() TO authenticated;

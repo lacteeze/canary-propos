@@ -142,11 +142,11 @@ export function getLandingCopy(lang: LandingLang) {
       midTerm: 'MOYEN TERME',
       sleeps: 'pour ',
       revealText: 'Louer à St. John\'s devrait être simple. Nous vérifions chaque maison, répondons à chaque appel à toute heure, et traitons votre propriété comme la nôtre — c\'est toute l\'idée.',
-      marquee: ' LOCATION · GESTION LONG TERME · GESTION AIRBNB · ENTRETIEN · SOUTIEN 24/7 · ST. JOHN\'S · MOUNT PEARL · PARADISE · ',
+      marquee: ' La location, enfin bien faite · Maisons vérifiées · Au mois, sans engagement · Une équipe locale · St. John\'s, Terre-Neuve · Fièrement local · ',
       bigRows: [
-        { num: '01', word: 'Louer', tail: 'une maison que vous aimerez', sub: 'Des annonces vérifiées avec photos exactes — ce que vous voyez est ce que vous louez.', href: '#homes' },
-        { num: '02', word: 'Posséder', tail: 'sans le stress', sub: 'Gestion complète à partir de 10 % du loyer. Au mois, sans engagement.', href: '#how' },
-        { num: '03', word: 'Séjourner', tail: 'une nuit ou un mois', sub: 'Séjours de courte durée partout à Terre-Neuve, hébergement professionnel.', href: '#stays' },
+        { word: 'Louer', tail: 'une maison que vous aimerez', sub: 'Des annonces vérifiées avec photos exactes — ce que vous voyez est ce que vous louez.', href: '#homes' },
+        { word: 'Posséder', tail: 'sans le stress', sub: 'Gestion complète à partir de 10 % du loyer. Au mois, sans engagement.', href: '#how' },
+        { word: 'Séjourner', tail: 'une nuit ou un mois', sub: 'Séjours de courte durée partout à Terre-Neuve, hébergement professionnel.', href: '#stays' },
       ],
       steps: [
         { num: '01', title: 'Nous l\'affichons correctement', body: 'Photographie professionnelle et marketing sur toutes les plateformes qui comptent — Facebook, Instagram, Kijiji et notre site.' },
@@ -275,11 +275,11 @@ export function getLandingCopy(lang: LandingLang) {
     midTerm: 'MID TERM',
     sleeps: 'sleeps ',
     revealText: 'Renting in St. John\'s should feel effortless. We verify every home, answer every call at any hour, and treat your property like it\'s our own — that\'s the whole idea.',
-    marquee: ' LEASING · LONG-TERM MANAGEMENT · AIRBNB MANAGEMENT · MAINTENANCE · 24/7 SUPPORT · ST. JOHN\'S · MOUNT PEARL · PARADISE · ',
+    marquee: ' Renting, finally done right · Verified homes · Month to month, no lock-in · One local team · St. John\'s, Newfoundland · Proudly local · ',
     bigRows: [
-      { num: '01', word: 'Rent', tail: 'a home you\'ll love', sub: 'Verified listings with accurate photos — what you see is what you rent.', href: '#homes' },
-      { num: '02', word: 'Own', tail: 'without the stress', sub: 'Full-service management from 10% of rent. Month to month, no lock-in.', href: '#how' },
-      { num: '03', word: 'Stay', tail: 'a night or a month', sub: 'Short-term stays across Newfoundland, professionally hosted.', href: '#stays' },
+      { word: 'Rent', tail: 'a home you\'ll love', sub: 'Verified listings with accurate photos — what you see is what you rent.', href: '#homes' },
+      { word: 'Own', tail: 'without the stress', sub: 'Full-service management from 10% of rent. Month to month, no lock-in.', href: '#how' },
+      { word: 'Stay', tail: 'a night or a month', sub: 'Short-term stays across Newfoundland, professionally hosted.', href: '#stays' },
     ],
     steps: [
       { num: '01', title: 'We list it properly', body: 'Professional photography and marketing across every platform that matters — Facebook, Instagram, Kijiji, and our own site.' },

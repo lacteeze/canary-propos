@@ -490,7 +490,7 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
         <div className="cl2-big-inner">
           <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--ink-dim)', marginBottom: 26 }}>{copy.tBigKicker}</div>
           {copy.bigRows.map((row) => (
-            <a key={row.num} href={row.href} className="cl2-big-row">
+            <a key={row.href} href={row.href} className="cl2-big-row">
               <span className="cl2-big-word"><span className="cl2-big-title">{row.word}</span><em>{row.tail}</em></span>
               <span className="cl2-big-sub">
                 <span className="cl2-big-sub-text">{row.sub}</span>
@@ -502,7 +502,7 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
         </div>
         <div aria-hidden="true" style={{ overflow: 'hidden', borderTop: '1px solid var(--ink-border)', padding: '16px 0', whiteSpace: 'nowrap' }}>
           <div style={{ display: 'inline-flex', gap: 0, animation: 'cl2marq 28s linear infinite', willChange: 'transform' }}>
-            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12.5px', letterSpacing: '.18em', color: 'var(--ink-dim)', paddingRight: 0 }}>{copy.marquee}{copy.marquee}</span>
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12.5px', letterSpacing: '.06em', color: 'var(--ink-dim)', paddingRight: 0 }}>{copy.marquee}{copy.marquee}</span>
           </div>
         </div>
       </section>

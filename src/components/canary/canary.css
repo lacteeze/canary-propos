@@ -3147,6 +3147,7 @@
   flex: 1;
 }
 .cnry .cy-pipeline-card {
+  position: relative;
   background: var(--elev);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -3155,11 +3156,17 @@
   text-align: left;
   color: inherit;
 }
+.cnry .cy-pipeline-card:has(.cy-pipeline-advance) {
+  padding-right: 44px;
+}
 .cnry .cy-pipeline-card.is-selected,
 .cnry .cy-pipeline-card:hover {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
 }
 .cnry .cy-pipeline-card.is-dragging { opacity: 0.55; }
+.cnry .cy-pipeline-card-main {
+  min-width: 0;
+}
 .cnry .cy-pipeline-card-top {
   display: flex;
   justify-content: space-between;
@@ -3222,56 +3229,6 @@
   letter-spacing: 0.01em;
   color: var(--dim);
 }
-.cnry .cy-pipeline-card-actions {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0;
-}
-.cnry .cy-pipeline-card-actions-panel {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  margin-bottom: 0;
-  transition:
-    grid-template-rows 0.22s ease,
-    opacity 0.18s ease,
-    margin-bottom 0.22s ease;
-  pointer-events: none;
-}
-.cnry .cy-pipeline-card.is-actions-open .cy-pipeline-card-actions-panel {
-  grid-template-rows: 1fr;
-  opacity: 1;
-  margin-bottom: 8px;
-  pointer-events: auto;
-}
-.cnry .cy-pipeline-card-actions-inner {
-  min-height: 0;
-  overflow: hidden;
-}
-.cnry .cy-pipeline-card.is-actions-open .cy-pipeline-card-actions-inner {
-  overflow: visible;
-}
-.cnry .cy-pipeline-card-foot {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  position: relative;
-  min-height: 36px;
-}
-.cnry .cy-pipeline-card-delete {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.18s ease;
-}
-.cnry .cy-pipeline-card.is-actions-open .cy-pipeline-card-delete {
-  opacity: 1;
-  pointer-events: auto;
-}
 .cnry .cy-pipeline-note-row {
   display: flex;
   gap: 6px;
@@ -3287,21 +3244,6 @@
   color: var(--text);
   padding: 7px 10px;
   font-size: 12.5px;
-}
-.cnry .cy-pipeline-icon-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--text);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-.cnry .cy-pipeline-icon-btn.is-danger {
-  color: var(--red);
-  border-color: color-mix(in srgb, var(--red) 35%, var(--border));
 }
 .cnry .cy-pipeline-datetime {
   width: 100%;
@@ -3325,29 +3267,37 @@
   align-items: center;
   gap: 6px;
 }
-.cnry .cy-pipeline-card-btns {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-  align-items: center;
-  justify-content: flex-end;
-}
 .cnry .cy-pipeline-advance {
-  width: 36px;
-  height: 36px;
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 92%, var(--elev));
   color: var(--text);
   display: grid;
   place-items: center;
   cursor: pointer;
   flex: none;
-}
-.cnry .cy-pipeline-advance:disabled {
-  opacity: 0.4;
+  opacity: 0;
   pointer-events: none;
-  cursor: default;
+  transition: opacity 0.15s ease;
+  z-index: 1;
+}
+.cnry .cy-pipeline-card:hover .cy-pipeline-advance,
+.cnry .cy-pipeline-card:focus-within .cy-pipeline-advance,
+.cnry .cy-pipeline-advance:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .cnry .cy-pipeline-advance {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 .cnry .cy-pipeline-empty {
   color: var(--dim);

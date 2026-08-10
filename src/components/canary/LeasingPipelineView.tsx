@@ -79,24 +79,13 @@ function shortProperty(address: string): string {
 
 type SaveTone = 'idle' | 'saving' | 'saved' | 'error'
 
-const ACTIONS_HOVER_DELAY_MS = 3000
-
-function prefersNoHover(): boolean {
-  if (typeof window === 'undefined') return false
-  return window.matchMedia('(hover: none)').matches
-}
-
 type PipelineCardProps = {
   inquiry: CanaryInquiry
   selected: boolean
   dragging: boolean
-  noteDraft: string
   onSelect: () => void
   onDragStart: (e: React.DragEvent) => void
   onDragEnd: () => void
-  onNoteChange: (value: string) => void
-  onSubmitNote: () => void
-  onDelete: () => void
   onAdvance: () => void
 }
 
@@ -104,226 +93,76 @@ function PipelineCard({
   inquiry,
   selected,
   dragging,
-  noteDraft,
   onSelect,
   onDragStart,
   onDragEnd,
-  onNoteChange,
-  onSubmitNote,
-  onDelete,
   onAdvance,
 }: PipelineCardProps) {
-  const [actionsOpen, setActionsOpen] = useState(false)
-  const cardRef = useRef<HTMLElement | null>(null)
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const hovering = useRef(false)
-  const actionsFocusedRef = useRef(false)
-  const suppressClickRef = useRef(false)
-
-  const clearHoverTimer = useCallback(() => {
-    if (hoverTimer.current) {
-      clearTimeout(hoverTimer.current)
-      hoverTimer.current = null
-    }
-  }, [])
-
-  const collapseActions = useCallback(() => {
-    clearHoverTimer()
-    actionsFocusedRef.current = false
-    const active = document.activeElement
-    if (active instanceof HTMLElement && cardRef.current?.contains(active)) {
-      active.blur()
-    }
-    setActionsOpen(false)
-  }, [clearHoverTimer])
-
-  useEffect(() => () => clearHoverTimer(), [clearHoverTimer])
-
-  // Collapse when clicking outside the card.
-  useEffect(() => {
-    if (!actionsOpen) return
-    const onPointerDown = (e: PointerEvent) => {
-      const el = cardRef.current
-      if (!el) return
-      if (e.target instanceof Node && el.contains(e.target)) return
-      collapseActions()
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    return () => document.removeEventListener('pointerdown', onPointerDown)
-  }, [actionsOpen, collapseActions])
-
-  const onCardEnter = () => {
-    hovering.current = true
-    if (prefersNoHover() || actionsFocusedRef.current || actionsOpen) return
-    clearHoverTimer()
-    hoverTimer.current = setTimeout(() => {
-      hoverTimer.current = null
-      setActionsOpen(true)
-    }, ACTIONS_HOVER_DELAY_MS)
-  }
-
-  const onCardLeave = () => {
-    hovering.current = false
-    clearHoverTimer()
-    if (!actionsFocusedRef.current) setActionsOpen(false)
-  }
-
-  const toggleActions = () => {
-    clearHoverTimer()
-    setActionsOpen((open) => {
-      if (open) {
-        actionsFocusedRef.current = false
-        const active = document.activeElement
-        if (active instanceof HTMLElement) active.blur()
-      }
-      return !open
-    })
-  }
-
-  const onPanelFocusCapture = (e: React.FocusEvent<HTMLDivElement>) => {
-    // Advance stays outside expand focus so tabbing to it doesn't pin the panel open.
-    if ((e.target as HTMLElement).closest?.('.cy-pipeline-advance')) return
-    actionsFocusedRef.current = true
-    setActionsOpen(true)
-    clearHoverTimer()
-  }
-
-  const onPanelBlurCapture = (e: React.FocusEvent<HTMLDivElement>) => {
-    const next = e.relatedTarget as HTMLElement | null
-    if (
-      next &&
-      e.currentTarget.contains(next) &&
-      !next.closest?.('.cy-pipeline-advance')
-    ) {
-      return
-    }
-    actionsFocusedRef.current = false
-    if (!hovering.current) setActionsOpen(false)
-  }
+  const canAdvance = Boolean(nextInquiryStage(inquiry.status))
 
   return (
     <article
-      ref={cardRef}
       className={`cy-pipeline-card${selected ? ' is-selected' : ''}${
         dragging ? ' is-dragging' : ''
-      }${actionsOpen ? ' is-actions-open' : ''}`}
+      }`}
       draggable
-      onDragStart={(e) => {
-        suppressClickRef.current = true
-        clearHoverTimer()
-        onDragStart(e)
-      }}
-      onDragEnd={() => {
-        onDragEnd()
-        // Drop often synthesizes a click shortly after dragend.
-        window.setTimeout(() => {
-          suppressClickRef.current = false
-        }, 50)
-      }}
-      onClick={() => {
-        if (suppressClickRef.current) return
-        toggleActions()
-      }}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       onDoubleClick={(e) => {
         e.preventDefault()
         onSelect()
       }}
-      onMouseEnter={onCardEnter}
-      onMouseLeave={onCardLeave}
     >
-      <div className="cy-pipeline-card-top">
-        <div>
-          <div className="cy-pipeline-card-name">{inquiry.name}</div>
-          <div className="cy-pipeline-card-prop">{shortProperty(inquiry.property)}</div>
-        </div>
-        <span className="cy-pipeline-movein" title="Desired move-in">
-          {formatMoveInBadge(inquiry.moveIn)}
-        </span>
-      </div>
-
-      {inquiry.status === 'viewing' && inquiry.viewingAt ? (
-        <div className="cy-pipeline-card-meta">
-          <Calendar size={13} aria-hidden />
-          <span>{`Viewing ${formatViewingAt(inquiry.viewingAt)}`}</span>
-        </div>
-      ) : null}
-
-      {inquiry.latestNote && (
-        <div className="cy-pipeline-card-note">
-          <div className="cy-pipeline-card-note-body">{inquiry.latestNote.body}</div>
-          <div className="cy-pipeline-card-note-age">
-            {relativeAge(inquiry.latestNote.createdAt)}
-          </div>
-        </div>
-      )}
-
-      <div
-        className="cy-pipeline-card-actions"
-        onKeyDown={(e) => e.stopPropagation()}
-        onFocusCapture={onPanelFocusCapture}
-        onBlurCapture={onPanelBlurCapture}
-      >
-        <div
-          className="cy-pipeline-card-actions-panel"
-          aria-hidden={!actionsOpen}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="cy-pipeline-card-actions-inner">
-            <div className="cy-pipeline-note-row">
-              <input
-                type="text"
-                placeholder="Log note..."
-                value={noteDraft}
-                tabIndex={actionsOpen ? 0 : -1}
-                onChange={(e) => onNoteChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    onSubmitNote()
-                  }
-                }}
-              />
+      <div className="cy-pipeline-card-main">
+        <div className="cy-pipeline-card-top">
+          <div>
+            <div className="cy-pipeline-card-name">{inquiry.name}</div>
+            <div className="cy-pipeline-card-prop">
+              {shortProperty(inquiry.property)}
             </div>
           </div>
+          <span className="cy-pipeline-movein" title="Desired move-in">
+            {formatMoveInBadge(inquiry.moveIn)}
+          </span>
         </div>
 
-        <div className="cy-pipeline-card-foot">
-          <button
-            type="button"
-            className="cy-pipeline-card-delete cy-pipeline-icon-btn is-danger"
-            aria-label="Delete inquiry"
-            aria-hidden={!actionsOpen}
-            tabIndex={actionsOpen ? 0 : -1}
-            onClick={(e) => {
-              e.stopPropagation()
-              onDelete()
-            }}
-            onMouseDown={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-            }}
-          >
-            <Trash2 size={14} />
-          </button>
-          <button
-            type="button"
-            className="cy-pipeline-advance"
-            aria-label="Advance stage"
-            disabled={!nextInquiryStage(inquiry.status)}
-            onClick={(e) => {
-              e.stopPropagation()
-              onAdvance()
-            }}
-            onMouseDown={(e) => {
-              // Avoid starting a card drag from the advance control.
-              e.preventDefault()
-              e.stopPropagation()
-            }}
-          >
-            <ArrowRight size={16} />
-          </button>
-        </div>
+        {inquiry.status === 'viewing' && inquiry.viewingAt ? (
+          <div className="cy-pipeline-card-meta">
+            <Calendar size={13} aria-hidden />
+            <span>{`Viewing ${formatViewingAt(inquiry.viewingAt)}`}</span>
+          </div>
+        ) : null}
+
+        {inquiry.latestNote && (
+          <div className="cy-pipeline-card-note">
+            <div className="cy-pipeline-card-note-body">
+              {inquiry.latestNote.body}
+            </div>
+            <div className="cy-pipeline-card-note-age">
+              {relativeAge(inquiry.latestNote.createdAt)}
+            </div>
+          </div>
+        )}
       </div>
+
+      {canAdvance ? (
+        <button
+          type="button"
+          className="cy-pipeline-advance"
+          aria-label="Advance stage"
+          onClick={(e) => {
+            e.stopPropagation()
+            onAdvance()
+          }}
+          onMouseDown={(e) => {
+            // Avoid starting a card drag from the advance control.
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+        >
+          <ArrowRight size={16} />
+        </button>
+      ) : null}
     </article>
   )
 }
@@ -723,7 +562,6 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
                   inquiry={inquiry}
                   selected={selectedId === inquiry.id}
                   dragging={dragId === inquiry.id}
-                  noteDraft={noteDrafts[inquiry.id] ?? ''}
                   onSelect={() => setSelectedId(inquiry.id)}
                   onDragStart={(e) => {
                     setDragId(inquiry.id)
@@ -731,11 +569,6 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
                     e.dataTransfer.effectAllowed = 'move'
                   }}
                   onDragEnd={() => setDragId(null)}
-                  onNoteChange={(value) =>
-                    setNoteDrafts((d) => ({ ...d, [inquiry.id]: value }))
-                  }
-                  onSubmitNote={() => submitNote(inquiry.id)}
-                  onDelete={() => removeInquiry(inquiry)}
                   onAdvance={() => advance(inquiry)}
                 />
               ))}

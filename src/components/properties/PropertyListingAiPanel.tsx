@@ -252,7 +252,7 @@ function FeaturesMultiSelect({
   }
 
   return (
-    <div style={{ display: 'grid', gap: 6, fontSize: 12, gridColumn: '1 / -1' }}>
+    <div style={{ display: 'grid', gap: 6, fontSize: 12, width: '100%' }}>
       <style>{`
         .cy-feature-chip:hover .cy-feature-chip__remove,
         .cy-feature-chip:focus-within .cy-feature-chip__remove {
@@ -347,12 +347,89 @@ function FeaturesMultiSelect({
   )
 }
 
-const FIELD_GRID_STYLE: React.CSSProperties = {
-  display: 'grid',
+/** Within-section pill row — left-aligned, hug-content cards */
+const FIELD_ROW_STYLE: React.CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
   gap: 8,
-  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+  alignItems: 'flex-start',
+  justifyContent: 'flex-start',
+  placeItems: 'start',
+}
+
+/** Stack of field groups with subtle spacing between sections */
+const FIELD_SECTIONS_STYLE: React.CSSProperties = {
+  display: 'grid',
+  gap: 12,
   justifyItems: 'start',
   alignItems: 'start',
+}
+
+function OverviewFieldSections({
+  leadingFields,
+  midFields,
+  postFurnishedFields,
+  metaFields,
+  afterFields,
+  parking,
+  pets,
+  utilities,
+  preGarage,
+  neighborhood,
+  features,
+}: {
+  leadingFields?: React.ReactNode
+  midFields?: React.ReactNode
+  postFurnishedFields?: React.ReactNode
+  metaFields?: React.ReactNode
+  afterFields?: React.ReactNode
+  parking?: React.ReactNode
+  pets?: React.ReactNode
+  utilities?: React.ReactNode
+  preGarage?: React.ReactNode
+  neighborhood?: React.ReactNode
+  features?: React.ReactNode
+}) {
+  const section1 = leadingFields || parking
+  const section2 = pets || utilities || midFields
+  const section3 = preGarage || postFurnishedFields
+  const section4 = neighborhood || metaFields
+  if (!section1 && !section2 && !section3 && !section4 && !afterFields && !features) {
+    return null
+  }
+  return (
+    <div style={FIELD_SECTIONS_STYLE}>
+      {section1 ? (
+        <div style={FIELD_ROW_STYLE}>
+          {leadingFields}
+          {parking}
+        </div>
+      ) : null}
+      {section2 ? (
+        <div style={FIELD_ROW_STYLE}>
+          {pets}
+          {utilities}
+          {midFields}
+        </div>
+      ) : null}
+      {section3 ? (
+        <div style={FIELD_ROW_STYLE}>
+          {preGarage}
+          {postFurnishedFields}
+        </div>
+      ) : null}
+      {section4 ? (
+        <div style={FIELD_ROW_STYLE}>
+          {neighborhood}
+          {metaFields}
+        </div>
+      ) : null}
+      {afterFields ? (
+        <div style={{ ...FIELD_SECTIONS_STYLE, gap: 8, width: '100%' }}>{afterFields}</div>
+      ) : null}
+      {features}
+    </div>
+  )
 }
 
 export function PropertyListingAiPanel({
@@ -361,7 +438,8 @@ export function PropertyListingAiPanel({
   leadingFields,
   midFields,
   postFurnishedFields,
-  trailingFields,
+  metaFields,
+  afterFields,
 }: {
   propertyId: string
   canEdit: boolean
@@ -369,10 +447,12 @@ export function PropertyListingAiPanel({
   leadingFields?: React.ReactNode
   /** Read-only overview cards after Utilities (e.g. Asking rate) */
   midFields?: React.ReactNode
-  /** Read-only overview cards after Furnished (e.g. Garage) */
+  /** Read-only overview cards after Laundry (e.g. Garage) */
   postFurnishedFields?: React.ReactNode
-  /** Meta overview cards rendered after Neighborhood (e.g. Type, Area) */
-  trailingFields?: React.ReactNode
+  /** Meta overview cards in section 4 after Neighborhood (e.g. Type, Area) */
+  metaFields?: React.ReactNode
+  /** Full-width cards after the four groups (e.g. Hospitable, Archived) */
+  afterFields?: React.ReactNode
 }) {
   const [brief, setBrief] = useState<ListingBrief>(() => emptyListingBrief())
   const [briefOptions, setBriefOptions] = useState<ListingBriefOptions>(() =>
@@ -501,14 +581,13 @@ export function PropertyListingAiPanel({
   if (!canEdit) {
     return (
       <div style={{ display: 'grid', gap: 14 }}>
-        {leadingFields || midFields || postFurnishedFields || trailingFields ? (
-          <div style={FIELD_GRID_STYLE}>
-            {leadingFields}
-            {midFields}
-            {postFurnishedFields}
-            {trailingFields}
-          </div>
-        ) : null}
+        <OverviewFieldSections
+          leadingFields={leadingFields}
+          midFields={midFields}
+          postFurnishedFields={postFurnishedFields}
+          metaFields={metaFields}
+          afterFields={afterFields}
+        />
         <div style={{ fontSize: 13, color: 'var(--dim)' }}>
           Listing inputs and knowledge base are manager-editable.
         </div>
@@ -549,37 +628,48 @@ export function PropertyListingAiPanel({
                   : ''}
           </span>
         </div>
-        <div style={FIELD_GRID_STYLE}>
-          {leadingFields}
-          <BriefCombobox
-            fieldKey={PARKING_FIELD.key}
-            label={PARKING_FIELD.label}
-            placeholder={PARKING_FIELD.placeholder}
-            value={brief[PARKING_FIELD.key]}
-            options={briefOptions[PARKING_FIELD.key] ?? DEFAULT_LISTING_BRIEF_OPTIONS[PARKING_FIELD.key]}
-            onChange={(v) => updateScalarField(PARKING_FIELD.key, v)}
-          />
-          <BriefCombobox
-            fieldKey={PETS_FIELD.key}
-            label={PETS_FIELD.label}
-            placeholder={PETS_FIELD.placeholder}
-            value={brief[PETS_FIELD.key]}
-            options={briefOptions[PETS_FIELD.key] ?? DEFAULT_LISTING_BRIEF_OPTIONS[PETS_FIELD.key]}
-            onChange={(v) => updateScalarField(PETS_FIELD.key, v)}
-          />
-          <BriefCombobox
-            fieldKey={UTILITIES_FIELD.key}
-            label={UTILITIES_FIELD.label}
-            placeholder={UTILITIES_FIELD.placeholder}
-            value={brief[UTILITIES_FIELD.key]}
-            options={
-              briefOptions[UTILITIES_FIELD.key] ??
-              DEFAULT_LISTING_BRIEF_OPTIONS[UTILITIES_FIELD.key]
-            }
-            onChange={(v) => updateScalarField(UTILITIES_FIELD.key, v)}
-          />
-          {midFields}
-          {PRE_GARAGE_FIELDS.map((f) => (
+        <OverviewFieldSections
+          leadingFields={leadingFields}
+          midFields={midFields}
+          postFurnishedFields={postFurnishedFields}
+          metaFields={metaFields}
+          afterFields={afterFields}
+          parking={
+            <BriefCombobox
+              fieldKey={PARKING_FIELD.key}
+              label={PARKING_FIELD.label}
+              placeholder={PARKING_FIELD.placeholder}
+              value={brief[PARKING_FIELD.key]}
+              options={
+                briefOptions[PARKING_FIELD.key] ?? DEFAULT_LISTING_BRIEF_OPTIONS[PARKING_FIELD.key]
+              }
+              onChange={(v) => updateScalarField(PARKING_FIELD.key, v)}
+            />
+          }
+          pets={
+            <BriefCombobox
+              fieldKey={PETS_FIELD.key}
+              label={PETS_FIELD.label}
+              placeholder={PETS_FIELD.placeholder}
+              value={brief[PETS_FIELD.key]}
+              options={briefOptions[PETS_FIELD.key] ?? DEFAULT_LISTING_BRIEF_OPTIONS[PETS_FIELD.key]}
+              onChange={(v) => updateScalarField(PETS_FIELD.key, v)}
+            />
+          }
+          utilities={
+            <BriefCombobox
+              fieldKey={UTILITIES_FIELD.key}
+              label={UTILITIES_FIELD.label}
+              placeholder={UTILITIES_FIELD.placeholder}
+              value={brief[UTILITIES_FIELD.key]}
+              options={
+                briefOptions[UTILITIES_FIELD.key] ??
+                DEFAULT_LISTING_BRIEF_OPTIONS[UTILITIES_FIELD.key]
+              }
+              onChange={(v) => updateScalarField(UTILITIES_FIELD.key, v)}
+            />
+          }
+          preGarage={PRE_GARAGE_FIELDS.map((f) => (
             <BriefCombobox
               key={f.key}
               fieldKey={f.key}
@@ -590,39 +680,41 @@ export function PropertyListingAiPanel({
               onChange={(v) => updateScalarField(f.key, v)}
             />
           ))}
-          {postFurnishedFields}
-          <BriefCombobox
-            fieldKey={NEIGHBORHOOD_FIELD.key}
-            label={NEIGHBORHOOD_FIELD.label}
-            placeholder={NEIGHBORHOOD_FIELD.placeholder}
-            value={brief[NEIGHBORHOOD_FIELD.key]}
-            options={
-              briefOptions[NEIGHBORHOOD_FIELD.key] ??
-              DEFAULT_LISTING_BRIEF_OPTIONS[NEIGHBORHOOD_FIELD.key]
-            }
-            onChange={(v) => updateScalarField(NEIGHBORHOOD_FIELD.key, v)}
-          />
-          {trailingFields}
-          <FeaturesMultiSelect
-            selected={brief.features}
-            options={briefOptions.features ?? DEFAULT_LISTING_BRIEF_OPTIONS.features}
-            pending={pending}
-            onChange={updateFeatures}
-            onRemoveOrgOption={(value) => {
-              startTransition(async () => {
-                setErr('')
-                setMsg('')
-                const res = await removeListingBriefOrgOption('features', value)
-                if (!res.success) {
-                  setErr(res.error)
-                  return
-                }
-                if (res.briefOptions) setBriefOptions(res.briefOptions)
-                setMsg('Removed custom option from org list.')
-              })
-            }}
-          />
-        </div>
+          neighborhood={
+            <BriefCombobox
+              fieldKey={NEIGHBORHOOD_FIELD.key}
+              label={NEIGHBORHOOD_FIELD.label}
+              placeholder={NEIGHBORHOOD_FIELD.placeholder}
+              value={brief[NEIGHBORHOOD_FIELD.key]}
+              options={
+                briefOptions[NEIGHBORHOOD_FIELD.key] ??
+                DEFAULT_LISTING_BRIEF_OPTIONS[NEIGHBORHOOD_FIELD.key]
+              }
+              onChange={(v) => updateScalarField(NEIGHBORHOOD_FIELD.key, v)}
+            />
+          }
+          features={
+            <FeaturesMultiSelect
+              selected={brief.features}
+              options={briefOptions.features ?? DEFAULT_LISTING_BRIEF_OPTIONS.features}
+              pending={pending}
+              onChange={updateFeatures}
+              onRemoveOrgOption={(value) => {
+                startTransition(async () => {
+                  setErr('')
+                  setMsg('')
+                  const res = await removeListingBriefOrgOption('features', value)
+                  if (!res.success) {
+                    setErr(res.error)
+                    return
+                  }
+                  if (res.briefOptions) setBriefOptions(res.briefOptions)
+                  setMsg('Removed custom option from org list.')
+                })
+              }}
+            />
+          }
+        />
       </div>
 
       <div>

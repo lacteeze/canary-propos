@@ -928,12 +928,20 @@ function OverviewFieldCard({
   )
 }
 
-const OVERVIEW_FIELD_GRID: React.CSSProperties = {
+const OVERVIEW_FIELD_SECTIONS: React.CSSProperties = {
   display: 'grid',
-  gap: 8,
-  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+  gap: 12,
   justifyItems: 'start',
   alignItems: 'start',
+}
+
+const OVERVIEW_FIELD_ROW: React.CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 8,
+  alignItems: 'flex-start',
+  justifyContent: 'flex-start',
+  placeItems: 'start',
 }
 
 export default function EntityDetailDrawer({
@@ -1184,7 +1192,7 @@ export default function EntityDetailDrawer({
       const overviewPostFurnishedFields = (
         <OverviewFieldCard label="Garage" value={p.hasGarage ? 'Yes' : 'No'} />
       )
-      const overviewTrailingFields = (
+      const overviewMetaFields = (
         <>
           <OverviewFieldCard
             label="Type"
@@ -1194,6 +1202,10 @@ export default function EntityDetailDrawer({
             label="Area"
             value={[p.city, p.area].filter(Boolean).join(' · ') || '—'}
           />
+        </>
+      )
+      const overviewAfterFields = (
+        <>
           {showHospitable ? (
             <>
               <OverviewFieldCard
@@ -1238,14 +1250,24 @@ export default function EntityDetailDrawer({
               leadingFields={overviewLeadingFields}
               midFields={overviewMidFields}
               postFurnishedFields={overviewPostFurnishedFields}
-              trailingFields={overviewTrailingFields}
+              metaFields={overviewMetaFields}
+              afterFields={
+                showHospitable || p.archivedAt ? overviewAfterFields : undefined
+              }
             />
           ) : (
-            <div style={OVERVIEW_FIELD_GRID}>
-              {overviewLeadingFields}
-              {overviewMidFields}
-              {overviewPostFurnishedFields}
-              {overviewTrailingFields}
+            <div style={OVERVIEW_FIELD_SECTIONS}>
+              <div style={OVERVIEW_FIELD_ROW}>
+                {overviewLeadingFields}
+              </div>
+              <div style={OVERVIEW_FIELD_ROW}>{overviewMidFields}</div>
+              <div style={OVERVIEW_FIELD_ROW}>{overviewPostFurnishedFields}</div>
+              <div style={OVERVIEW_FIELD_ROW}>{overviewMetaFields}</div>
+              {showHospitable || p.archivedAt ? (
+                <div style={{ ...OVERVIEW_FIELD_SECTIONS, gap: 8, width: '100%' }}>
+                  {overviewAfterFields}
+                </div>
+              ) : null}
             </div>
           )}
         </div>,

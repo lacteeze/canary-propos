@@ -6,7 +6,7 @@ type CopyIconProps = {
 
 /**
  * Flaticon copy/documents glyph from `/icons/copy.png`.
- * Masked with `currentColor` so it follows light/dark button text.
+ * Masked with `currentColor` so bare icon buttons inherit parent color.
  */
 export function CopyIcon({ size = 14, className, style }: CopyIconProps) {
   return (

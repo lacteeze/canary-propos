@@ -40,23 +40,11 @@ export function CopyPublicLinkButton({
     return (
       <button
         type="button"
-        className={className}
+        className={['cy-copy-icon-btn', className].filter(Boolean).join(' ')}
         onClick={handleCopy}
         aria-label={label}
-        title={copied ? 'Copied' : href}
-        style={{
-          border: '1px solid var(--border)',
-          background: 'var(--elev)',
-          color: 'var(--text)',
-          borderRadius: 8,
-          padding: 6,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          lineHeight: 0,
-          ...style,
-        }}
+        title={copied ? 'Copied' : 'Copy'}
+        style={style}
       >
         <CopyIcon size={13} />
       </button>
@@ -81,23 +69,10 @@ export function CopyPublicLinkButton({
       </a>
       <button
         type="button"
-        className={className}
+        className={['cy-copy-icon-btn', className].filter(Boolean).join(' ')}
         onClick={handleCopy}
         aria-label={label}
         title={label}
-        style={{
-          border: '1px solid var(--border)',
-          background: 'var(--input)',
-          color: 'var(--text)',
-          borderRadius: 999,
-          padding: 6,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          flex: 'none',
-          lineHeight: 0,
-        }}
       >
         <CopyIcon size={14} />
       </button>

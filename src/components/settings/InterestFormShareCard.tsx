@@ -56,17 +56,10 @@ export function InterestFormShareCard() {
         </a>
         <button
           type="button"
-          className="cy-btn cy-btn--active"
+          className="cy-copy-icon-btn"
           onClick={() => void handleCopy()}
           aria-label={copied ? 'Copied' : 'Copy'}
           title={copied ? 'Copied' : 'Copy'}
-          style={{
-            padding: 8,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            lineHeight: 0,
-          }}
         >
           <CopyIcon size={15} />
         </button>

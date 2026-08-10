@@ -90,22 +90,10 @@ export function PublicSlugField({ slug, disabled, onSave }: PublicSlugFieldProps
           {href && (
             <button
               type="button"
+              className="cy-copy-icon-btn"
               onClick={copy}
               aria-label={copied ? 'Copied' : 'Copy'}
               title={copied ? 'Copied' : 'Copy'}
-              style={{
-                border: '1px solid var(--border)',
-                background: 'var(--input)',
-                color: 'var(--text)',
-                borderRadius: 999,
-                padding: 6,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                flex: 'none',
-                lineHeight: 0,
-              }}
             >
               <CopyIcon size={14} />
             </button>

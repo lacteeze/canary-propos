@@ -835,6 +835,37 @@ function Section({ title, rows }: { title: string; rows: RowDef[] }) {
   )
 }
 
+/** Read-only field card matching PropertyListingAiPanel quick-field treatment */
+function OverviewFieldCard({
+  label,
+  value,
+  wide,
+}: {
+  label: string
+  value: React.ReactNode
+  wide?: boolean
+}) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gap: 4,
+        fontSize: 12,
+        ...(wide ? { gridColumn: '1 / -1' } : null),
+      }}
+    >
+      <span style={{ color: 'var(--dim)' }}>{label}</span>
+      <div className="cy-field-card-value">{value}</div>
+    </div>
+  )
+}
+
+const OVERVIEW_FIELD_GRID: React.CSSProperties = {
+  display: 'grid',
+  gap: 8,
+  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+}
+
 export default function EntityDetailDrawer({
   drawer,
   onClose,
@@ -1065,6 +1096,61 @@ export default function EntityDetailDrawer({
       const publishedListings = db.drafts.filter(
         (d) => d.status === 'published' && siblingUnitIds.has(d.propId || d.unitId),
       )
+      const showHospitable =
+        propertyStatusOption(p.status) === 'STR' ||
+        Boolean(p.hospitablePropertyId || p.hospitableWidgetPropertyId)
+      const overviewFieldCards = (
+        <>
+          <OverviewFieldCard
+            label="Type"
+            value={p.type ? formatPropertyTypeLabel(p.type) : '—'}
+          />
+          <OverviewFieldCard
+            label="Area"
+            value={[p.city, p.area].filter(Boolean).join(' · ') || '—'}
+          />
+          <OverviewFieldCard label="Beds" value={p.beds || '—'} />
+          <OverviewFieldCard label="Baths" value={p.baths || '—'} />
+          <OverviewFieldCard
+            label="Asking rate"
+            value={p.rate != null ? money(p.rate) + '/mo' : '—'}
+          />
+          <OverviewFieldCard label="Garage" value={p.hasGarage ? 'Yes' : 'No'} />
+          {showHospitable ? (
+            <>
+              <OverviewFieldCard
+                label="Hospitable API UUID"
+                value={p.hospitablePropertyId || '—'}
+                wide
+              />
+              <OverviewFieldCard
+                label="Hospitable widget ID"
+                value={p.hospitableWidgetPropertyId || '—'}
+                wide
+              />
+            </>
+          ) : null}
+          <OverviewFieldCard
+            label="Public URL slug"
+            value={p.slug ? <CopyPublicLinkButton slug={p.slug} /> : '—'}
+            wide
+          />
+          {p.archivedAt ? (
+            <OverviewFieldCard
+              label="Archived"
+              value={new Date(p.archivedAt).toLocaleDateString('en-CA', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })}
+            />
+          ) : null}
+        </>
+      )
+      const draftListing = p.propertyDbId
+        ? publishedListings[0] ||
+          db.drafts.find((d) => siblingUnitIds.has(d.propId || d.unitId))
+        : undefined
       sections = [
         <WebsiteListingsSection
           key="website-listings"
@@ -1074,43 +1160,19 @@ export default function EntityDetailDrawer({
           money={money}
           onOpenListing={onOpenListing}
         />,
-        <Section
-          key="overview"
-          title="Overview"
-          rows={[
-            {
-              label: 'Type',
-              value: p.type ? formatPropertyTypeLabel(p.type) : '—',
-            },
-            { label: 'Area', value: [p.city, p.area].filter(Boolean).join(' · ') || '—' },
-            { label: 'Beds', value: p.beds || '—' },
-            { label: 'Baths', value: p.baths || '—' },
-            {
-              label: 'Asking rate',
-              value: p.rate != null ? money(p.rate) + '/mo' : '—',
-            },
-            ...(propertyStatusOption(p.status) === 'STR' ||
-            p.hospitablePropertyId ||
-            p.hospitableWidgetPropertyId
-              ? [
-                  {
-                    label: 'Hospitable API UUID',
-                    value: p.hospitablePropertyId || '—',
-                  },
-                  {
-                    label: 'Hospitable widget ID',
-                    value: p.hospitableWidgetPropertyId || '—',
-                  },
-                ]
-              : []),
-            { label: 'Garage', value: p.hasGarage ? 'Yes' : 'No' },
-            {
-              label: 'Public URL slug',
-              value: p.slug ? <CopyPublicLinkButton slug={p.slug} /> : '—',
-            },
-            ...(p.archivedAt ? [{ label: 'Archived', value: new Date(p.archivedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) }] : []),
-          ]}
-        />,
+        <div key="overview-listing-fields" style={{ marginTop: 14 }}>
+          <div className="cy-drawer-section-title">Overview</div>
+          {p.propertyDbId ? (
+            <PropertyListingAiPanel
+              propertyId={p.propertyDbId}
+              listingId={draftListing?.id}
+              canEdit={canEdit}
+              leadingFields={overviewFieldCards}
+            />
+          ) : (
+            <div style={OVERVIEW_FIELD_GRID}>{overviewFieldCards}</div>
+          )}
+        </div>,
         <PropertyOpenInquiriesSection
           key="open-inquiries"
           property={p}
@@ -1119,19 +1181,6 @@ export default function EntityDetailDrawer({
           onConverted={refresh}
         />,
       ]
-      if (p.propertyDbId) {
-        const draftListing =
-          publishedListings[0] ||
-          db.drafts.find((d) => siblingUnitIds.has(d.propId || d.unitId))
-        sections.push(
-          <PropertyListingAiPanel
-            key="listing-ai"
-            propertyId={p.propertyDbId}
-            listingId={draftListing?.id}
-            canEdit={canEdit}
-          />
-        )
-      }
       propertyPhotoCount = p.listingPhotoPaths?.length ?? 0
       if (canEdit && p.propertyDbId && db.orgId) {
         propertyPhotoSection = (

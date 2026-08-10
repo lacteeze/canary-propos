@@ -24,6 +24,7 @@ import {
 
 const BRIEF_AUTOSAVE_MS = 500
 const FEATURES_AUTOSAVE_MS = 150
+const KB_AUTOSAVE_MS = 500
 
 const SCALAR_FIELDS: {
   key: ListingBriefScalarField
@@ -305,14 +306,23 @@ function FeaturesMultiSelect({
   )
 }
 
+const FIELD_GRID_STYLE: React.CSSProperties = {
+  display: 'grid',
+  gap: 8,
+  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+}
+
 export function PropertyListingAiPanel({
   propertyId,
   listingId,
   canEdit,
+  leadingFields,
 }: {
   propertyId: string
   listingId?: string | null
   canEdit: boolean
+  /** Read-only overview cards rendered in the same grid as listing quick fields */
+  leadingFields?: React.ReactNode
 }) {
   const [brief, setBrief] = useState<ListingBrief>(() => emptyListingBrief())
   const [briefOptions, setBriefOptions] = useState<ListingBriefOptions>(() =>
@@ -396,8 +406,11 @@ export function PropertyListingAiPanel({
 
   if (!canEdit) {
     return (
-      <div style={{ fontSize: 13, color: 'var(--dim)' }}>
-        Listing inputs and knowledge base are manager-editable.
+      <div style={{ display: 'grid', gap: 14 }}>
+        {leadingFields ? <div style={FIELD_GRID_STYLE}>{leadingFields}</div> : null}
+        <div style={{ fontSize: 13, color: 'var(--dim)' }}>
+          Listing inputs and knowledge base are manager-editable.
+        </div>
       </div>
     )
   }
@@ -407,12 +420,11 @@ export function PropertyListingAiPanel({
       <div>
         <div
           style={{
-            display: 'flex',
+            display: briefSaveStatus === 'idle' ? 'none' : 'flex',
             alignItems: 'baseline',
             justifyContent: 'flex-end',
             gap: 8,
             marginBottom: 8,
-            minHeight: '1em',
           }}
         >
           <span
@@ -436,7 +448,8 @@ export function PropertyListingAiPanel({
                   : ''}
           </span>
         </div>
-        <div style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 1fr' }}>
+        <div style={FIELD_GRID_STYLE}>
+          {leadingFields}
           {SCALAR_FIELDS.map((f) => (
             <BriefCombobox
               key={f.key}

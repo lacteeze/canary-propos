@@ -1318,6 +1318,21 @@
   font-size: 12.5px;
 }
 
+/* Read-only value chip matching cy-select--field (property overview cards) */
+.cnry .cy-field-card-value {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--input);
+  color: var(--text);
+  padding: 9px 10px;
+  font-weight: 600;
+  font-size: 12.5px;
+  line-height: 1.35;
+  min-width: 0;
+  word-break: break-word;
+}
+
 .cnry .cy-select--field:hover {
   background-color: var(--elev);
 }

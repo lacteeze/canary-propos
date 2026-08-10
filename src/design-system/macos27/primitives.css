@@ -156,7 +156,8 @@
 }
 
 .cnry[data-ui='macos27'] .cy-input,
-.cnry[data-ui='macos27'] .cy-select {
+.cnry[data-ui='macos27'] .cy-select,
+.cnry[data-ui='macos27'] .cy-field-card-value {
   border-radius: var(--mac-radius-control);
   background: var(--mac-bg-elevated);
   backdrop-filter: none;

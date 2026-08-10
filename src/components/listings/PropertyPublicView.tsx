@@ -32,7 +32,7 @@ export type PropertyPublicViewProps = {
   property: PropertyPublicProperty
   unit: PropertyPublicUnit | null
   photos: string[]
-  /** Full-res URLs for lightbox (index-aligned with photos). */
+  /** Full-res URLs for hero + lightbox (index-aligned with photos). */
   photosFull?: string[]
   availabilityLabel: string
   carouselGroups: CityGroup[]

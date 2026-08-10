@@ -48,7 +48,7 @@ export type ListingDetailListing = {
 export type ListingDetailViewProps = {
   listing: ListingDetailListing
   listingPhotos: string[]
-  /** Full-res URLs for lightbox (index-aligned with listingPhotos). */
+  /** Full-res URLs for hero + lightbox (index-aligned with listingPhotos). */
   listingPhotosFull?: string[]
   carouselGroups: CityGroup[]
   orgSlug: string

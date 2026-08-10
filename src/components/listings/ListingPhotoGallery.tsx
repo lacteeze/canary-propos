@@ -8,11 +8,14 @@ const MAX_ZOOM = 4
 const ZOOM_STEP = 0.5
 
 type ListingPhotoGalleryProps = {
-  /** Page hero + strip (prefer preview / transformed URLs). */
+  /**
+   * Thumbnail-strip URLs (prefer preview / transformed).
+   * Index 0 is also the fallback hero when `fullPhotos` is omitted.
+   */
   photos: string[]
   /**
-   * Full-resolution URLs for lightbox, same order as `photos`.
-   * When omitted, lightbox uses `photos` (legacy / single-variant callers).
+   * Full-resolution URLs for hero + lightbox, same order as `photos`.
+   * When omitted, hero/lightbox use `photos` (legacy / single-variant callers).
    */
   fullPhotos?: string[]
   title: string
@@ -38,6 +41,8 @@ export function ListingPhotoGallery({
     openIndex !== null
       ? (fullPhotos?.[openIndex] || photos[openIndex] || null)
       : null
+  // Hero spans ~viewport width (~1000px+); never stretch a 720px preview thumb.
+  const heroSrc = fullPhotos?.[0] || photos[0] || null
   const stripPhotos = photos.slice(1)
 
   useEffect(() => {
@@ -343,12 +348,12 @@ export function ListingPhotoGallery({
           cursor: hasPhotos ? 'zoom-in' : 'default',
         }}
       >
-        {hasPhotos ? (
-          // Hero is the LCP element — load it eagerly at high priority so it
-          // wins bandwidth over the (lazy) thumbnail strip below.
+        {hasPhotos && heroSrc ? (
+          // Hero is the LCP element — load full-res eagerly at high priority so
+          // it stays sharp at desktop width (preview thumbs are ~720px).
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={photos[0]}
+            src={heroSrc}
             alt={title}
             loading="eager"
             fetchPriority="high"

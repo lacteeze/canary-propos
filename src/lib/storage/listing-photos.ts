@@ -358,9 +358,12 @@ export async function resolveListingCoverPhoto(
 }
 
 /**
- * Sign gallery paths as preview (page hero + strip) and full (lightbox).
- * `all` / `hero` / `gallery` are preview URLs (fallback to full if transform fails).
- * `full` is index-aligned with `all` for zoom/lightbox without shipping originals on first paint.
+ * Sign gallery paths as preview (thumbnail strip) and full (hero + lightbox).
+ * `all` / `gallery` are preview URLs (fallback to full if transform fails).
+ * `hero` and `full` are untransformed originals — hero alone is ~viewport-wide
+ * and must not use the 720px preview transform.
+ * `full` is index-aligned with `all` for hero/lightbox without shipping
+ * originals for every strip thumb on first paint.
  */
 export async function resolveListingGalleryPhotos(
   paths: string[]
@@ -385,5 +388,5 @@ export async function resolveListingGalleryPhotos(
   }
   const all = pairs.map((p) => p.preview)
   const full = pairs.map((p) => p.full)
-  return { hero: all[0], gallery: all.slice(1), all, full }
+  return { hero: full[0] ?? null, gallery: all.slice(1), all, full }
 }

@@ -257,6 +257,8 @@ export interface CanaryInquiryNote {
 export interface CanaryInquiry {
   id: string
   listingId: string | null
+  /** properties.id when known — used for sibling leftover-lead detection */
+  propertyId: string | null
   type: InquiryType
   name: string
   email: string
@@ -278,6 +280,11 @@ export interface CanaryInquiry {
 
 export function isGeneralInterestNote(note: string | null | undefined): boolean {
   return (note ?? '').trimStart().startsWith('[General interest]')
+}
+
+/** Open pipeline stages (excludes signed + closed). */
+export function isOpenInquiryStatus(status: InquiryStatus): boolean {
+  return status !== 'closed' && status !== 'signed'
 }
 
 export function inquiryTypeLabel(inquiry: Pick<CanaryInquiry, 'type' | 'isGeneralInterest'>): string {

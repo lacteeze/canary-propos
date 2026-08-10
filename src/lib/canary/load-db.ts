@@ -247,10 +247,10 @@ export async function loadCanaryDb(
            listings!listing_id(
              id,
              units!unit_id(
-               properties!property_id(street_address, city)
+               properties!property_id(id, street_address, city)
              )
            ),
-           properties!property_id(street_address, city)`
+           properties!property_id(id, street_address, city)`
         )
         .eq('org_id', orgId)
         .order('created_at', { ascending: false })
@@ -623,22 +623,30 @@ export async function loadCanaryDb(
       const fromListing = i.listings?.units?.properties
       const fromProperty = i.properties
       const prop = fromListing ?? fromProperty
-      if (!prop) return null
       const note = i.note ?? ''
+      const generalInterest = isGeneralInterestNote(note)
+      // Keep general-interest /rent leads even when no property is linked.
+      if (!prop && !generalInterest) return null
+      const propertyLabel = prop
+        ? fullAddress(prop.street_address, prop.city)
+        : 'General interest'
+      // Once re-linked to a listing, treat as a normal prospect for labels.
+      const isGeneralInterest = generalInterest && !i.listing_id
       return {
         id: i.id,
         listingId: i.listing_id ?? null,
+        propertyId: i.property_id ?? (prop?.id as string | undefined) ?? null,
         type: i.type as InquiryType,
         name: i.name,
         email: i.email,
         phone: i.phone ?? '',
         status: i.status as InquiryStatus,
         submittedAt: String(i.created_at),
-        property: fullAddress(prop.street_address, prop.city),
+        property: propertyLabel,
         moveIn: i.move_in_date ?? '',
         viewingAt: i.viewing_at ? String(i.viewing_at) : null,
         note,
-        isGeneralInterest: isGeneralInterestNote(note),
+        isGeneralInterest,
         orgSlug,
         latestNote: latestNoteByInquiry.get(i.id) ?? null,
       } satisfies CanaryInquiry

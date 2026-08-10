@@ -15,6 +15,14 @@ import { InquiryNotificationEmail } from '@/lib/email/templates/InquiryNotificat
 import React from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import {
+  ensureGeneralInterestNote,
+  rankMatchingHomes,
+  type MatchHomeCandidate,
+  type MatchHomeCriteria,
+  type ScoredMatchHome,
+} from '@/lib/canary/match-homes'
+import { listingPublicHref, propertyPublicHref } from '@/lib/listings/listing-href'
 
 // --- Action result type ---
 export type InquiryActionResult =
@@ -988,4 +996,534 @@ export async function submitGeneralInterest(formData: FormData): Promise<Inquiry
   }
 
   return { success: true }
+}
+
+// --- Leftover-lead recycling (unit filled → interest pool) ---
+
+async function resolveAuthorPerson(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<{ id: string; orgId: string } | null> {
+  const { data: person } = await supabase
+    .from('people')
+    .select('id, org_id, role')
+    .eq('user_id', userId)
+    .eq('active', true)
+    .single()
+  if (!person?.org_id) return null
+  if (
+    !person.role?.includes('manager') &&
+    !person.role?.includes('admin') &&
+    !person.role?.includes('employee')
+  ) {
+    return null
+  }
+  return { id: person.id, orgId: person.org_id }
+}
+
+async function appendStaffNotes(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orgId: string,
+  authorId: string,
+  inquiryIds: string[],
+  body: string,
+): Promise<void> {
+  if (!inquiryIds.length) return
+  const rows = inquiryIds.map((inquiry_id) => ({
+    org_id: orgId,
+    inquiry_id,
+    author_id: authorId,
+    body,
+  }))
+  const { error } = await supabase.from('inquiry_notes').insert(rows)
+  if (error) {
+    console.error('[appendStaffNotes]', error)
+  }
+}
+
+function interestPoolStage(status: string): 'new' | 'contacted' {
+  return status === 'new' ? 'new' : 'contacted'
+}
+
+function propertyLabelFromRow(row: {
+  street_address?: string | null
+  city?: string | null
+}): string {
+  const street = row.street_address?.trim() || ''
+  const city = row.city?.trim() || ''
+  if (street && city) return `${street}, ${city}`
+  return street || city || 'property'
+}
+
+export async function convertInquiriesToInterestPool(
+  inquiryIds: string[],
+): Promise<{ error?: string; updated?: number }> {
+  const ids = [...new Set(inquiryIds)].filter(Boolean)
+  if (!ids.length) return { error: 'No prospects selected.' }
+  for (const id of ids) {
+    if (!z.string().uuid().safeParse(id).success) {
+      return { error: 'Invalid inquiry ID.' }
+    }
+  }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const person = await resolveAuthorPerson(supabase, user.id)
+  if (!person) return { error: 'Not authorized' }
+
+  const { data: rows, error: fetchError } = await supabase
+    .from('inquiries')
+    .select(
+      `id, status, note, property_id, listing_id,
+       properties!property_id(street_address, city),
+       listings!listing_id(units!unit_id(properties!property_id(street_address, city)))`,
+    )
+    .eq('org_id', person.orgId)
+    .in('id', ids)
+
+  if (fetchError) {
+    console.error('[convertInquiriesToInterestPool] fetch', fetchError)
+    return { error: 'Failed to load prospects.' }
+  }
+  if (!rows?.length) return { error: 'No matching prospects found.' }
+
+  let updated = 0
+  for (const row of rows) {
+    const fromProp = row.properties as { street_address?: string; city?: string } | null
+    const fromListing = (
+      row.listings as {
+        units?: { properties?: { street_address?: string; city?: string } | null } | null
+      } | null
+    )?.units?.properties
+    const address = propertyLabelFromRow(fromProp ?? fromListing ?? {})
+    const shortAddr = shortPropertyAddress(address) || address
+    const nextNote = ensureGeneralInterestNote(row.note, shortAddr)
+    const nextStatus = interestPoolStage(row.status)
+
+    const { error: updateError } = await supabase
+      .from('inquiries')
+      .update({
+        listing_id: null,
+        note: nextNote,
+        status: nextStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', row.id)
+      .eq('org_id', person.orgId)
+
+    if (updateError) {
+      console.error('[convertInquiriesToInterestPool] update', updateError)
+      continue
+    }
+    updated += 1
+    await appendStaffNotes(
+      supabase,
+      person.orgId,
+      person.id,
+      [row.id],
+      `Converted to interest pool from ${shortAddr} because unit leased.`,
+    )
+  }
+
+  if (!updated) return { error: 'Failed to convert prospects.' }
+  revalidatePath('/app')
+  return { updated }
+}
+
+export async function closeInquiriesAsLost(
+  inquiryIds: string[],
+): Promise<{ error?: string; updated?: number }> {
+  const ids = [...new Set(inquiryIds)].filter(Boolean)
+  if (!ids.length) return { error: 'No prospects selected.' }
+  for (const id of ids) {
+    if (!z.string().uuid().safeParse(id).success) {
+      return { error: 'Invalid inquiry ID.' }
+    }
+  }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const person = await resolveAuthorPerson(supabase, user.id)
+  if (!person) return { error: 'Not authorized' }
+
+  const { data: rows, error: fetchError } = await supabase
+    .from('inquiries')
+    .select('id')
+    .eq('org_id', person.orgId)
+    .in('id', ids)
+
+  if (fetchError || !rows?.length) {
+    return { error: 'No matching prospects found.' }
+  }
+
+  const foundIds = rows.map((r) => r.id)
+  const { error: updateError } = await supabase
+    .from('inquiries')
+    .update({
+      status: 'closed',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('org_id', person.orgId)
+    .in('id', foundIds)
+
+  if (updateError) {
+    console.error('[closeInquiriesAsLost]', updateError)
+    return { error: 'Failed to close prospects.' }
+  }
+
+  await appendStaffNotes(
+    supabase,
+    person.orgId,
+    person.id,
+    foundIds,
+    'Closed as lost (unit leased / manager closed).',
+  )
+
+  revalidatePath('/app')
+  return { updated: foundIds.length }
+}
+
+export type MatchingHomeResult = ScoredMatchHome
+
+export async function listMatchingHomesForInquiry(
+  inquiryId: string,
+): Promise<{ error?: string; homes?: MatchingHomeResult[]; sourceAddress?: string }> {
+  const idParsed = z.string().uuid().safeParse(inquiryId)
+  if (!idParsed.success) return { error: 'Invalid inquiry ID.' }
+
+  const auth = await requireInquiryManager()
+  if ('error' in auth) return { error: auth.error }
+
+  const { data: inquiry } = await auth.supabase
+    .from('inquiries')
+    .select(
+      `id, property_id, listing_id, budget,
+       properties!property_id(id, street_address, city),
+       listings!listing_id(
+         id, display_rent, unit_id,
+         units!unit_id(id, bedrooms, bathrooms, asking_rent, property_id,
+           properties!property_id(id, street_address, city))
+       )`,
+    )
+    .eq('id', idParsed.data)
+    .eq('org_id', auth.orgId)
+    .maybeSingle()
+
+  if (!inquiry) return { error: 'Inquiry not found.' }
+
+  const listingUnit = (
+    inquiry.listings as {
+      display_rent?: number | null
+      units?: {
+        bedrooms?: number | null
+        bathrooms?: number | null
+        asking_rent?: number | null
+        property_id?: string | null
+        properties?: { id?: string; street_address?: string; city?: string } | null
+      } | null
+    } | null
+  )?.units
+  const sourceProp =
+    (inquiry.properties as { id?: string; street_address?: string; city?: string } | null) ??
+    listingUnit?.properties ??
+    null
+
+  const criteria: MatchHomeCriteria = {
+    propertyId: inquiry.property_id ?? listingUnit?.property_id ?? sourceProp?.id ?? null,
+    city: sourceProp?.city ?? null,
+    bedrooms: listingUnit?.bedrooms ?? null,
+    bathrooms: listingUnit?.bathrooms != null ? Number(listingUnit.bathrooms) : null,
+    rent:
+      inquiry.budget ??
+      (inquiry.listings as { display_rent?: number | null } | null)?.display_rent ??
+      listingUnit?.asking_rent ??
+      null,
+  }
+
+  const sourceAddress = sourceProp ? propertyLabelFromRow(sourceProp) : 'this property'
+
+  if (criteria.propertyId && (criteria.bedrooms == null || criteria.rent == null)) {
+    const { data: units } = await auth.supabase
+      .from('units')
+      .select('bedrooms, bathrooms, asking_rent, status')
+      .eq('org_id', auth.orgId)
+      .eq('property_id', criteria.propertyId)
+      .is('archived_at', null)
+      .limit(5)
+    const u = units?.[0]
+    if (u) {
+      if (criteria.bedrooms == null) criteria.bedrooms = u.bedrooms
+      if (criteria.bathrooms == null && u.bathrooms != null) {
+        criteria.bathrooms = Number(u.bathrooms)
+      }
+      if (criteria.rent == null && u.asking_rent != null) criteria.rent = Number(u.asking_rent)
+    }
+  }
+
+  const { data: org } = await auth.supabase
+    .from('organizations')
+    .select('slug')
+    .eq('id', auth.orgId)
+    .maybeSingle()
+  const orgQuery = org?.slug ? `?org=${encodeURIComponent(org.slug)}` : ''
+
+  const [{ data: published }, { data: openUnits }, { data: activeLeases }] = await Promise.all([
+    auth.supabase
+      .from('listings')
+      .select(
+        `id, slug, display_rent, available_from, status,
+         units!unit_id(id, bedrooms, bathrooms, asking_rent, status, property_id,
+           properties!property_id(id, street_address, city, slug))`,
+      )
+      .eq('org_id', auth.orgId)
+      .eq('status', 'published')
+      .limit(200),
+    auth.supabase
+      .from('units')
+      .select(
+        `id, bedrooms, bathrooms, asking_rent, status, property_id,
+         properties!property_id(id, street_address, city, slug)`,
+      )
+      .eq('org_id', auth.orgId)
+      .in('status', ['vacant', 'str'])
+      .is('archived_at', null)
+      .limit(300),
+    auth.supabase
+      .from('leases')
+      .select('unit_id, end_date, status')
+      .eq('org_id', auth.orgId)
+      .eq('status', 'active')
+      .not('end_date', 'is', null)
+      .limit(500),
+  ])
+
+  const soonCutoff = Date.now() + 90 * 864e5
+  const soonByUnit = new Map<string, string>()
+  for (const lease of activeLeases ?? []) {
+    if (!lease.unit_id || !lease.end_date) continue
+    const end = new Date(lease.end_date).getTime()
+    if (Number.isNaN(end) || end > soonCutoff || end < Date.now() - 7 * 864e5) continue
+    const prev = soonByUnit.get(lease.unit_id)
+    if (!prev || lease.end_date < prev) soonByUnit.set(lease.unit_id, lease.end_date)
+  }
+
+  const byProperty = new Map<string, MatchHomeCandidate>()
+
+  for (const listing of published ?? []) {
+    const unit = listing.units as {
+      id?: string
+      bedrooms?: number | null
+      bathrooms?: number | null
+      asking_rent?: number | null
+      status?: string | null
+      property_id?: string | null
+      properties?: {
+        id?: string
+        street_address?: string | null
+        city?: string | null
+        slug?: string | null
+      } | null
+    } | null
+    const prop = unit?.properties
+    const propertyId = unit?.property_id ?? prop?.id
+    if (!propertyId || !prop) continue
+    const address = propertyLabelFromRow(prop)
+    const href =
+      listingPublicHref({ id: listing.id, slug: listing.slug }, orgQuery) ||
+      propertyPublicHref({ slug: prop.slug }, { orgQuery }) ||
+      '#'
+    byProperty.set(propertyId, {
+      propertyId,
+      listingId: listing.id,
+      address,
+      city: prop.city ?? '',
+      beds: unit?.bedrooms ?? null,
+      baths: unit?.bathrooms != null ? Number(unit.bathrooms) : null,
+      rent: listing.display_rent ?? unit?.asking_rent ?? null,
+      availableFrom: listing.available_from,
+      status: 'Listed',
+      href,
+      slug: listing.slug ?? prop.slug ?? null,
+    })
+  }
+
+  for (const unit of openUnits ?? []) {
+    const prop = unit.properties as {
+      id?: string
+      street_address?: string | null
+      city?: string | null
+      slug?: string | null
+    } | null
+    const propertyId = unit.property_id ?? prop?.id
+    if (!propertyId || !prop) continue
+    if (byProperty.has(propertyId)) continue
+    const address = propertyLabelFromRow(prop)
+    const href = propertyPublicHref({ slug: prop.slug }, { orgQuery }) || '#'
+    byProperty.set(propertyId, {
+      propertyId,
+      listingId: null,
+      address,
+      city: prop.city ?? '',
+      beds: unit.bedrooms,
+      baths: unit.bathrooms != null ? Number(unit.bathrooms) : null,
+      rent: unit.asking_rent != null ? Number(unit.asking_rent) : null,
+      availableFrom: null,
+      status: unit.status === 'str' ? 'STR' : 'Vacant',
+      href,
+      slug: prop.slug ?? null,
+    })
+  }
+
+  const soonUnitIds = [...soonByUnit.keys()]
+  if (soonUnitIds.length) {
+    const { data: soonUnits } = await auth.supabase
+      .from('units')
+      .select(
+        `id, bedrooms, bathrooms, asking_rent, status, property_id,
+         properties!property_id(id, street_address, city, slug)`,
+      )
+      .eq('org_id', auth.orgId)
+      .in('id', soonUnitIds)
+      .is('archived_at', null)
+
+    for (const unit of soonUnits ?? []) {
+      const prop = unit.properties as {
+        id?: string
+        street_address?: string | null
+        city?: string | null
+        slug?: string | null
+      } | null
+      const propertyId = unit.property_id ?? prop?.id
+      if (!propertyId || !prop) continue
+      if (byProperty.has(propertyId)) {
+        const existing = byProperty.get(propertyId)!
+        if (!existing.availableFrom) {
+          existing.availableFrom = soonByUnit.get(unit.id) ?? null
+        }
+        continue
+      }
+      const address = propertyLabelFromRow(prop)
+      const href = propertyPublicHref({ slug: prop.slug }, { orgQuery }) || '#'
+      byProperty.set(propertyId, {
+        propertyId,
+        listingId: null,
+        address,
+        city: prop.city ?? '',
+        beds: unit.bedrooms,
+        baths: unit.bathrooms != null ? Number(unit.bathrooms) : null,
+        rent: unit.asking_rent != null ? Number(unit.asking_rent) : null,
+        availableFrom: soonByUnit.get(unit.id) ?? null,
+        status: 'Available soon',
+        href,
+        slug: prop.slug ?? null,
+      })
+    }
+  }
+
+  const homes = rankMatchingHomes(criteria, [...byProperty.values()], 8)
+  return { homes, sourceAddress }
+}
+
+export async function assignInquiryToHome(
+  inquiryId: string,
+  target: { propertyId: string; listingId?: string | null },
+): Promise<{ error?: string }> {
+  const idParsed = z.string().uuid().safeParse(inquiryId)
+  if (!idParsed.success) return { error: 'Invalid inquiry ID.' }
+  const propParsed = z.string().uuid().safeParse(target.propertyId)
+  if (!propParsed.success) return { error: 'Invalid property ID.' }
+  let listingId: string | null = target.listingId ?? null
+  if (listingId && !z.string().uuid().safeParse(listingId).success) {
+    return { error: 'Invalid listing ID.' }
+  }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const person = await resolveAuthorPerson(supabase, user.id)
+  if (!person) return { error: 'Not authorized' }
+
+  const { data: property } = await supabase
+    .from('properties')
+    .select('id, street_address, city')
+    .eq('id', propParsed.data)
+    .eq('org_id', person.orgId)
+    .maybeSingle()
+  if (!property) return { error: 'Property not found.' }
+
+  if (listingId) {
+    const { data: listing } = await supabase
+      .from('listings')
+      .select('id, unit_id, units!unit_id(property_id)')
+      .eq('id', listingId)
+      .eq('org_id', person.orgId)
+      .maybeSingle()
+    const listingPropId = (
+      listing?.units as { property_id?: string | null } | null
+    )?.property_id
+    if (!listing || listingPropId !== propParsed.data) {
+      listingId = null
+    }
+  }
+
+  if (!listingId) {
+    const { data: units } = await supabase
+      .from('units')
+      .select('id')
+      .eq('org_id', person.orgId)
+      .eq('property_id', propParsed.data)
+    const unitIds = (units ?? []).map((u) => u.id)
+    if (unitIds.length) {
+      const { data: listing } = await supabase
+        .from('listings')
+        .select('id')
+        .eq('org_id', person.orgId)
+        .eq('status', 'published')
+        .in('unit_id', unitIds)
+        .limit(1)
+        .maybeSingle()
+      listingId = listing?.id ?? null
+    }
+  }
+
+  const address = propertyLabelFromRow(property)
+  const shortAddr = shortPropertyAddress(address) || address
+
+  const { error: updateError } = await supabase
+    .from('inquiries')
+    .update({
+      property_id: propParsed.data,
+      listing_id: listingId,
+      status: 'contacted',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', idParsed.data)
+    .eq('org_id', person.orgId)
+
+  if (updateError) {
+    console.error('[assignInquiryToHome]', updateError)
+    return { error: 'Failed to assign home.' }
+  }
+
+  await appendStaffNotes(
+    supabase,
+    person.orgId,
+    person.id,
+    [idParsed.data],
+    `Offered matching home: ${shortAddr}.`,
+  )
+
+  revalidatePath('/app')
+  return {}
 }

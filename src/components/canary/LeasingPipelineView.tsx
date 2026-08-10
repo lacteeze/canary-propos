@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, Calendar, Mail, Phone, Trash2 } from 'lucide-react'
 import {
   addInquiryNote,
+  closeInquiriesAsLost,
+  convertInquiriesToInterestPool,
   deleteInquiry,
   listInquiryNotes,
   updateInquiryStatus,
@@ -12,11 +14,14 @@ import {
 import {
   INQUIRY_PIPELINE_LABELS,
   INQUIRY_PIPELINE_STAGES,
+  isOpenInquiryStatus,
   nextInquiryStage,
   type CanaryInquiry,
   type CanaryInquiryNote,
   type InquiryStatus,
 } from '@/lib/canary/types'
+import { MatchingHomesPanel } from './MatchingHomesPanel'
+import { UnitFilledLeadsModal } from './UnitFilledLeadsModal'
 
 function relativeAge(iso: string): string {
   const t = new Date(iso).getTime()
@@ -125,7 +130,14 @@ function PipelineCard({
     >
       <div className="cy-pipeline-card-main">
         <div className="cy-pipeline-card-top">
-          <div className="cy-pipeline-card-name">{inquiry.name}</div>
+          <div className="cy-pipeline-card-name">
+            {inquiry.name}
+            {inquiry.isGeneralInterest ? (
+              <span className="cy-pipeline-interest-pill" title="General interest pool">
+                Interest
+              </span>
+            ) : null}
+          </div>
           <div className="cy-pipeline-card-prop">
             {shortProperty(inquiry.property)}
           </div>
@@ -191,6 +203,11 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [saveTone, setSaveTone] = useState<SaveTone>('idle')
   const [saveMessage, setSaveMessage] = useState('')
+  const [unitFilled, setUnitFilled] = useState<{
+    signed: CanaryInquiry
+    leftovers: CanaryInquiry[]
+  } | null>(null)
+  const [recycleBusy, setRecycleBusy] = useState(false)
 
   /** Inquiry ids with in-flight optimistic mutations — protect from parent prop clobber. */
   const dirtyIds = useRef(new Set<string>())
@@ -345,6 +362,22 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
     [bumpDone, bumpSaving, scheduleParentSync],
   )
 
+  function findLeftoverSiblings(signed: CanaryInquiry, list: CanaryInquiry[]): CanaryInquiry[] {
+    return list.filter((i) => {
+      if (i.id === signed.id) return false
+      if (!isOpenInquiryStatus(i.status)) return false
+      if (signed.propertyId && i.propertyId) {
+        return i.propertyId === signed.propertyId
+      }
+      // Fallback: same display address when property ids missing
+      return (
+        Boolean(signed.property) &&
+        signed.property !== 'General interest' &&
+        i.property === signed.property
+      )
+    })
+  }
+
   function moveInquiry(id: string, status: InquiryStatus) {
     const current = items.find((i) => i.id === id)
     if (!current || current.status === status) return
@@ -354,10 +387,80 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
     }
     dirtyIds.current.add(id)
     setError(null)
-    setItems((list) => list.map((i) => (i.id === id ? { ...i, status } : i)))
+    const nextList = items.map((i) => (i.id === id ? { ...i, status } : i))
+    setItems(nextList)
 
     statusQueue.current.set(id, status)
     void flushStatus(id)
+
+    if (status === 'signed') {
+      const leftovers = findLeftoverSiblings({ ...current, status }, nextList)
+      if (leftovers.length > 0) {
+        setUnitFilled({ signed: { ...current, status: 'signed' }, leftovers })
+      }
+    }
+  }
+
+  function applyRecycleUpdates(updated: CanaryInquiry[]) {
+    if (updated.length) {
+      const byId = new Map(updated.map((u) => [u.id, u]))
+      setItems((list) =>
+        list
+          .map((i) => byId.get(i.id) ?? i)
+          .filter((i) => i.status !== 'closed'),
+      )
+    }
+    setUnitFilled(null)
+    scheduleParentSync()
+  }
+
+  async function convertSelectedToPool(inquiry: CanaryInquiry) {
+    setRecycleBusy(true)
+    setError(null)
+    bumpSaving()
+    const result = await convertInquiriesToInterestPool([inquiry.id])
+    setRecycleBusy(false)
+    if (result.error) {
+      bumpDone(false, result.error)
+      return
+    }
+    const next: CanaryInquiry = {
+      ...inquiry,
+      listingId: null,
+      status: inquiry.status === 'new' ? 'new' : 'contacted',
+      isGeneralInterest: true,
+      note: inquiry.note.trimStart().startsWith('[General interest]')
+        ? inquiry.note
+        : `[General interest]\nConverted from: ${inquiry.property}\n\n${inquiry.note}`.trim(),
+      latestNote: {
+        id: crypto.randomUUID(),
+        body: `Converted to interest pool from ${inquiry.property} because unit leased.`,
+        createdAt: new Date().toISOString(),
+        authorName: 'You',
+      },
+    }
+    setItems((list) => list.map((i) => (i.id === inquiry.id ? next : i)))
+    if (selectedId === inquiry.id) {
+      setDetailNotes((n) => [next.latestNote!, ...n])
+    }
+    bumpDone(true)
+    scheduleParentSync()
+  }
+
+  async function closeSelectedAsLost(inquiry: CanaryInquiry) {
+    setRecycleBusy(true)
+    setError(null)
+    bumpSaving()
+    const result = await closeInquiriesAsLost([inquiry.id])
+    setRecycleBusy(false)
+    if (result.error) {
+      bumpDone(false, result.error)
+      return
+    }
+    setItems((list) => list.filter((i) => i.id !== inquiry.id))
+    if (selectedId === inquiry.id) setSelectedId(null)
+    bumpDone(true)
+    scheduleParentSync()
   }
 
   function advance(inquiry: CanaryInquiry) {
@@ -684,6 +787,45 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
               })}
             </div>
 
+            {!selected.isGeneralInterest && selected.status !== 'signed' ? (
+              <div className="cy-pipeline-recycle">
+                <div className="cy-mono-label" style={{ marginBottom: 8 }}>
+                  Recycle lead
+                </div>
+                <p className="cy-pipeline-recycle-help">
+                  Move this prospect into the general interest pool (keep contact &amp; notes)
+                  or close them as lost — without waiting for a Signed sibling.
+                </p>
+                <div className="cy-pipeline-recycle-actions">
+                  <button
+                    type="button"
+                    className="cy-btn cy-btn-primary"
+                    disabled={recycleBusy}
+                    onClick={() => void convertSelectedToPool(selected)}
+                  >
+                    Convert to interest pool
+                  </button>
+                  <button
+                    type="button"
+                    className="cy-btn"
+                    disabled={recycleBusy}
+                    onClick={() => void closeSelectedAsLost(selected)}
+                  >
+                    Close as lost
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            <MatchingHomesPanel
+              inquiryId={selected.id}
+              allowAssign
+              onAssigned={() => {
+                setSelectedId(null)
+                scheduleParentSync()
+              }}
+            />
+
             <div className="cy-pipeline-notes-block">
               <div className="cy-mono-label" style={{ marginBottom: 8 }}>
                 Notes & activity
@@ -752,6 +894,15 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
           </aside>
         </>
       )}
+
+      {unitFilled ? (
+        <UnitFilledLeadsModal
+          signedInquiry={unitFilled.signed}
+          leftovers={unitFilled.leftovers}
+          onDismiss={() => setUnitFilled(null)}
+          onApplied={applyRecycleUpdates}
+        />
+      ) : null}
     </section>
   )
 }

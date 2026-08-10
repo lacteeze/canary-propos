@@ -53,16 +53,10 @@
   box-sizing: border-box;
 }
 
-/* Solo interest form: comfortable reading width; full width on small screens */
-.cpub-forms-stack:has(> .cpub-form-card:only-child) {
-  max-width: min(100%, 720px);
-}
-
 /* Two+ cards (listing inquiry + interest): side-by-side from tablet up */
 @media (min-width: 720px) {
   .cpub-forms-stack:has(> .cpub-form-card:nth-child(2)) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    max-width: 100%;
   }
 }
 

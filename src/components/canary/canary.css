@@ -1428,6 +1428,38 @@
   margin-top: 0;
 }
 
+/* Hug selected-option text width (header StatusSelect, etc.) */
+.cnry .cy-select-hug {
+  display: inline-grid;
+  vertical-align: middle;
+  max-width: 100%;
+}
+
+.cnry .cy-select-hug > .cy-select {
+  grid-area: 1 / 1;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.cnry .cy-select-hug__mirror {
+  grid-area: 1 / 1;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
+  box-sizing: border-box;
+  /* Match .cy-select + .cy-select--compact chrome so offsetWidth = select width */
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  padding: 4px 26px 4px 8px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: normal;
+  height: 0;
+  overflow: hidden;
+}
+
 /* ---------- Scrollbars ---------- */
 .cnry ::-webkit-scrollbar {
   width: 8px;

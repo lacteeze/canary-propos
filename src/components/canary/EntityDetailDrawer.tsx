@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useState, useTransition } from 'react'
+import React, { useCallback, useLayoutEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   createTenantAndLinkToLease,
@@ -315,21 +315,45 @@ function StatusSelect({
 }) {
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+  const [widthPx, setWidthPx] = useState<number | undefined>()
+  const mirrorRef = useRef<HTMLSpanElement>(null)
   const label = formatOption ?? ((v: string) => v)
+  const selected = value || options[0]
+  const [displayValue, setDisplayValue] = useState(selected)
+  const selectedLabel = label(displayValue)
+
+  useLayoutEffect(() => {
+    setDisplayValue(selected)
+  }, [selected])
+
+  useLayoutEffect(() => {
+    const mirror = mirrorRef.current
+    if (!mirror) return
+    setWidthPx(Math.ceil(mirror.offsetWidth))
+  }, [selectedLabel])
 
   if (disabled) return <span style={{ fontWeight: 600 }}>{label(value) || '—'}</span>
 
   return (
-    <span>
+    <span className="cy-select-hug">
+      <span ref={mirrorRef} className="cy-select-hug__mirror" aria-hidden>
+        {selectedLabel}
+      </span>
       <select
         className="cy-select cy-select--compact"
-        value={value || options[0]}
+        value={displayValue}
         disabled={saving}
+        style={widthPx != null ? { width: widthPx } : undefined}
         onChange={async (e) => {
+          const next = e.target.value
+          setDisplayValue(next)
           setSaving(true)
           setErr('')
-          const res = await onSave(e.target.value)
-          if (!res.success) setErr(res.error ?? 'Failed')
+          const res = await onSave(next)
+          if (!res.success) {
+            setErr(res.error ?? 'Failed')
+            setDisplayValue(selected)
+          }
           setSaving(false)
         }}
       >

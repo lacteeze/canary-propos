@@ -1099,7 +1099,23 @@ export default function EntityDetailDrawer({
       const showHospitable =
         propertyStatusOption(p.status) === 'STR' ||
         Boolean(p.hospitablePropertyId || p.hospitableWidgetPropertyId)
-      const overviewFieldCards = (
+      const overviewLeadingFields = (
+        <>
+          <OverviewFieldCard label="Beds" value={p.beds || '—'} />
+          <OverviewFieldCard label="Baths" value={p.baths || '—'} />
+          <OverviewFieldCard
+            label="Asking rate"
+            value={p.rate != null ? money(p.rate) + '/mo' : '—'}
+          />
+          <OverviewFieldCard label="Garage" value={p.hasGarage ? 'Yes' : 'No'} />
+          <OverviewFieldCard
+            label="Public URL slug"
+            value={p.slug ? <CopyPublicLinkButton slug={p.slug} /> : '—'}
+            wide
+          />
+        </>
+      )
+      const overviewTrailingFields = (
         <>
           <OverviewFieldCard
             label="Type"
@@ -1109,13 +1125,6 @@ export default function EntityDetailDrawer({
             label="Area"
             value={[p.city, p.area].filter(Boolean).join(' · ') || '—'}
           />
-          <OverviewFieldCard label="Beds" value={p.beds || '—'} />
-          <OverviewFieldCard label="Baths" value={p.baths || '—'} />
-          <OverviewFieldCard
-            label="Asking rate"
-            value={p.rate != null ? money(p.rate) + '/mo' : '—'}
-          />
-          <OverviewFieldCard label="Garage" value={p.hasGarage ? 'Yes' : 'No'} />
           {showHospitable ? (
             <>
               <OverviewFieldCard
@@ -1130,11 +1139,6 @@ export default function EntityDetailDrawer({
               />
             </>
           ) : null}
-          <OverviewFieldCard
-            label="Public URL slug"
-            value={p.slug ? <CopyPublicLinkButton slug={p.slug} /> : '—'}
-            wide
-          />
           {p.archivedAt ? (
             <OverviewFieldCard
               label="Archived"
@@ -1162,10 +1166,14 @@ export default function EntityDetailDrawer({
             <PropertyListingAiPanel
               propertyId={p.propertyDbId}
               canEdit={canEdit}
-              leadingFields={overviewFieldCards}
+              leadingFields={overviewLeadingFields}
+              trailingFields={overviewTrailingFields}
             />
           ) : (
-            <div style={OVERVIEW_FIELD_GRID}>{overviewFieldCards}</div>
+            <div style={OVERVIEW_FIELD_GRID}>
+              {overviewLeadingFields}
+              {overviewTrailingFields}
+            </div>
           )}
         </div>,
         <PropertyOpenInquiriesSection

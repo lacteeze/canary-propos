@@ -312,11 +312,14 @@ export function PropertyListingAiPanel({
   propertyId,
   canEdit,
   leadingFields,
+  trailingFields,
 }: {
   propertyId: string
   canEdit: boolean
-  /** Read-only overview cards rendered in the same grid as listing quick fields */
+  /** Read-only overview cards rendered before listing quick fields in the shared grid */
   leadingFields?: React.ReactNode
+  /** Meta overview cards rendered after Neighborhood (e.g. Type, Area) */
+  trailingFields?: React.ReactNode
 }) {
   const [brief, setBrief] = useState<ListingBrief>(() => emptyListingBrief())
   const [briefOptions, setBriefOptions] = useState<ListingBriefOptions>(() =>
@@ -445,7 +448,12 @@ export function PropertyListingAiPanel({
   if (!canEdit) {
     return (
       <div style={{ display: 'grid', gap: 14 }}>
-        {leadingFields ? <div style={FIELD_GRID_STYLE}>{leadingFields}</div> : null}
+        {leadingFields || trailingFields ? (
+          <div style={FIELD_GRID_STYLE}>
+            {leadingFields}
+            {trailingFields}
+          </div>
+        ) : null}
         <div style={{ fontSize: 13, color: 'var(--dim)' }}>
           Listing inputs and knowledge base are manager-editable.
         </div>
@@ -499,6 +507,7 @@ export function PropertyListingAiPanel({
               onChange={(v) => updateScalarField(f.key, v)}
             />
           ))}
+          {trailingFields}
           <FeaturesMultiSelect
             selected={brief.features}
             options={briefOptions.features ?? DEFAULT_LISTING_BRIEF_OPTIONS.features}

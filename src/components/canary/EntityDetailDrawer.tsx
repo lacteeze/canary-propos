@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useLayoutEffect, useRef, useState, useTransition } from 'react'
+import React, { useCallback, useLayoutEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   createTenantAndLinkToLease,
@@ -20,6 +20,7 @@ import type { CanaryDb, CanaryDraft, CanaryLease, CanaryPerson, CanaryProperty }
 import { draftStatusBadge, leaseDbStatusFromDisplay } from '@/lib/canary/types'
 import { listingPublicHref, propertyPublicHref } from '@/lib/listings/listing-href'
 import AuditLogPanel from './AuditLogPanel'
+import { AutosizeSelect } from './AutosizeSelect'
 import { CopyPublicLinkButton } from './CopyPublicLinkButton'
 import DatePickerField, { formatDisplayDate } from './DatePickerField'
 import { PropertyPhotoUpload } from '@/components/properties/PropertyPhotoUpload'
@@ -315,8 +316,6 @@ function StatusSelect({
 }) {
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
-  const [widthPx, setWidthPx] = useState<number | undefined>()
-  const mirrorRef = useRef<HTMLSpanElement>(null)
   const label = formatOption ?? ((v: string) => v)
   const selected = value || options[0]
   const [displayValue, setDisplayValue] = useState(selected)
@@ -326,24 +325,15 @@ function StatusSelect({
     setDisplayValue(selected)
   }, [selected])
 
-  useLayoutEffect(() => {
-    const mirror = mirrorRef.current
-    if (!mirror) return
-    setWidthPx(Math.ceil(mirror.offsetWidth))
-  }, [selectedLabel])
-
   if (disabled) return <span style={{ fontWeight: 600 }}>{label(value) || '—'}</span>
 
   return (
-    <span className="cy-select-hug">
-      <span ref={mirrorRef} className="cy-select-hug__mirror" aria-hidden>
-        {selectedLabel}
-      </span>
-      <select
+    <span className="cy-status-select">
+      <AutosizeSelect
         className="cy-select cy-select--compact"
+        sizeToLabel={selectedLabel}
         value={displayValue}
         disabled={saving}
-        style={widthPx != null ? { width: widthPx } : undefined}
         onChange={async (e) => {
           const next = e.target.value
           setDisplayValue(next)
@@ -360,7 +350,7 @@ function StatusSelect({
         {options.map((o) => (
           <option key={o} value={o}>{label(o)}</option>
         ))}
-      </select>
+      </AutosizeSelect>
       {err && <span style={{ color: 'var(--red)', fontSize: 11, marginLeft: 6 }}>{err}</span>}
     </span>
   )

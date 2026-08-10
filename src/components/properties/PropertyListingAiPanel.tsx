@@ -17,6 +17,7 @@ import {
   type ListingBriefOptions,
   type ListingBriefScalarField,
 } from '@/lib/listings/listing-brief'
+import { AutosizeSelect } from '@/components/canary/AutosizeSelect'
 
 const BRIEF_AUTOSAVE_MS = 500
 const FEATURES_AUTOSAVE_MS = 150
@@ -94,6 +95,8 @@ function BriefCombobox({
   const known = options.some((o) => o.toLowerCase() === value.trim().toLowerCase())
   const showCustom = customMode || (!!value.trim() && !known)
   const selectValue = known && !customMode ? value : showCustom ? '__custom__' : ''
+  const sizeToLabel =
+    selectValue === '__custom__' ? 'Custom…' : selectValue ? selectValue : '— Select —'
 
   return (
     <label
@@ -109,8 +112,9 @@ function BriefCombobox({
     >
       <div className="cy-field-inline">
         <span className="cy-field-inline__label">{label}</span>
-        <select
+        <AutosizeSelect
           className="cy-select cy-select--field"
+          sizeToLabel={sizeToLabel}
           value={selectValue}
           onChange={(e) => {
             const v = e.target.value
@@ -130,7 +134,7 @@ function BriefCombobox({
             </option>
           ))}
           <option value="__custom__">Custom…</option>
-        </select>
+        </AutosizeSelect>
       </div>
       {showCustom && (
         <input

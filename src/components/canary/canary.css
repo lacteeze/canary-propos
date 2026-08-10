@@ -1426,38 +1426,75 @@
   border-radius: var(--radius-pill);
   background-color: var(--panel);
   margin-top: 0;
+  width: auto;
+  max-width: 100%;
+  field-sizing: content;
 }
 
-/* Hug selected-option text width (header StatusSelect, etc.) */
-.cnry .cy-select-hug {
+/*
+ * Hug selected option text: invisible mirror + select share one grid cell;
+ * mirror sets the intrinsic width (native <select> won't size to selection).
+ */
+.cnry .cy-select-autosize {
   display: inline-grid;
   vertical-align: middle;
   max-width: 100%;
-}
-
-.cnry .cy-select-hug > .cy-select {
-  grid-area: 1 / 1;
-  max-width: 100%;
   min-width: 0;
-  box-sizing: border-box;
+  justify-self: start;
 }
 
-.cnry .cy-select-hug__mirror {
+.cnry .cy-select-autosize > .cy-select-autosize__mirror,
+.cnry .cy-select-autosize > select {
   grid-area: 1 / 1;
+}
+
+.cnry .cy-select-autosize__mirror {
   visibility: hidden;
+  white-space: pre;
+  overflow: hidden;
   pointer-events: none;
-  white-space: nowrap;
-  box-sizing: border-box;
-  /* Match .cy-select + .cy-select--compact chrome so offsetWidth = select width */
-  border: 1px solid transparent;
-  border-radius: var(--radius-pill);
-  padding: 4px 26px 4px 8px;
+  user-select: none;
   font-family: inherit;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12.5px;
   line-height: normal;
-  height: 0;
-  overflow: hidden;
+  padding: 6px 28px 6px 10px;
+  border: 1px solid transparent;
+  box-sizing: border-box;
+}
+
+.cnry .cy-select-autosize:has(.cy-select--compact) > .cy-select-autosize__mirror {
+  font-size: 13px;
+  padding: 4px 26px 4px 8px;
+}
+
+.cnry .cy-field-inline .cy-select-autosize {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cnry .cy-field-inline .cy-select-autosize__mirror {
+  font-size: 12.5px;
+  padding: 9px 28px 9px 0;
+  border: none;
+}
+
+.cnry .cy-select-autosize > select,
+.cnry .cy-field-inline .cy-select-autosize > .cy-select,
+.cnry .cy-field-inline .cy-select-autosize > .cy-select--field {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  field-sizing: fixed;
+}
+
+.cnry .cy-status-select {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  vertical-align: middle;
 }
 
 /* ---------- Scrollbars ---------- */

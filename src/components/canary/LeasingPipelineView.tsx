@@ -180,15 +180,23 @@ function PipelineCard({
     })
   }
 
-  const onPanelFocusCapture = () => {
+  const onPanelFocusCapture = (e: React.FocusEvent<HTMLDivElement>) => {
+    // Advance stays outside expand focus so tabbing to it doesn't pin the panel open.
+    if ((e.target as HTMLElement).closest?.('.cy-pipeline-advance')) return
     actionsFocusedRef.current = true
     setActionsOpen(true)
     clearHoverTimer()
   }
 
   const onPanelBlurCapture = (e: React.FocusEvent<HTMLDivElement>) => {
-    const next = e.relatedTarget as Node | null
-    if (next && e.currentTarget.contains(next)) return
+    const next = e.relatedTarget as HTMLElement | null
+    if (
+      next &&
+      e.currentTarget.contains(next) &&
+      !next.closest?.('.cy-pipeline-advance')
+    ) {
+      return
+    }
     actionsFocusedRef.current = false
     if (!hovering.current) setActionsOpen(false)
   }
@@ -252,13 +260,13 @@ function PipelineCard({
       <div
         className="cy-pipeline-card-actions"
         onKeyDown={(e) => e.stopPropagation()}
+        onFocusCapture={onPanelFocusCapture}
+        onBlurCapture={onPanelBlurCapture}
       >
         <div
           className="cy-pipeline-card-actions-panel"
           aria-hidden={!actionsOpen}
           onClick={(e) => e.stopPropagation()}
-          onFocusCapture={onPanelFocusCapture}
-          onBlurCapture={onPanelBlurCapture}
         >
           <div className="cy-pipeline-card-actions-inner">
             <div className="cy-pipeline-note-row">
@@ -275,20 +283,28 @@ function PipelineCard({
                   }
                 }}
               />
-              <button
-                type="button"
-                className="cy-pipeline-icon-btn is-danger"
-                aria-label="Delete inquiry"
-                tabIndex={actionsOpen ? 0 : -1}
-                onClick={onDelete}
-              >
-                <Trash2 size={14} />
-              </button>
             </div>
           </div>
         </div>
 
         <div className="cy-pipeline-card-foot">
+          <button
+            type="button"
+            className="cy-pipeline-card-delete cy-pipeline-icon-btn is-danger"
+            aria-label="Delete inquiry"
+            aria-hidden={!actionsOpen}
+            tabIndex={actionsOpen ? 0 : -1}
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete()
+            }}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+          >
+            <Trash2 size={14} />
+          </button>
           <button
             type="button"
             className="cy-pipeline-advance"

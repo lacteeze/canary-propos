@@ -3257,6 +3257,20 @@
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  position: relative;
+  min-height: 36px;
+}
+.cnry .cy-pipeline-card-delete {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+.cnry .cy-pipeline-card.is-actions-open .cy-pipeline-card-delete {
+  opacity: 1;
+  pointer-events: auto;
 }
 .cnry .cy-pipeline-note-row {
   display: flex;
@@ -3266,6 +3280,7 @@
 .cnry .cy-pipeline-note-row input {
   flex: 1;
   min-width: 0;
+  width: 100%;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;

@@ -12,7 +12,6 @@ import {
   updateProjectField,
   updatePropertyDetails,
   updatePropertyField,
-  updatePropertySlug,
   type PropertyDetailsInput,
 } from '@/app/actions/entity-updates'
 import { getOrCreatePropertyThread, getThreadMessages, sendChatMessage, type ChatMessage } from '@/app/actions/chat'
@@ -23,7 +22,6 @@ import { listingPublicHref, propertyPublicHref } from '@/lib/listings/listing-hr
 import AuditLogPanel from './AuditLogPanel'
 import { CopyPublicLinkButton } from './CopyPublicLinkButton'
 import DatePickerField, { formatDisplayDate } from './DatePickerField'
-import { PublicSlugField } from './PublicSlugField'
 import { PropertyPhotoUpload } from '@/components/properties/PropertyPhotoUpload'
 import { PropertyListingAiPanel } from '@/components/properties/PropertyListingAiPanel'
 import { updateLeaseListingFields } from '@/app/actions/property-knowledge'
@@ -1059,7 +1057,23 @@ export default function EntityDetailDrawer({
       sub = p.address
       kindLabel = p.archivedAt ? 'Property · Archived' : 'Property · ' + (p.status || '')
       propertyForEdit = p
+      const siblingUnitIds = new Set(
+        db.properties
+          .filter((x) => x.propertyDbId && x.propertyDbId === p.propertyDbId)
+          .map((x) => x.id),
+      )
+      const publishedListings = db.drafts.filter(
+        (d) => d.status === 'published' && siblingUnitIds.has(d.propId || d.unitId),
+      )
       sections = [
+        <WebsiteListingsSection
+          key="website-listings"
+          property={p}
+          listings={publishedListings}
+          short={short}
+          money={money}
+          onOpenListing={onOpenListing}
+        />,
         <Section
           key="overview"
           title="Overview"
@@ -1072,33 +1086,14 @@ export default function EntityDetailDrawer({
             },
             {
               label: 'Type',
-              value: canEdit ? (
-                <StatusSelect
-                  value={propertyTypeOption(p.type)}
-                  options={PROPERTY_TYPE_OPTIONS}
-                  formatOption={formatPropertyTypeLabel}
-                  onSave={wrapSave((v) => updatePropertyField(p.id, 'property_type', v))}
-                />
-              ) : (p.type || '—'),
+              value: p.type ? formatPropertyTypeLabel(p.type) : '—',
             },
             { label: 'Area', value: [p.city, p.area].filter(Boolean).join(' · ') || '—' },
-            {
-              label: 'Beds',
-              value: canEdit ? (
-                <InlineField value={p.beds} label="bedrooms" type="number" onSave={wrapSave((v) => updatePropertyField(p.id, 'bedrooms', v))} />
-              ) : (p.beds || '—'),
-            },
-            {
-              label: 'Baths',
-              value: canEdit ? (
-                <InlineField value={p.baths} label="bathrooms" type="number" onSave={wrapSave((v) => updatePropertyField(p.id, 'bathrooms', v))} />
-              ) : (p.baths || '—'),
-            },
+            { label: 'Beds', value: p.beds || '—' },
+            { label: 'Baths', value: p.baths || '—' },
             {
               label: 'Asking rate',
-              value: canEdit ? (
-                <InlineField value={p.rate != null ? String(p.rate) : ''} label="asking rate" type="number" confirm onSave={wrapSave((v) => updatePropertyField(p.id, 'asking_rent', v))} />
-              ) : (p.rate ? money(p.rate) + '/mo' : '—'),
+              value: p.rate != null ? money(p.rate) + '/mo' : '—',
             },
             ...(propertyStatusOption(p.status) === 'STR' ||
             p.hospitablePropertyId ||
@@ -1106,61 +1101,18 @@ export default function EntityDetailDrawer({
               ? [
                   {
                     label: 'Hospitable API UUID',
-                    value: canEdit ? (
-                      <InlineField
-                        value={p.hospitablePropertyId || ''}
-                        label="Hospitable API UUID"
-                        type="text"
-                        confirm
-                        onSave={wrapSave((v) => updatePropertyField(p.id, 'hospitable_property_id', v))}
-                      />
-                    ) : (
-                      p.hospitablePropertyId || '—'
-                    ),
+                    value: p.hospitablePropertyId || '—',
                   },
                   {
                     label: 'Hospitable widget ID',
-                    value: canEdit ? (
-                      <InlineField
-                        value={p.hospitableWidgetPropertyId || ''}
-                        label="Hospitable widget property ID"
-                        type="text"
-                        confirm
-                        onSave={wrapSave((v) => {
-                          const trimmed = v.trim()
-                          if (!trimmed) {
-                            return updatePropertyField(p.id, 'hospitable_widget_property_id', '')
-                          }
-                          const id = parseHospitableWidgetPropertyId(trimmed)
-                          if (!id) {
-                            return Promise.resolve({
-                              success: false,
-                              error: 'Paste a Hospitable widget URL or numeric ID (or leave blank).',
-                            })
-                          }
-                          return updatePropertyField(p.id, 'hospitable_widget_property_id', id)
-                        })}
-                      />
-                    ) : (
-                      p.hospitableWidgetPropertyId || '—'
-                    ),
+                    value: p.hospitableWidgetPropertyId || '—',
                   },
                 ]
               : []),
             { label: 'Garage', value: p.hasGarage ? 'Yes' : 'No' },
             {
               label: 'Public URL slug',
-              value: p.propertyDbId ? (
-                <PublicSlugField
-                  slug={p.slug}
-                  disabled={!canEdit}
-                  onSave={wrapSave((v) => updatePropertySlug(p.propertyDbId, v))}
-                />
-              ) : p.slug ? (
-                <CopyPublicLinkButton slug={p.slug} />
-              ) : (
-                '—'
-              ),
+              value: p.slug ? <CopyPublicLinkButton slug={p.slug} /> : '—',
             },
             ...(p.archivedAt ? [{ label: 'Archived', value: new Date(p.archivedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) }] : []),
           ]}
@@ -1173,24 +1125,6 @@ export default function EntityDetailDrawer({
           onConverted={refresh}
         />,
       ]
-      const siblingUnitIds = new Set(
-        db.properties
-          .filter((x) => x.propertyDbId && x.propertyDbId === p.propertyDbId)
-          .map((x) => x.id),
-      )
-      const publishedListings = db.drafts.filter(
-        (d) => d.status === 'published' && siblingUnitIds.has(d.propId || d.unitId),
-      )
-      sections.push(
-        <WebsiteListingsSection
-          key="website-listings"
-          property={p}
-          listings={publishedListings}
-          short={short}
-          money={money}
-          onOpenListing={onOpenListing}
-        />,
-      )
       if (p.propertyDbId) {
         const draftListing =
           publishedListings[0] ||

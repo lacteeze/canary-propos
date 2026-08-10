@@ -33,6 +33,11 @@ export interface CanaryProperty {
   unitId: string
   /** Hospitable Public API property UUID for STR calendar matching */
   hospitablePropertyId: string
+  /**
+   * Hospitable Direct Booking widget `data-property-id` (numeric string).
+   * Distinct from `hospitablePropertyId` (API UUID).
+   */
+  hospitableWidgetPropertyId: string
   mgmtFee: string
   /** raw management fee fields (staff-only edit form) */
   mgmtFeeType: string

@@ -535,27 +535,36 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
           </div>
           <p style={{ margin: '0 0 26px', color: 'var(--ink-dim)', maxWidth: '56ch' }}>{copy.tStaysIntro}</p>
           <div className="cl2-card-grid">
-            {stays.map((stay, index) => (
-              <a key={`${stay.short}-${index}`} href={stay.href} target="_blank" rel="noopener noreferrer" className="cl2-card" style={{ textDecoration: 'none', color: 'var(--text)', background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                <div style={{ height: 190, backgroundImage: `url('${stay.photo}')`, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative' }}>
-                  <span className="cl2-str-pill">{copy.tBookDirect}</span>
-                </div>
-                <div style={{ padding: '15px 17px 17px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minHeight: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 16, lineHeight: 1.25, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {stay.short}
+            {stays.map((stay, index) => {
+              const external = /^https?:\/\//i.test(stay.href)
+              return (
+                <a
+                  key={`${stay.short}-${index}`}
+                  href={stay.href}
+                  {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                  className="cl2-card"
+                  style={{ textDecoration: 'none', color: 'var(--text)', background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}
+                >
+                  <div style={{ height: 190, backgroundImage: `url('${stay.photo}')`, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative' }}>
+                    <span className="cl2-str-pill">{copy.tBookDirect}</span>
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 12, fontSize: 13, color: 'var(--dim)' }}>
-                    <span><b style={{ color: 'var(--text)', fontWeight: 700 }}>{stay.beds}</b> {copy.tBed}</span>
-                    <span><b style={{ color: 'var(--text)', fontWeight: 700 }}>{stay.baths}</b> {copy.tBath}</span>
-                    {stay.sleeps ? (
-                      <span><b style={{ color: 'var(--text)', fontWeight: 700 }}>{stay.sleeps}</b> {copy.sleeps.trim()}</span>
-                    ) : null}
-                    {stay.extra ? <span>{stay.extra}</span> : null}
-                    <span style={{ marginLeft: 'auto', fontWeight: 700, fontSize: 14, color: 'var(--accent)' }}>{stay.town}</span>
+                  <div style={{ padding: '15px 17px 17px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minHeight: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 16, lineHeight: 1.25, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {stay.short}
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 12, fontSize: 13, color: 'var(--dim)' }}>
+                      <span><b style={{ color: 'var(--text)', fontWeight: 700 }}>{stay.beds}</b> {copy.tBed}</span>
+                      <span><b style={{ color: 'var(--text)', fontWeight: 700 }}>{stay.baths}</b> {copy.tBath}</span>
+                      {stay.sleeps ? (
+                        <span><b style={{ color: 'var(--text)', fontWeight: 700 }}>{stay.sleeps}</b> {copy.sleeps.trim()}</span>
+                      ) : null}
+                      {stay.extra ? <span>{stay.extra}</span> : null}
+                      <span style={{ marginLeft: 'auto', fontWeight: 700, fontSize: 14, color: 'var(--accent)' }}>{stay.town}</span>
+                    </div>
                   </div>
-                </div>
-              </a>
-            ))}
+                </a>
+              )
+            })}
           </div>
         </div>
       </section>

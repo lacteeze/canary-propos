@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   const orgSlug = process.env.NEXT_PUBLIC_DEFAULT_ORG_SLUG ?? 'canary'
-  const stays = await getHospitableStays()
+  const stays = await getHospitableStays(orgSlug)
   const [listings, stats] = await Promise.all([
     getPublishedListings(orgSlug),
     getLandingStats(orgSlug, stays.length),

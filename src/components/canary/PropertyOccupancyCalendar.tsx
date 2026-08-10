@@ -187,6 +187,9 @@ function PropertyQuickEdit({
   const [feeType, setFeeType] = useState(property.mgmtFeeType === 'flat' ? 'flat' : 'percent')
   const [feeValue, setFeeValue] = useState(property.mgmtFeeValue)
   const [hospitablePropertyId, setHospitablePropertyId] = useState(property.hospitablePropertyId || '')
+  const [hospitableWidgetPropertyId, setHospitableWidgetPropertyId] = useState(
+    property.hospitableWidgetPropertyId || ''
+  )
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
   const [ok, setOk] = useState(false)
@@ -205,6 +208,7 @@ function PropertyQuickEdit({
     setFeeType(property.mgmtFeeType === 'flat' ? 'flat' : 'percent')
     setFeeValue(property.mgmtFeeValue)
     setHospitablePropertyId(property.hospitablePropertyId || '')
+    setHospitableWidgetPropertyId(property.hospitableWidgetPropertyId || '')
     setErr('')
     setOk(false)
   }, [property])
@@ -246,6 +250,10 @@ function PropertyQuickEdit({
     if (hospId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(hospId)) {
       return setErr('Hospitable property ID must be a UUID (or leave blank).')
     }
+    const widgetId = hospitableWidgetPropertyId.trim()
+    if (widgetId && !/^\d+$/.test(widgetId)) {
+      return setErr('Hospitable widget property ID must be numeric (or leave blank).')
+    }
 
     const payload: PropertyDetailsInput = {
       status: status as PropertyDetailsInput['status'],
@@ -261,6 +269,7 @@ function PropertyQuickEdit({
       managementFeeType: feeType as PropertyDetailsInput['managementFeeType'],
       managementFeeValue: feeN,
       hospitablePropertyId: hospId || null,
+      hospitableWidgetPropertyId: widgetId || null,
     }
     setSaving(true)
     const res = await updatePropertyDetails(property.unitId, payload)
@@ -339,7 +348,7 @@ function PropertyQuickEdit({
             <label>{formLabel(feeType === 'percent' ? 'Mgmt fee (%)' : 'Mgmt fee ($)')}
               <input type="number" min={0} value={feeValue} onChange={(e) => setFeeValue(e.target.value)} style={fieldStyle} />
             </label>
-            <label style={{ gridColumn: '1 / -1' }}>{formLabel('Hospitable property ID')}
+            <label style={{ gridColumn: '1 / -1' }}>{formLabel('Hospitable API UUID')}
               <input
                 type="text"
                 value={hospitablePropertyId}
@@ -348,7 +357,19 @@ function PropertyQuickEdit({
                 style={{ ...fieldStyle, fontFamily: MONO, fontSize: 11.5 }}
               />
             </label>
+            <label style={{ gridColumn: '1 / -1' }}>{formLabel('Hospitable widget property ID')}
+              <input
+                type="text"
+                value={hospitableWidgetPropertyId}
+                onChange={(e) => setHospitableWidgetPropertyId(e.target.value)}
+                placeholder="e.g. 796518"
+                style={{ ...fieldStyle, fontFamily: MONO, fontSize: 11.5 }}
+              />
+            </label>
           </div>
+          <p style={{ margin: '8px 0 0', fontSize: 11.5, color: 'var(--dim)', lineHeight: 1.4 }}>
+            Widget ID is the numeric <code>data-property-id</code> from Direct Bookings → Copy widget code.
+          </p>
         </div>
       )}
 

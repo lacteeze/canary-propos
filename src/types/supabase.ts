@@ -1696,6 +1696,7 @@ export type Database = {
           created_at: string | null
           floor: number | null
           hospitable_property_id: string | null
+          hospitable_widget_property_id: string | null
           id: string
           org_id: string
           property_id: string | null
@@ -1713,6 +1714,7 @@ export type Database = {
           created_at?: string | null
           floor?: number | null
           hospitable_property_id?: string | null
+          hospitable_widget_property_id?: string | null
           id?: string
           org_id: string
           property_id?: string | null
@@ -1730,6 +1732,7 @@ export type Database = {
           created_at?: string | null
           floor?: number | null
           hospitable_property_id?: string | null
+          hospitable_widget_property_id?: string | null
           id?: string
           org_id?: string
           property_id?: string | null

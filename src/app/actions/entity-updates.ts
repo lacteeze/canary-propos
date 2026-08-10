@@ -98,7 +98,14 @@ const UNIT_DB_STATUSES = ['vacant', 'occupied', 'maintenance', 'str', 'office'] 
 
 export async function updatePropertyField(
   unitId: string,
-  field: 'status' | 'asking_rent' | 'bedrooms' | 'bathrooms' | 'hospitable_property_id' | 'property_type',
+  field:
+    | 'status'
+    | 'asking_rent'
+    | 'bedrooms'
+    | 'bathrooms'
+    | 'hospitable_property_id'
+    | 'hospitable_widget_property_id'
+    | 'property_type',
   value: string
 ): Promise<ActionResult> {
   const ctx = await getStaffContext()
@@ -106,7 +113,9 @@ export async function updatePropertyField(
 
   const { data: unit } = await ctx.supabase
     .from('units')
-    .select('id, property_id, status, asking_rent, bedrooms, bathrooms, hospitable_property_id')
+    .select(
+      'id, property_id, status, asking_rent, bedrooms, bathrooms, hospitable_property_id, hospitable_widget_property_id'
+    )
     .eq('id', unitId)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -181,6 +190,19 @@ export async function updatePropertyField(
     if (next === prev) return { success: true }
     changes.push({ field: 'hospitable_property_id', oldValue: prev, newValue: next })
     patch.hospitable_property_id = next
+  } else if (field === 'hospitable_widget_property_id') {
+    const trimmed = value.trim()
+    if (trimmed && !/^\d+$/.test(trimmed)) {
+      return {
+        success: false,
+        error: 'Hospitable widget property ID must be numeric (from Direct Booking widget code), or leave blank.',
+      }
+    }
+    const next = trimmed || null
+    const prev = unit.hospitable_widget_property_id?.trim() || null
+    if (next === prev) return { success: true }
+    changes.push({ field: 'hospitable_widget_property_id', oldValue: prev, newValue: next })
+    patch.hospitable_widget_property_id = next
   }
 
   const { error } = await ctx.supabase.from('units').update(patch).eq('id', unitId).eq('org_id', ctx.person.org_id)
@@ -358,6 +380,13 @@ const propertyDetailsSchema = z.object({
     (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
     z.string().uuid().nullable()
   ),
+  hospitableWidgetPropertyId: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+    z
+      .string()
+      .regex(/^\d+$/, 'Hospitable widget property ID must be numeric')
+      .nullable()
+  ),
 })
 
 export type PropertyDetailsInput = z.infer<typeof propertyDetailsSchema>
@@ -372,7 +401,9 @@ export async function updatePropertyDetails(unitId: string, input: PropertyDetai
 
   const { data: unit } = await ctx.supabase
     .from('units')
-    .select('id, property_id, status, bedrooms, bathrooms, asking_rent, amenities, hospitable_property_id')
+    .select(
+      'id, property_id, status, bedrooms, bathrooms, asking_rent, amenities, hospitable_property_id, hospitable_widget_property_id'
+    )
     .eq('id', unitId)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -451,6 +482,15 @@ export async function updatePropertyDetails(unitId: string, input: PropertyDetai
       newValue: form.hospitablePropertyId,
     })
     unitPatch.hospitable_property_id = form.hospitablePropertyId
+  }
+  const oldWidgetId = unit.hospitable_widget_property_id?.trim() || null
+  if (form.hospitableWidgetPropertyId !== oldWidgetId) {
+    changes.push({
+      field: 'hospitable_widget_property_id',
+      oldValue: oldWidgetId,
+      newValue: form.hospitableWidgetPropertyId,
+    })
+    unitPatch.hospitable_widget_property_id = form.hospitableWidgetPropertyId
   }
 
   // ----- properties patch -----
@@ -1111,6 +1151,7 @@ type UnitWithProperty = {
   id: string
   property_id: string | null
   hospitable_property_id: string | null
+  hospitable_widget_property_id: string | null
   properties: { id: string; street_address: string; city: string } | null
 }
 
@@ -1122,7 +1163,9 @@ async function loadOrgUnits(
   const uniqueIds = [...new Set(unitIds)]
   const { data } = await supabase
     .from('units')
-    .select('id, property_id, hospitable_property_id, properties!property_id(id, street_address, city)')
+    .select(
+      'id, property_id, hospitable_property_id, hospitable_widget_property_id, properties!property_id(id, street_address, city)'
+    )
     .eq('org_id', orgId)
     .in('id', uniqueIds)
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
@@ -1405,6 +1448,17 @@ export async function mergeProperties(input: {
         .eq('id', primary.id)
         .eq('org_id', ctx.person.org_id)
       primary.hospitable_property_id = mergeUnit.hospitable_property_id
+    }
+    if (!primary.hospitable_widget_property_id && mergeUnit.hospitable_widget_property_id) {
+      await ctx.supabase
+        .from('units')
+        .update({
+          hospitable_widget_property_id: mergeUnit.hospitable_widget_property_id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', primary.id)
+        .eq('org_id', ctx.person.org_id)
+      primary.hospitable_widget_property_id = mergeUnit.hospitable_widget_property_id
     }
 
     const { error: delErr } = await ctx.supabase

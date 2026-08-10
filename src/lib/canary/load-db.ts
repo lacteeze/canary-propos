@@ -183,7 +183,7 @@ export async function loadCanaryDb(
       supabase
         .from('units')
         .select(
-          `id, unit_number, bedrooms, bathrooms, status, asking_rent, amenities, hospitable_property_id, archived_at,
+          `id, unit_number, bedrooms, bathrooms, status, asking_rent, amenities, hospitable_property_id, hospitable_widget_property_id, archived_at,
            properties!property_id(id, slug, street_address, city, province, property_type, portfolio_id, owner_id, management_fee_type, management_fee_value, listing_brief)`
         )
         .eq('org_id', orgId)
@@ -415,6 +415,7 @@ export async function loadCanaryDb(
         mgmtFeeType: p.management_fee_type ?? 'percent',
         mgmtFeeValue: p.management_fee_value != null ? String(Number(p.management_fee_value)) : '',
         hospitablePropertyId: u.hospitable_property_id?.trim() ?? '',
+        hospitableWidgetPropertyId: u.hospitable_widget_property_id?.trim() ?? '',
         archivedAt: u.archived_at ?? null,
         listingPhotoPaths: listingPhotosByProperty.get(p.id) ?? [],
         privatePhotoPaths: privatePhotosByProperty.get(p.id) ?? [],

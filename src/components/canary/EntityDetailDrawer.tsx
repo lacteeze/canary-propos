@@ -529,6 +529,9 @@ function PropertyEditForm({
   const [feeType, setFeeType] = useState(property.mgmtFeeType === 'flat' ? 'flat' : 'percent')
   const [feeValue, setFeeValue] = useState(property.mgmtFeeValue)
   const [hospitablePropertyId, setHospitablePropertyId] = useState(property.hospitablePropertyId || '')
+  const [hospitableWidgetPropertyId, setHospitableWidgetPropertyId] = useState(
+    property.hospitableWidgetPropertyId || ''
+  )
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
 
@@ -546,6 +549,10 @@ function PropertyEditForm({
     if (hospId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(hospId)) {
       return setErr('Hospitable property ID must be a UUID (or leave blank).')
     }
+    const widgetId = hospitableWidgetPropertyId.trim()
+    if (widgetId && !/^\d+$/.test(widgetId)) {
+      return setErr('Hospitable widget property ID must be numeric (or leave blank).')
+    }
     if (!window.confirm('Save these property changes?')) return
 
     const payload: PropertyDetailsInput = {
@@ -562,6 +569,7 @@ function PropertyEditForm({
       managementFeeType: feeType as PropertyDetailsInput['managementFeeType'],
       managementFeeValue: feeN,
       hospitablePropertyId: hospId || null,
+      hospitableWidgetPropertyId: widgetId || null,
     }
     setSaving(true)
     const res = await updatePropertyDetails(property.unitId, payload)
@@ -649,7 +657,7 @@ function PropertyEditForm({
               <label>{formLabel(feeType === 'percent' ? 'Management fee (%)' : 'Management fee ($)')}
                 <input type="number" min={0} value={feeValue} onChange={(e) => setFeeValue(e.target.value)} style={formFieldStyle} />
               </label>
-              <label style={{ gridColumn: '1 / -1' }}>{formLabel('Hospitable property ID')}
+              <label style={{ gridColumn: '1 / -1' }}>{formLabel('Hospitable API UUID')}
                 <input
                   type="text"
                   value={hospitablePropertyId}
@@ -658,9 +666,20 @@ function PropertyEditForm({
                   style={{ ...formFieldStyle, fontFamily: MONO, fontSize: 12 }}
                 />
               </label>
+              <label style={{ gridColumn: '1 / -1' }}>{formLabel('Hospitable widget property ID')}
+                <input
+                  type="text"
+                  value={hospitableWidgetPropertyId}
+                  onChange={(e) => setHospitableWidgetPropertyId(e.target.value)}
+                  placeholder="e.g. 796518"
+                  style={{ ...formFieldStyle, fontFamily: MONO, fontSize: 12 }}
+                />
+              </label>
             </div>
             <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--dim)', lineHeight: 1.45 }}>
-              Paste the Hospitable property UUID to match STR bookings on the leases timeline. Leave blank for long-term-only units.
+              API UUID matches STR bookings on the leases timeline. Widget property ID is the numeric{' '}
+              <code>data-property-id</code> from Direct Bookings → Website → Copy widget code (embeds the
+              calendar on the public property page). Leave both blank for long-term-only units.
             </p>
           </div>
         )}
@@ -1059,19 +1078,41 @@ export default function EntityDetailDrawer({
                 <InlineField value={p.rate != null ? String(p.rate) : ''} label="asking rate" type="number" confirm onSave={wrapSave((v) => updatePropertyField(p.id, 'asking_rent', v))} />
               ) : (p.rate ? money(p.rate) + '/mo' : '—'),
             },
-            ...(propertyStatusOption(p.status) === 'STR'
-              ? [{
-                  label: 'Hospitable ID',
-                  value: canEdit ? (
-                    <InlineField
-                      value={p.hospitablePropertyId || ''}
-                      label="Hospitable property ID"
-                      type="text"
-                      confirm
-                      onSave={wrapSave((v) => updatePropertyField(p.id, 'hospitable_property_id', v))}
-                    />
-                  ) : (p.hospitablePropertyId || '—'),
-                }]
+            ...(propertyStatusOption(p.status) === 'STR' ||
+            p.hospitablePropertyId ||
+            p.hospitableWidgetPropertyId
+              ? [
+                  {
+                    label: 'Hospitable API UUID',
+                    value: canEdit ? (
+                      <InlineField
+                        value={p.hospitablePropertyId || ''}
+                        label="Hospitable API UUID"
+                        type="text"
+                        confirm
+                        onSave={wrapSave((v) => updatePropertyField(p.id, 'hospitable_property_id', v))}
+                      />
+                    ) : (
+                      p.hospitablePropertyId || '—'
+                    ),
+                  },
+                  {
+                    label: 'Hospitable widget ID',
+                    value: canEdit ? (
+                      <InlineField
+                        value={p.hospitableWidgetPropertyId || ''}
+                        label="Hospitable widget property ID"
+                        type="text"
+                        confirm
+                        onSave={wrapSave((v) =>
+                          updatePropertyField(p.id, 'hospitable_widget_property_id', v)
+                        )}
+                      />
+                    ) : (
+                      p.hospitableWidgetPropertyId || '—'
+                    ),
+                  },
+                ]
               : []),
             { label: 'Garage', value: p.hasGarage ? 'Yes' : 'No' },
             {

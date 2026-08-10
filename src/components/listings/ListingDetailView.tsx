@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { InquiryForm } from '@/components/listings/InquiryForm'
 import { InterestForm } from '@/components/listings/InterestForm'
+import { HospitableDirectBookingWidget } from '@/components/listings/HospitableDirectBookingWidget'
 import { ListingPhotoGallery } from '@/components/listings/ListingPhotoGallery'
 import { SimilarListingsSection } from '@/components/landing/SimilarListingsCarousel'
 import { PublicHeader } from '@/components/public/PublicHeader'
@@ -32,6 +33,7 @@ export type ListingDetailListing = {
     sq_footage: number | null
     amenities: string[] | null
     asking_rent: number | null
+    hospitable_widget_property_id?: string | null
     properties: {
       id: string
       street_address: string
@@ -50,6 +52,8 @@ export type ListingDetailViewProps = {
   listingPhotosFull?: string[]
   carouselGroups: CityGroup[]
   orgSlug: string
+  /** Org-level Hospitable Direct site UUID when widget should render */
+  hospitableSiteUuid?: string | null
   listingCardCopy: {
     tBed: string
     tBath: string
@@ -75,6 +79,7 @@ export const LISTING_DETAIL_SELECT = `
     sq_footage,
     amenities,
     asking_rent,
+    hospitable_widget_property_id,
     properties (
       id,
       street_address,
@@ -92,6 +97,7 @@ export function ListingDetailView({
   listingPhotosFull,
   carouselGroups,
   orgSlug,
+  hospitableSiteUuid,
   listingCardCopy,
 }: ListingDetailViewProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -153,6 +159,10 @@ export function ListingDetailView({
 
   const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
   const mapsQuery = encodeURIComponent(fullAddress)
+  const widgetPropertyId =
+    typeof unit?.hospitable_widget_property_id === 'string'
+      ? unit.hospitable_widget_property_id.trim()
+      : ''
 
   return (
     <>
@@ -232,6 +242,15 @@ export function ListingDetailView({
             }}
           >
             <div style={{ minWidth: 0 }}>
+              {hospitableSiteUuid && widgetPropertyId ? (
+                <div style={{ marginBottom: 36 }}>
+                  <HospitableDirectBookingWidget
+                    siteUuid={hospitableSiteUuid}
+                    propertyId={widgetPropertyId}
+                  />
+                </div>
+              ) : null}
+
               {listing.listing_description && (
                 <section style={{ marginBottom: 36 }}>
                   <h2

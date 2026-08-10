@@ -16,6 +16,9 @@ import { signListingPhotoPaths } from '@/lib/storage/listing-photos'
 export type StayCoverLookup = {
   byHospitableId: Map<string, string>
   byStreetKey: Map<string, string>
+  /** PropOS public slug (`/{slug}`) keyed by Hospitable API UUID */
+  slugByHospitableId: Map<string, string>
+  slugByStreetKey: Map<string, string>
 }
 
 type UnitRow = {
@@ -77,6 +80,21 @@ export function resolveStayCoverPath(
   return null
 }
 
+/** Resolve PropOS public property slug for a Hospitable STR listing. */
+export function resolveStaySlug(
+  property: HospitableProperty,
+  lookup: StayCoverLookup
+): string | null {
+  const byId = lookup.slugByHospitableId.get(property.id)
+  if (byId) return byId
+
+  for (const key of streetKeysForHospitableProperty(property)) {
+    const slug = lookup.slugByStreetKey.get(key)
+    if (slug) return slug
+  }
+  return null
+}
+
 /**
  * Load first listing cover path per PropOS property, indexed by Hospitable id
  * and canonical street key (for units that still lack hospitable_property_id).
@@ -87,6 +105,8 @@ export async function loadStayCoverLookup(
   const empty: StayCoverLookup = {
     byHospitableId: new Map(),
     byStreetKey: new Map(),
+    slugByHospitableId: new Map(),
+    slugByStreetKey: new Map(),
   }
 
   const org = await getOrgBySlug(orgSlug)
@@ -119,6 +139,36 @@ export async function loadStayCoverLookup(
 
   const byHospitableId = new Map<string, string>()
   const byStreetKey = new Map<string, string>()
+  const slugByHospitableId = new Map<string, string>()
+  const slugByStreetKey = new Map<string, string>()
+
+  const indexStreetKeys = (property: NonNullable<UnitRow['properties']>, cover: string | null) => {
+    const slug = property.slug!.trim()
+    const street = canonicalStreetKey(property.street_address)
+    if (street) {
+      if (cover && !byStreetKey.has(street)) byStreetKey.set(street, cover)
+      if (!slugByStreetKey.has(street)) slugByStreetKey.set(street, slug)
+    }
+
+    const short = property.street_address.split(',')[0]?.trim() ?? ''
+    const shortKey = canonicalStreetKey(short)
+    if (shortKey) {
+      if (cover && !byStreetKey.has(shortKey)) byStreetKey.set(shortKey, cover)
+      if (!slugByStreetKey.has(shortKey)) slugByStreetKey.set(shortKey, slug)
+    }
+
+    const slugKey = canonicalStreetKey(property.slug!.replace(/-/g, ' '))
+    if (slugKey) {
+      if (cover && !byStreetKey.has(slugKey)) byStreetKey.set(slugKey, cover)
+      if (!slugByStreetKey.has(slugKey)) slugByStreetKey.set(slugKey, slug)
+    }
+
+    const norm = normalizeAddressKey(short)
+    if (norm) {
+      if (cover && !byStreetKey.has(norm)) byStreetKey.set(norm, cover)
+      if (!slugByStreetKey.has(norm)) slugByStreetKey.set(norm, slug)
+    }
+  }
 
   for (const row of rows) {
     const property = row.properties
@@ -128,40 +178,18 @@ export async function loadStayCoverLookup(
     const fromLegacy = (property.photo_paths ?? []).filter(
       (p): p is string => !!p && !/^https?:\/\//i.test(p)
     )
-    const cover = (fromMedia[0] || fromLegacy[0] || '').trim()
-    if (!cover) continue
+    const cover = (fromMedia[0] || fromLegacy[0] || '').trim() || null
 
     const hospId = row.hospitable_property_id?.trim()
-    if (hospId && !byHospitableId.has(hospId)) {
-      byHospitableId.set(hospId, cover)
+    if (hospId) {
+      if (cover && !byHospitableId.has(hospId)) byHospitableId.set(hospId, cover)
+      if (!slugByHospitableId.has(hospId)) slugByHospitableId.set(hospId, property.slug.trim())
     }
 
-    const street = canonicalStreetKey(property.street_address)
-    if (street && !byStreetKey.has(street)) {
-      byStreetKey.set(street, cover)
-    }
-
-    // Also index bare street without city noise already handled by canonicalStreetKey
-    const short = property.street_address.split(',')[0]?.trim() ?? ''
-    const shortKey = canonicalStreetKey(short)
-    if (shortKey && !byStreetKey.has(shortKey)) {
-      byStreetKey.set(shortKey, cover)
-    }
-
-    // Slug form e.g. 14-bonaventure-ave
-    const slugKey = canonicalStreetKey(property.slug.replace(/-/g, ' '))
-    if (slugKey && !byStreetKey.has(slugKey)) {
-      byStreetKey.set(slugKey, cover)
-    }
-
-    // Normalize address key without suffix collapsing as extra hit
-    const norm = normalizeAddressKey(short)
-    if (norm && !byStreetKey.has(norm)) {
-      byStreetKey.set(norm, cover)
-    }
+    indexStreetKeys(property, cover)
   }
 
-  return { byHospitableId, byStreetKey }
+  return { byHospitableId, byStreetKey, slugByHospitableId, slugByStreetKey }
 }
 
 /** Sign PropOS covers for a Hospitable property list; returns hospitable id → signed URL. */

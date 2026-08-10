@@ -3,6 +3,7 @@ import type { HospitableProperty } from '@/lib/hospitable/client'
 import { upgradeHospitablePictureUrl } from '@/lib/hospitable/map-property-to-stay'
 import {
   resolveStayCoverPath,
+  resolveStaySlug,
   streetKeysForHospitableProperty,
   type StayCoverLookup,
 } from './stay-cover-photos'
@@ -39,6 +40,14 @@ describe('resolveStayCoverPath', () => {
       ['73 casey st', 'org/properties/casey/photos/cover.jpg'],
       ['14 bonaventure ave', 'org/properties/bonaventure/photos/cover.jpg'],
     ]),
+    slugByHospitableId: new Map([
+      ['hosp-bonaventure', '14-bonaventure-ave'],
+      ['d26f423d-af7a-43c4-859b-45640c85bed5', '21-front-rd'],
+    ]),
+    slugByStreetKey: new Map([
+      ['73 casey st', '73-casey-street'],
+      ['21 front rd', '21-front-rd'],
+    ]),
   }
 
   it('prefers explicit hospitable_property_id match', () => {
@@ -69,8 +78,37 @@ describe('resolveStayCoverPath', () => {
     const property: HospitableProperty = {
       id: 'unknown',
       public_name: 'Somewhere Else',
-      address: { city: 'Dildo', display: '21 Front Road' },
+      address: { city: 'Harbour Grace', display: '99 Nowhere Lane' },
     }
     expect(resolveStayCoverPath(property, lookup)).toBeNull()
+  })
+})
+
+describe('resolveStaySlug', () => {
+  const lookup: StayCoverLookup = {
+    byHospitableId: new Map(),
+    byStreetKey: new Map(),
+    slugByHospitableId: new Map([
+      ['d26f423d-af7a-43c4-859b-45640c85bed5', '21-front-rd'],
+    ]),
+    slugByStreetKey: new Map([['21 front rd', '21-front-rd']]),
+  }
+
+  it('resolves PropOS slug from Hospitable API UUID', () => {
+    const property: HospitableProperty = {
+      id: 'd26f423d-af7a-43c4-859b-45640c85bed5',
+      public_name: 'Modern Home Steps from Brewery with Ocean View',
+      address: { city: 'Dildo', display: '21 front road' },
+    }
+    expect(resolveStaySlug(property, lookup)).toBe('21-front-rd')
+  })
+
+  it('falls back to street key when UUID is not linked', () => {
+    const property: HospitableProperty = {
+      id: 'unlinked',
+      public_name: 'Ocean View',
+      address: { city: 'Dildo', display: '21 Front Road' },
+    }
+    expect(resolveStaySlug(property, lookup)).toBe('21-front-rd')
   })
 })

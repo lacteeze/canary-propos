@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { InterestForm } from '@/components/listings/InterestForm'
+import { HospitableDirectBookingWidget } from '@/components/listings/HospitableDirectBookingWidget'
 import { ListingPhotoGallery } from '@/components/listings/ListingPhotoGallery'
 import { SimilarListingsSection } from '@/components/landing/SimilarListingsCarousel'
 import { PublicHeader } from '@/components/public/PublicHeader'
@@ -39,6 +40,10 @@ export type PropertyPublicViewProps = {
   orgId: string
   /** Any listing for a unit on this property (incl. draft/unlisted), if one exists */
   linkedListingId?: string | null
+  /** Hospitable Direct widget `data-property-id` when linked for short-term booking */
+  hospitableWidgetPropertyId?: string | null
+  /** Org-level Hospitable Direct site UUID */
+  hospitableSiteUuid?: string | null
   listingCardCopy: {
     tBed: string
     tBath: string
@@ -66,6 +71,8 @@ export function PropertyPublicView({
   orgSlug,
   orgId,
   linkedListingId,
+  hospitableWidgetPropertyId,
+  hospitableSiteUuid,
   listingCardCopy,
 }: PropertyPublicViewProps) {
   const street = property.street_address?.trim() || ''
@@ -208,6 +215,13 @@ export function PropertyPublicView({
         </div>
 
         <div style={{ display: 'grid', gap: 40 }}>
+          {hospitableSiteUuid && hospitableWidgetPropertyId ? (
+            <HospitableDirectBookingWidget
+              siteUuid={hospitableSiteUuid}
+              propertyId={hospitableWidgetPropertyId}
+            />
+          ) : null}
+
           {unit?.amenities && unit.amenities.length > 0 && (
             <section>
               <h2 style={{ margin: '0 0 14px', fontSize: 18, fontWeight: 700 }}>Amenities</h2>

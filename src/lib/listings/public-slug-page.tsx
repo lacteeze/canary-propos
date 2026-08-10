@@ -16,6 +16,7 @@ import { getDetailPageCarouselGroups } from '@/lib/listings/browse-utils'
 import { createPublicClient } from '@/lib/supabase/public'
 import { getListingPhotoPathsForProperty } from '@/lib/storage/property-listing-media'
 import { resolveListingGalleryPhotos } from '@/lib/storage/listing-photos'
+import { getHospitableSiteUuid } from '@/lib/hospitable/site-uuid'
 
 const PROPERTY_PUBLIC_SELECT = `
   id,
@@ -67,6 +68,8 @@ export async function renderPublishedListingPage(opts: {
   }
 
   const carouselGroups = getDetailPageCarouselGroups(allPublished, listing.id, listingCity)
+  const widgetId = (unit?.hospitable_widget_property_id as string | null | undefined)?.trim()
+  const hospitableSiteUuid = widgetId ? getHospitableSiteUuid() : null
 
   return (
     <ListingDetailView
@@ -75,6 +78,7 @@ export async function renderPublishedListingPage(opts: {
       listingPhotosFull={listingPhotosFull}
       carouselGroups={carouselGroups}
       orgSlug={orgSlug}
+      hospitableSiteUuid={hospitableSiteUuid}
       listingCardCopy={listingCardCopyFromLanding()}
     />
   )
@@ -133,7 +137,9 @@ export async function renderPropertyPublicPage(opts: {
   const [unitsRes, leaseEndRes, fromMedia, allPublished] = await Promise.all([
     supabase
       .from('units')
-      .select('id, bedrooms, bathrooms, sq_footage, amenities, asking_rent, status')
+      .select(
+        'id, bedrooms, bathrooms, sq_footage, amenities, asking_rent, status, hospitable_widget_property_id'
+      )
       .eq('property_id', property.id)
       .eq('org_id', orgId)
       .order('unit_number', { ascending: true }),
@@ -145,6 +151,11 @@ export async function renderPropertyPublicPage(opts: {
   const unitRows = unitsRes.data ?? []
   const unit = (unitRows[0] as PropertyPublicUnit | null) ?? null
   const unitIds = unitRows.map((u) => u.id as string)
+  const hospitableWidgetPropertyId =
+    unitRows
+      .map((u) => (u.hospitable_widget_property_id as string | null | undefined)?.trim())
+      .find((id): id is string => !!id) ?? null
+  const hospitableSiteUuid = hospitableWidgetPropertyId ? getHospitableSiteUuid() : null
 
   // Pass published listing id when visible; draft/unlisted resolved in submitGeneralInterest.
   let linkedListingId: string | null = null
@@ -202,6 +213,8 @@ export async function renderPropertyPublicPage(opts: {
       orgSlug={orgSlug}
       orgId={orgId}
       linkedListingId={linkedListingId}
+      hospitableWidgetPropertyId={hospitableWidgetPropertyId}
+      hospitableSiteUuid={hospitableSiteUuid}
       listingCardCopy={listingCardCopyFromLanding()}
     />
   )

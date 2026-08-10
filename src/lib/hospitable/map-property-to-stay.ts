@@ -35,7 +35,8 @@ export function upgradeHospitablePictureUrl(url: string | null | undefined): str
 export function mapPropertyToStay(
   property: HospitableProperty,
   photoFallbackIndex = 0,
-  photoOverride?: string | null
+  photoOverride?: string | null,
+  hrefOverride?: string | null
 ): LandingStay | null {
   const short = (property.public_name || property.name || '').trim()
   const town = (property.address?.city || '').trim()
@@ -47,8 +48,10 @@ export function mapPropertyToStay(
   const sleeps =
     maxGuests != null && !Number.isNaN(maxGuests) ? formatCount(maxGuests) : ''
 
+  // Prefer PropOS public property page (equal treatment with listings); fall back to
+  // Hospitable site URL / Airbnb portfolio only when no slug match exists.
   const siteUrl = property.bookings?.site_urls?.find(Boolean)
-  const href = siteUrl?.trim() || DEFAULT_STAYS_HREF
+  const href = hrefOverride?.trim() || siteUrl?.trim() || DEFAULT_STAYS_HREF
   const photo =
     photoOverride?.trim() ||
     upgradeHospitablePictureUrl(property.picture) ||
@@ -59,11 +62,17 @@ export function mapPropertyToStay(
 
 export function mapPropertiesToStays(
   properties: HospitableProperty[],
-  photoOverrides?: Map<string, string>
+  photoOverrides?: Map<string, string>,
+  hrefOverrides?: Map<string, string>
 ): LandingStay[] {
   return properties
     .map((property, index) =>
-      mapPropertyToStay(property, index, photoOverrides?.get(property.id))
+      mapPropertyToStay(
+        property,
+        index,
+        photoOverrides?.get(property.id),
+        hrefOverrides?.get(property.id)
+      )
     )
     .filter((stay): stay is LandingStay => stay != null)
 }

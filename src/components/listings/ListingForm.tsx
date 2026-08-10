@@ -6,6 +6,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { createListing, updateListing } from '@/app/actions/listings'
+import { generateListingDescription } from '@/app/actions/listing-ai'
 import { toast } from 'sonner'
 
 interface Unit {
@@ -65,6 +66,7 @@ export function ListingForm({
   const [status, setStatus] = useState(existingListing?.listing_status ?? 'draft')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [isGenerating, startGenerate] = useTransition()
 
   const defaultLabel = isEditMode ? 'Edit listing' : 'Create listing'
 
@@ -160,7 +162,34 @@ export function ListingForm({
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-stone-700">Description</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="block text-sm font-medium text-stone-700">Description</label>
+              <button
+                type="button"
+                disabled={isGenerating || isPending}
+                onClick={() => {
+                  setError(null)
+                  startGenerate(async () => {
+                    const res = await generateListingDescription({
+                      propertyId,
+                      listingId: existingListing?.id,
+                    })
+                    if (!res.success) {
+                      setError(res.error)
+                      return
+                    }
+                    setTitle((t) => t.trim() || res.title)
+                    setDescription(res.description)
+                    if (res.highlights.length > 0) {
+                      setHighlightsRaw(res.highlights.join(', '))
+                    }
+                  })
+                }}
+                className="rounded-md border border-stone-300 px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+              >
+                {isGenerating ? 'Generating…' : 'Generate description'}
+              </button>
+            </div>
             <textarea
               rows={4}
               value={description}
@@ -168,6 +197,9 @@ export function ListingForm({
               placeholder="Describe the unit, neighbourhood, features…"
               className="mt-1 block w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
             />
+            <p className="mt-1 text-xs text-stone-400">
+              Uses property quick fields and knowledge base. Review before saving.
+            </p>
           </div>
 
           {/* Highlights */}

@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { activateDraftListing, deleteDraftListing, saveDraftListing, savePaymentEntry } from '@/app/actions/canary'
+import { generateListingDescription } from '@/app/actions/listing-ai'
 import { updateOwnAvatarPath } from '@/app/actions/profile'
 import { archiveProperties, unarchiveProperties, deleteProperties, mergeProperties } from '@/app/actions/entity-updates'
 import { invitePersonToPortal } from '@/app/(manager)/people/actions'
@@ -308,6 +309,7 @@ export default function CanaryApp({
   const [draftEndDirty, setDraftEndDirty] = useState(false)
   const [draftError, setDraftError] = useState('')
   const [draftSaving, setDraftSaving] = useState(false)
+  const [draftDescGenerating, setDraftDescGenerating] = useState(false)
   const [payFormOpen, setPayFormOpen] = useState(false)
   const [payForm, setPayForm] = useState<PayFormState | null>(null)
   const [payError, setPayError] = useState('')
@@ -4107,8 +4109,63 @@ export default function CanaryApp({
               <label><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Utilities</span>
                 <select className="cy-select cy-select--field" value={curDraft.utilities} onChange={setDraftField('utilities')}>
                   <option>Not included</option><option>Included</option><option>Included with cap</option></select></label>
-              <label style={{ gridColumn: '1/-1' }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Public description <span style={{ color: 'var(--faint)', fontWeight: 500 }}>(shown to tenants — never include codes, keys, or owner info)</span></span>
-                <textarea value={curDraft.description} onChange={setDraftField('description')} rows={3} style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', marginTop: 4, resize: 'vertical' }} /></label>
+              <label style={{ gridColumn: '1/-1' }}>
+                <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>
+                    Public description{' '}
+                    <span style={{ color: 'var(--faint)', fontWeight: 500 }}>
+                      (shown to tenants — never include codes, keys, or owner info)
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className="cy-btn-ghost"
+                    disabled={draftDescGenerating || draftSaving || !curDraft.propId}
+                    title={!curDraft.propId ? 'Choose a property first' : 'Generate from property quick fields and knowledge base'}
+                    onClick={() => {
+                      const prop = db.properties.find((x) => x.id === curDraft.propId)
+                      if (!prop?.propertyDbId) {
+                        setDraftError('Choose a property before generating a description.')
+                        return
+                      }
+                      setDraftDescGenerating(true)
+                      setDraftError('')
+                      void (async () => {
+                        try {
+                          const res = await generateListingDescription({
+                            propertyId: prop.propertyDbId,
+                            listingId: curDraft.id || undefined,
+                          })
+                          if (!res.success) {
+                            setDraftError(res.error)
+                            return
+                          }
+                          setDraft({ ...curDraft, description: res.description })
+                        } finally {
+                          setDraftDescGenerating(false)
+                        }
+                      })()
+                    }}
+                    style={{ fontSize: 12, padding: '4px 10px' }}
+                  >
+                    {draftDescGenerating ? 'Generating…' : 'Generate description'}
+                  </button>
+                </span>
+                <textarea
+                  value={curDraft.description}
+                  onChange={setDraftField('description')}
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    background: 'var(--input)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 8,
+                    padding: '9px 10px',
+                    marginTop: 4,
+                    resize: 'vertical',
+                  }}
+                />
+              </label>
             </div>
             {draftError && <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 12 }}>{draftError}</div>}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16, flexWrap: 'wrap' }}>

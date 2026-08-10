@@ -1147,10 +1147,6 @@ export default function EntityDetailDrawer({
           ) : null}
         </>
       )
-      const draftListing = p.propertyDbId
-        ? publishedListings[0] ||
-          db.drafts.find((d) => siblingUnitIds.has(d.propId || d.unitId))
-        : undefined
       sections = [
         <WebsiteListingsSection
           key="website-listings"
@@ -1165,7 +1161,6 @@ export default function EntityDetailDrawer({
           {p.propertyDbId ? (
             <PropertyListingAiPanel
               propertyId={p.propertyDbId}
-              listingId={draftListing?.id}
               canEdit={canEdit}
               leadingFields={overviewFieldCards}
             />

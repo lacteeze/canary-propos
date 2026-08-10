@@ -115,11 +115,9 @@ function PipelineCard({
     >
       <div className="cy-pipeline-card-main">
         <div className="cy-pipeline-card-top">
-          <div>
-            <div className="cy-pipeline-card-name">{inquiry.name}</div>
-            <div className="cy-pipeline-card-prop">
-              {shortProperty(inquiry.property)}
-            </div>
+          <div className="cy-pipeline-card-name">{inquiry.name}</div>
+          <div className="cy-pipeline-card-prop">
+            {shortProperty(inquiry.property)}
           </div>
           <span className="cy-pipeline-movein" title="Desired move-in">
             {formatMoveInBadge(inquiry.moveIn)}

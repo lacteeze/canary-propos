@@ -3,6 +3,7 @@ import {
   formatPropertyAddress,
   formatPropertyFullLabel,
   streetAddressHasCitySegment,
+  stripTrailingDuplicateCity,
 } from './property-ops'
 
 describe('streetAddressHasCitySegment', () => {
@@ -33,6 +34,44 @@ describe('streetAddressHasCitySegment', () => {
       ),
     ).toBe(true)
   })
+
+  it('matches St. John\'s despite apostrophe / punctuation differences', () => {
+    expect(
+      streetAddressHasCitySegment(
+        "75 Casey St, St. John's, NL A1C 4X6, Canada",
+        "St. John's",
+      ),
+    ).toBe(true)
+    expect(
+      streetAddressHasCitySegment(
+        '75 Casey St, St. John’s, NL A1C 4X6, Canada', // curly apostrophe
+        "St. John's",
+      ),
+    ).toBe(true)
+    expect(
+      streetAddressHasCitySegment(
+        "75 Casey St, St. John's, NL A1C 4X6, Canada",
+        'St Johns',
+      ),
+    ).toBe(true)
+  })
+})
+
+describe('stripTrailingDuplicateCity', () => {
+  it('removes trailing duplicate St. John\'s', () => {
+    expect(
+      stripTrailingDuplicateCity(
+        "75 Casey St, St. John's, NL A1C 4X6, Canada, St. John's",
+        "St. John's",
+      ),
+    ).toBe("75 Casey St, St. John's, NL A1C 4X6, Canada")
+  })
+
+  it('keeps a single trailing city', () => {
+    expect(
+      stripTrailingDuplicateCity("12 Duckworth St, St. John's", "St. John's"),
+    ).toBe("12 Duckworth St, St. John's")
+  })
 })
 
 describe('formatPropertyFullLabel', () => {
@@ -61,6 +100,24 @@ describe('formatPropertyFullLabel', () => {
     expect(
       formatPropertyFullLabel('12 Duckworth St', "St. John's", '10A'),
     ).toBe("12 Duckworth St, St. John's · 10A")
+  })
+
+  it('strips already-duplicated trailing St. John\'s on display', () => {
+    expect(
+      formatPropertyFullLabel(
+        "75 Casey St, St. John's, NL A1C 4X6, Canada, St. John's",
+        "St. John's",
+      ),
+    ).toBe("75 Casey St, St. John's, NL A1C 4X6, Canada")
+  })
+
+  it('strips trailing city when apostrophe styles differ', () => {
+    expect(
+      formatPropertyFullLabel(
+        '75 Casey St, St. John’s, NL A1C 4X6, Canada, St. John’s',
+        "St. John's",
+      ),
+    ).toBe('75 Casey St, St. John’s, NL A1C 4X6, Canada')
   })
 })
 

@@ -30,6 +30,10 @@ import {
   parseHospitableWidgetPropertyId,
 } from '@/lib/hospitable/parse-widget-property-id'
 import { PropertyOpenInquiriesSection } from './PropertyOpenInquiriesSection'
+import {
+  formatPropertyFullLabel,
+  streetAddressHasCitySegment,
+} from '@/lib/canary/property-ops'
 
 const MONO = "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif"
 
@@ -723,6 +727,25 @@ function publishedListingPublicHref(
   return listingPublicHref({ id: listing.id, slug: null }, '')
 }
 
+function websiteListingCardTitle(
+  draft: CanaryDraft,
+  property: CanaryProperty,
+  short: (addr: string | null | undefined) => string,
+): string {
+  const city = property.city?.trim() || ''
+  const cleanedAddress =
+    formatPropertyFullLabel(draft.address, city || null) ?? draft.address
+  const rawTitle = draft.title?.trim()
+  if (!rawTitle || rawTitle === draft.address) {
+    return cleanedAddress || short(draft.address) || 'Published listing'
+  }
+  // listing_title sometimes stores a full Google line — dedupe city for display only.
+  if (city && streetAddressHasCitySegment(rawTitle, city)) {
+    return formatPropertyFullLabel(rawTitle, city) ?? rawTitle
+  }
+  return rawTitle
+}
+
 function WebsiteListingsSection({
   property,
   listings,
@@ -748,11 +771,9 @@ function WebsiteListingsSection({
           {listings.map((d) => {
             const badge = draftStatusBadge(d.status)
             const publicHref = publishedListingPublicHref(d, property)
-            const title = d.title?.trim() || short(d.address) || 'Published listing'
-            const meta = [
-              d.unitLabel ? `Unit ${d.unitLabel}` : null,
-              d.rent ? `${money(parseFloat(d.rent) || 0)}/mo` : null,
-            ].filter(Boolean).join(' · ')
+            const title = websiteListingCardTitle(d, property, short)
+            const rentLabel = d.rent ? `${money(parseFloat(d.rent) || 0)}/mo` : ''
+            const meta = d.unitLabel ? `Unit ${d.unitLabel}` : ''
             return (
               <div
                 key={d.id}
@@ -770,7 +791,32 @@ function WebsiteListingsSection({
                 }}
               >
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontWeight: 650, fontSize: 13.5, lineHeight: 1.3 }}>{title}</div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                    }}
+                  >
+                    <div style={{ fontWeight: 650, fontSize: 13.5, lineHeight: 1.3, minWidth: 0 }}>
+                      {title}
+                    </div>
+                    {rentLabel ? (
+                      <div
+                        style={{
+                          flex: 'none',
+                          fontWeight: 700,
+                          fontSize: 16,
+                          lineHeight: 1.2,
+                          color: 'var(--text)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {rentLabel}
+                      </div>
+                    ) : null}
+                  </div>
                   {meta ? (
                     <div style={{ color: 'var(--dim)', fontSize: 12, marginTop: 3 }}>{meta}</div>
                   ) : null}
@@ -807,11 +853,6 @@ function WebsiteListingsSection({
                     ) : null}
                   </div>
                 </div>
-                {onOpenListing ? (
-                  <span style={{ flex: 'none', color: 'var(--dim)', fontSize: 12, fontWeight: 600, marginTop: 2 }}>
-                    Edit
-                  </span>
-                ) : null}
               </div>
             )
           })}

@@ -19,23 +19,60 @@ export function shortStreetAddress(streetAddress: string | null | undefined): st
   return trimmed.split(',')[0]?.trim() || trimmed
 }
 
+/** Punctuation/case-insensitive city key — "St. John's" ≡ "St Johns". */
+function citySegmentKey(value: string): string {
+  // Strip apostrophes first so John's → johns (not "john s").
+  return value
+    .toLowerCase()
+    .replace(/[''`´’]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 /**
  * True when `city` already appears as its own comma-separated segment after the
- * street line (case-insensitive). Does not treat city substrings inside the
- * street name (e.g. "Paradise Lane") as a match.
+ * street line (case/punctuation-insensitive). Does not treat city substrings
+ * inside the street name (e.g. "Paradise Lane") as a match.
  */
 export function streetAddressHasCitySegment(
   streetAddress: string,
   city: string,
 ): boolean {
-  const cityKey = city.trim().toLowerCase()
+  const cityKey = citySegmentKey(city)
   if (!cityKey) return false
   const parts = streetAddress
     .split(',')
-    .map((part) => part.trim().toLowerCase())
+    .map((part) => citySegmentKey(part))
     .filter(Boolean)
   // First segment is the street line; only later location segments count.
   return parts.slice(1).some((part) => part === cityKey)
+}
+
+/**
+ * Display-only: drop a trailing `, {city}` when that city already appears earlier
+ * as a location segment (fixes stored Google lines that were double-appended).
+ */
+export function stripTrailingDuplicateCity(
+  streetAddress: string,
+  city: string,
+): string {
+  const cityKey = citySegmentKey(city)
+  if (!cityKey) return streetAddress.trim()
+  const parts = streetAddress
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+  while (parts.length > 1) {
+    const lastKey = citySegmentKey(parts[parts.length - 1]!)
+    if (lastKey !== cityKey) break
+    const earlierHasCity = parts
+      .slice(1, -1)
+      .some((part) => citySegmentKey(part) === cityKey)
+    if (!earlierHasCity) break
+    parts.pop()
+  }
+  return parts.join(', ')
 }
 
 /**
@@ -61,10 +98,11 @@ export function formatPropertyFullLabel(
   const street = streetAddress?.trim()
   if (!street) return null
   const cityTrim = city?.trim()
+  const cleaned = cityTrim ? stripTrailingDuplicateCity(street, cityTrim) : street
   const base =
-    cityTrim && !streetAddressHasCitySegment(street, cityTrim)
-      ? `${street}, ${cityTrim}`
-      : street
+    cityTrim && !streetAddressHasCitySegment(cleaned, cityTrim)
+      ? `${cleaned}, ${cityTrim}`
+      : cleaned
   const unit = unitNumber?.trim()
   return unit ? `${base} · ${unit}` : base
 }

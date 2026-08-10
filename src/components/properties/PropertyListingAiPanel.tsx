@@ -8,10 +8,6 @@ import {
   savePropertyListingBrief,
 } from '@/app/actions/property-knowledge'
 import {
-  applyGeneratedListingCopy,
-  generateListingDescription,
-} from '@/app/actions/listing-ai'
-import {
   DEFAULT_LISTING_BRIEF_OPTIONS,
   emptyListingBrief,
   isDefaultListingBriefOption,
@@ -314,12 +310,10 @@ const FIELD_GRID_STYLE: React.CSSProperties = {
 
 export function PropertyListingAiPanel({
   propertyId,
-  listingId,
   canEdit,
   leadingFields,
 }: {
   propertyId: string
-  listingId?: string | null
   canEdit: boolean
   /** Read-only overview cards rendered in the same grid as listing quick fields */
   leadingFields?: React.ReactNode
@@ -329,9 +323,6 @@ export function PropertyListingAiPanel({
     mergeListingBriefOptions({})
   )
   const [markdown, setMarkdown] = useState('')
-  const [draftTitle, setDraftTitle] = useState('')
-  const [draftDesc, setDraftDesc] = useState('')
-  const [draftHighlights, setDraftHighlights] = useState('')
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const [briefSaveStatus, setBriefSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(
@@ -340,8 +331,32 @@ export function PropertyListingAiPanel({
   const [briefReady, setBriefReady] = useState(false)
   const [pending, startTransition] = useTransition()
   const lastSavedBriefJson = useRef('')
+  const lastSavedMarkdown = useRef('')
   const briefAutosaveMs = useRef(BRIEF_AUTOSAVE_MS)
   const savedLabelTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function markSaved() {
+    setBriefSaveStatus('saved')
+    if (savedLabelTimer.current) clearTimeout(savedLabelTimer.current)
+    savedLabelTimer.current = setTimeout(() => {
+      setBriefSaveStatus((s) => (s === 'saved' ? 'idle' : s))
+    }, 2000)
+  }
+
+  async function persistKnowledge(next: string) {
+    if (next === lastSavedMarkdown.current) return
+    setBriefSaveStatus('saving')
+    setErr('')
+    setMsg('')
+    const res = await savePropertyKnowledge(propertyId, next)
+    if (!res.success) {
+      setBriefSaveStatus('error')
+      setErr(res.error)
+      return
+    }
+    lastSavedMarkdown.current = next
+    markSaved()
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -354,6 +369,7 @@ export function PropertyListingAiPanel({
       lastSavedBriefJson.current = JSON.stringify(data.listingBrief)
       setBriefOptions(data.briefOptions ?? mergeListingBriefOptions({}))
       setMarkdown(data.markdown)
+      lastSavedMarkdown.current = data.markdown
       setBriefReady(true)
     })()
     return () => {
@@ -381,11 +397,7 @@ export function PropertyListingAiPanel({
       }
       lastSavedBriefJson.current = JSON.stringify(brief)
       if (res.briefOptions) setBriefOptions(res.briefOptions)
-      setBriefSaveStatus('saved')
-      if (savedLabelTimer.current) clearTimeout(savedLabelTimer.current)
-      savedLabelTimer.current = setTimeout(() => {
-        setBriefSaveStatus((s) => (s === 'saved' ? 'idle' : s))
-      }, 2000)
+      markSaved()
     }, delay)
 
     return () => {
@@ -393,6 +405,32 @@ export function PropertyListingAiPanel({
       clearTimeout(t)
     }
   }, [brief, propertyId, canEdit, briefReady])
+
+  useEffect(() => {
+    if (!canEdit || !briefReady) return
+    if (markdown === lastSavedMarkdown.current) return
+
+    let cancelled = false
+    const t = setTimeout(async () => {
+      setBriefSaveStatus('saving')
+      setErr('')
+      setMsg('')
+      const res = await savePropertyKnowledge(propertyId, markdown)
+      if (cancelled) return
+      if (!res.success) {
+        setBriefSaveStatus('error')
+        setErr(res.error)
+        return
+      }
+      lastSavedMarkdown.current = markdown
+      markSaved()
+    }, KB_AUTOSAVE_MS)
+
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [markdown, propertyId, canEdit, briefReady])
 
   function updateScalarField(key: ListingBriefScalarField, value: string) {
     briefAutosaveMs.current = BRIEF_AUTOSAVE_MS
@@ -488,8 +526,18 @@ export function PropertyListingAiPanel({
         <textarea
           value={markdown}
           onChange={(e) => setMarkdown(e.target.value)}
+          onBlur={() => {
+            void persistKnowledge(markdown)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault()
+              void persistKnowledge(markdown)
+            }
+          }}
           rows={8}
           placeholder="Systems, quirks, vendors, maintenance history, access notes…"
+          title="Ctrl+Enter to save"
           style={{
             width: '100%',
             border: '1px solid var(--border)',
@@ -502,111 +550,6 @@ export function PropertyListingAiPanel({
             resize: 'vertical',
           }}
         />
-        <button
-          type="button"
-          className="cy-btn-ghost"
-          disabled={pending}
-          style={{ marginTop: 8 }}
-          onClick={() => {
-            startTransition(async () => {
-              setErr('')
-              setMsg('')
-              const res = await savePropertyKnowledge(propertyId, markdown)
-              if (!res.success) setErr(res.error)
-              else setMsg('Knowledge base saved.')
-            })
-          }}
-        >
-          Save knowledge base
-        </button>
-      </div>
-
-      <div>
-        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>AI listing description</div>
-        <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--dim)' }}>
-          Uses quick fields, unit facts, and knowledge base via Vercel AI Gateway. Review before saving to a listing.
-        </p>
-        <button
-          type="button"
-          className="cy-btn-ghost"
-          disabled={pending}
-          onClick={() => {
-            startTransition(async () => {
-              setErr('')
-              setMsg('')
-              const res = await generateListingDescription({
-                propertyId,
-                listingId: listingId || undefined,
-              })
-              if (!res.success) {
-                setErr(res.error)
-                return
-              }
-              setDraftTitle(res.title)
-              setDraftDesc(res.description)
-              setDraftHighlights(res.highlights.join(', '))
-              setMsg('Draft ready — review and apply to listing if linked.')
-            })
-          }}
-        >
-          Generate description
-        </button>
-        {(draftTitle || draftDesc) && (
-          <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
-            <input
-              value={draftTitle}
-              onChange={(e) => setDraftTitle(e.target.value)}
-              style={fieldStyle}
-            />
-            <textarea
-              value={draftDesc}
-              onChange={(e) => setDraftDesc(e.target.value)}
-              rows={6}
-              style={{
-                width: '100%',
-                border: '1px solid var(--border)',
-                borderRadius: 8,
-                padding: 10,
-                background: 'var(--elev)',
-                color: 'var(--text)',
-              }}
-            />
-            <input
-              value={draftHighlights}
-              onChange={(e) => setDraftHighlights(e.target.value)}
-              placeholder="Highlights (comma-separated)"
-              style={fieldStyle}
-            />
-            {listingId ? (
-              <button
-                type="button"
-                className="cy-btn-ghost"
-                disabled={pending}
-                onClick={() => {
-                  startTransition(async () => {
-                    const res = await applyGeneratedListingCopy({
-                      listingId,
-                      title: draftTitle,
-                      description: draftDesc,
-                      highlights: draftHighlights
-                        .split(',')
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                    })
-                    if (!res.success) setErr(res.error)
-                    else setMsg('Applied to listing draft.')
-                  })
-                }}
-              >
-                Apply to listing
-              </button>
-            ) : (
-              <p style={{ fontSize: 12, color: 'var(--dim)', margin: 0 }}>
-                Open or create a website listing to apply this copy.
-              </p>
-            )}
-          </div>
-        )}
       </div>
 
       {msg ? <p style={{ margin: 0, fontSize: 12, color: 'var(--green)' }}>{msg}</p> : null}

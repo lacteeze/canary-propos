@@ -3232,7 +3232,63 @@
   letter-spacing: 0.01em;
   color: var(--dim);
 }
-.cnry .cy-pipeline-card-actions { margin-top: 10px; }
+.cnry .cy-pipeline-card-actions {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.cnry .cy-pipeline-actions-toggle {
+  align-self: center;
+  width: 28px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dim);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex: none;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.cnry .cy-pipeline-actions-toggle:hover,
+.cnry .cy-pipeline-actions-toggle:focus-visible {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  outline: none;
+}
+.cnry .cy-pipeline-actions-toggle svg {
+  transition: transform 0.2s ease;
+}
+.cnry .cy-pipeline-card.is-actions-open .cy-pipeline-actions-toggle svg {
+  transform: rotate(180deg);
+}
+.cnry .cy-pipeline-card-actions-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  margin-top: 0;
+  transition:
+    grid-template-rows 0.22s ease,
+    opacity 0.18s ease,
+    margin-top 0.22s ease;
+  pointer-events: none;
+}
+.cnry .cy-pipeline-card.is-actions-open .cy-pipeline-card-actions-panel {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  margin-top: 6px;
+  pointer-events: auto;
+}
+.cnry .cy-pipeline-card-actions-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.cnry .cy-pipeline-card.is-actions-open .cy-pipeline-card-actions-inner {
+  overflow: visible;
+}
 .cnry .cy-pipeline-note-row {
   display: flex;
   gap: 6px;
@@ -3288,18 +3344,9 @@
 .cnry .cy-pipeline-card-btns {
   display: flex;
   gap: 8px;
-  margin-top: 0;
-  max-height: 0;
-  overflow: hidden;
+  margin-top: 8px;
   align-items: center;
   justify-content: flex-end;
-  transition: max-height 0.18s ease, margin-top 0.18s ease;
-}
-.cnry .cy-pipeline-card:hover .cy-pipeline-card-btns,
-.cnry .cy-pipeline-card:focus-within .cy-pipeline-card-btns,
-.cnry .cy-pipeline-card.is-selected .cy-pipeline-card-btns {
-  max-height: 44px;
-  margin-top: 8px;
 }
 .cnry .cy-pipeline-advance {
   width: 36px;
@@ -3312,21 +3359,8 @@
   place-items: center;
   cursor: pointer;
   flex: none;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity 0.15s ease, visibility 0.15s ease;
 }
-.cnry .cy-pipeline-card:hover .cy-pipeline-advance,
-.cnry .cy-pipeline-card:focus-within .cy-pipeline-advance,
-.cnry .cy-pipeline-card.is-selected .cy-pipeline-advance {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-}
-.cnry .cy-pipeline-card:hover .cy-pipeline-advance:disabled,
-.cnry .cy-pipeline-card:focus-within .cy-pipeline-advance:disabled,
-.cnry .cy-pipeline-card.is-selected .cy-pipeline-advance:disabled {
+.cnry .cy-pipeline-advance:disabled {
   opacity: 0.4;
   pointer-events: none;
   cursor: default;

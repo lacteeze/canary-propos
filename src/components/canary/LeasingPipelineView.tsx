@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Calendar, Mail, Phone, Plus, Trash2 } from 'lucide-react'
+import { ArrowRight, Calendar, ChevronDown, Mail, Phone, Plus, Trash2 } from 'lucide-react'
 import {
   addInquiryNote,
   deleteInquiry,
@@ -71,6 +71,227 @@ function shortProperty(address: string): string {
 }
 
 type SaveTone = 'idle' | 'saving' | 'saved' | 'error'
+
+const ACTIONS_HOVER_DELAY_MS = 5000
+
+function prefersNoHover(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia('(hover: none)').matches
+}
+
+type PipelineCardProps = {
+  inquiry: CanaryInquiry
+  selected: boolean
+  dragging: boolean
+  noteDraft: string
+  onSelect: () => void
+  onDragStart: (e: React.DragEvent) => void
+  onDragEnd: () => void
+  onNoteChange: (value: string) => void
+  onSubmitNote: () => void
+  onDelete: () => void
+  onAdvance: () => void
+}
+
+function PipelineCard({
+  inquiry,
+  selected,
+  dragging,
+  noteDraft,
+  onSelect,
+  onDragStart,
+  onDragEnd,
+  onNoteChange,
+  onSubmitNote,
+  onDelete,
+  onAdvance,
+}: PipelineCardProps) {
+  const [actionsOpen, setActionsOpen] = useState(false)
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hovering = useRef(false)
+  const actionsFocusedRef = useRef(false)
+
+  const clearHoverTimer = useCallback(() => {
+    if (hoverTimer.current) {
+      clearTimeout(hoverTimer.current)
+      hoverTimer.current = null
+    }
+  }, [])
+
+  useEffect(() => () => clearHoverTimer(), [clearHoverTimer])
+
+  const onCardEnter = () => {
+    hovering.current = true
+    if (prefersNoHover() || actionsFocusedRef.current || actionsOpen) return
+    clearHoverTimer()
+    hoverTimer.current = setTimeout(() => {
+      hoverTimer.current = null
+      setActionsOpen(true)
+    }, ACTIONS_HOVER_DELAY_MS)
+  }
+
+  const onCardLeave = () => {
+    hovering.current = false
+    clearHoverTimer()
+    if (!actionsFocusedRef.current) setActionsOpen(false)
+  }
+
+  const toggleActions = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    clearHoverTimer()
+    setActionsOpen((open) => {
+      if (open) {
+        actionsFocusedRef.current = false
+        const active = document.activeElement
+        if (active instanceof HTMLElement) active.blur()
+      }
+      return !open
+    })
+  }
+
+  const onPanelFocusCapture = () => {
+    actionsFocusedRef.current = true
+    setActionsOpen(true)
+    clearHoverTimer()
+  }
+
+  const onPanelBlurCapture = (e: React.FocusEvent<HTMLDivElement>) => {
+    const next = e.relatedTarget as Node | null
+    if (next && e.currentTarget.contains(next)) return
+    actionsFocusedRef.current = false
+    if (!hovering.current) setActionsOpen(false)
+  }
+
+  return (
+    <article
+      className={`cy-pipeline-card${selected ? ' is-selected' : ''}${
+        dragging ? ' is-dragging' : ''
+      }${actionsOpen ? ' is-actions-open' : ''}`}
+      draggable
+      onDragStart={(e) => {
+        clearHoverTimer()
+        onDragStart(e)
+      }}
+      onDragEnd={onDragEnd}
+      onClick={onSelect}
+      onMouseEnter={onCardEnter}
+      onMouseLeave={onCardLeave}
+    >
+      <div className="cy-pipeline-card-top">
+        <div>
+          <div className="cy-pipeline-card-name">{inquiry.name}</div>
+          <div className="cy-pipeline-card-prop">{shortProperty(inquiry.property)}</div>
+        </div>
+        <span
+          className={`cy-pipeline-term${
+            inquiry.type === 'application'
+              ? ' is-app'
+              : inquiry.isGeneralInterest
+                ? ' is-interest'
+                : ''
+          }`}
+        >
+          {inquiryTypeLabel(inquiry)}
+        </span>
+      </div>
+
+      <div className="cy-pipeline-card-meta">
+        <Calendar size={13} aria-hidden />
+        <span>
+          {inquiry.status === 'viewing' && inquiry.viewingAt
+            ? `Viewing ${formatViewingAt(inquiry.viewingAt)}`
+            : formatMoveIn(inquiry.moveIn)}
+        </span>
+      </div>
+
+      {inquiry.latestNote && (
+        <div className="cy-pipeline-card-note">
+          <div className="cy-pipeline-card-note-body">{inquiry.latestNote.body}</div>
+          <div className="cy-pipeline-card-note-age">
+            {relativeAge(inquiry.latestNote.createdAt)}
+          </div>
+        </div>
+      )}
+
+      <div
+        className="cy-pipeline-card-actions"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          className="cy-pipeline-actions-toggle"
+          aria-label={actionsOpen ? 'Hide card actions' : 'Show card actions'}
+          aria-expanded={actionsOpen}
+          onClick={toggleActions}
+          onMouseDown={(e) => {
+            // Keep note focus from bluring before toggle runs; stop card drag.
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+        >
+          <ChevronDown size={14} aria-hidden />
+        </button>
+
+        <div
+          className="cy-pipeline-card-actions-panel"
+          aria-hidden={!actionsOpen}
+          onFocusCapture={onPanelFocusCapture}
+          onBlurCapture={onPanelBlurCapture}
+        >
+          <div className="cy-pipeline-card-actions-inner">
+            <div className="cy-pipeline-note-row">
+              <input
+                type="text"
+                placeholder="Log a call or note…"
+                value={noteDraft}
+                tabIndex={actionsOpen ? 0 : -1}
+                onChange={(e) => onNoteChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    onSubmitNote()
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="cy-pipeline-icon-btn"
+                aria-label="Add note"
+                tabIndex={actionsOpen ? 0 : -1}
+                onClick={onSubmitNote}
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+            <div className="cy-pipeline-card-btns">
+              <button
+                type="button"
+                className="cy-pipeline-icon-btn is-danger"
+                aria-label="Delete inquiry"
+                tabIndex={actionsOpen ? 0 : -1}
+                onClick={onDelete}
+              >
+                <Trash2 size={14} />
+              </button>
+              <button
+                type="button"
+                className="cy-pipeline-advance"
+                aria-label="Advance stage"
+                tabIndex={actionsOpen ? 0 : -1}
+                disabled={!nextInquiryStage(inquiry.status)}
+                onClick={onAdvance}
+              >
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+  )
+}
 
 type Props = {
   inquiries: CanaryInquiry[]
@@ -462,108 +683,26 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
             </div>
             <div className="cy-pipeline-col-body">
               {byStage[stage].map((inquiry) => (
-                <article
+                <PipelineCard
                   key={inquiry.id}
-                  className={`cy-pipeline-card${selectedId === inquiry.id ? ' is-selected' : ''}${
-                    dragId === inquiry.id ? ' is-dragging' : ''
-                  }`}
-                  draggable
+                  inquiry={inquiry}
+                  selected={selectedId === inquiry.id}
+                  dragging={dragId === inquiry.id}
+                  noteDraft={noteDrafts[inquiry.id] ?? ''}
+                  onSelect={() => setSelectedId(inquiry.id)}
                   onDragStart={(e) => {
                     setDragId(inquiry.id)
                     e.dataTransfer.setData('text/inquiry-id', inquiry.id)
                     e.dataTransfer.effectAllowed = 'move'
                   }}
                   onDragEnd={() => setDragId(null)}
-                  onClick={() => setSelectedId(inquiry.id)}
-                >
-                  <div className="cy-pipeline-card-top">
-                    <div>
-                      <div className="cy-pipeline-card-name">{inquiry.name}</div>
-                      <div className="cy-pipeline-card-prop">{shortProperty(inquiry.property)}</div>
-                    </div>
-                    <span
-                      className={`cy-pipeline-term${
-                        inquiry.type === 'application'
-                          ? ' is-app'
-                          : inquiry.isGeneralInterest
-                            ? ' is-interest'
-                            : ''
-                      }`}
-                    >
-                      {inquiryTypeLabel(inquiry)}
-                    </span>
-                  </div>
-
-                  <div className="cy-pipeline-card-meta">
-                    <Calendar size={13} aria-hidden />
-                    <span>
-                      {inquiry.status === 'viewing' && inquiry.viewingAt
-                        ? `Viewing ${formatViewingAt(inquiry.viewingAt)}`
-                        : formatMoveIn(inquiry.moveIn)}
-                    </span>
-                  </div>
-
-                  {inquiry.latestNote && (
-                    <div className="cy-pipeline-card-note">
-                      <div className="cy-pipeline-card-note-body">
-                        {inquiry.latestNote.body}
-                      </div>
-                      <div className="cy-pipeline-card-note-age">
-                        {relativeAge(inquiry.latestNote.createdAt)}
-                      </div>
-                    </div>
-                  )}
-
-                  <div
-                    className="cy-pipeline-card-actions"
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
-                  >
-                    <div className="cy-pipeline-note-row">
-                      <input
-                        type="text"
-                        placeholder="Log a call or note…"
-                        value={noteDrafts[inquiry.id] ?? ''}
-                        onChange={(e) =>
-                          setNoteDrafts((d) => ({ ...d, [inquiry.id]: e.target.value }))
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            submitNote(inquiry.id)
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="cy-pipeline-icon-btn"
-                        aria-label="Add note"
-                        onClick={() => submitNote(inquiry.id)}
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </div>
-                    <div className="cy-pipeline-card-btns">
-                      <button
-                        type="button"
-                        className="cy-pipeline-icon-btn is-danger"
-                        aria-label="Delete inquiry"
-                        onClick={() => removeInquiry(inquiry)}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        className="cy-pipeline-advance"
-                        aria-label="Advance stage"
-                        disabled={!nextInquiryStage(inquiry.status)}
-                        onClick={() => advance(inquiry)}
-                      >
-                        <ArrowRight size={16} />
-                      </button>
-                    </div>
-                  </div>
-                </article>
+                  onNoteChange={(value) =>
+                    setNoteDrafts((d) => ({ ...d, [inquiry.id]: value }))
+                  }
+                  onSubmitNote={() => submitNote(inquiry.id)}
+                  onDelete={() => removeInquiry(inquiry)}
+                  onAdvance={() => advance(inquiry)}
+                />
               ))}
               {!byStage[stage].length && (
                 <div className="cy-pipeline-empty">No prospects</div>

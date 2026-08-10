@@ -1124,14 +1124,12 @@ export default function EntityDetailDrawer({
           publishedListings[0] ||
           db.drafts.find((d) => siblingUnitIds.has(d.propId || d.unitId))
         sections.push(
-          <div key="listing-ai" className="cy-drawer-section">
-            <div className="cy-drawer-section-title">Listing inputs & knowledge</div>
-            <PropertyListingAiPanel
-              propertyId={p.propertyDbId}
-              listingId={draftListing?.id}
-              canEdit={canEdit}
-            />
-          </div>
+          <PropertyListingAiPanel
+            key="listing-ai"
+            propertyId={p.propertyDbId}
+            listingId={draftListing?.id}
+            canEdit={canEdit}
+          />
         )
       }
       propertyPhotoCount = p.listingPhotoPaths?.length ?? 0

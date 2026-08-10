@@ -409,12 +409,12 @@ export function PropertyListingAiPanel({
           style={{
             display: 'flex',
             alignItems: 'baseline',
-            justifyContent: 'space-between',
+            justifyContent: 'flex-end',
             gap: 8,
             marginBottom: 8,
+            minHeight: '1em',
           }}
         >
-          <div style={{ fontWeight: 700, fontSize: 13 }}>Listing quick fields</div>
           <span
             aria-live="polite"
             style={{
@@ -425,7 +425,6 @@ export function PropertyListingAiPanel({
                   : briefSaveStatus === 'saved'
                     ? 'var(--green)'
                     : 'var(--dim)',
-              minHeight: '1em',
             }}
           >
             {briefSaveStatus === 'saving'
@@ -469,10 +468,6 @@ export function PropertyListingAiPanel({
             }}
           />
         </div>
-        <p style={{ margin: '8px 0 0', fontSize: 11, color: 'var(--dim)' }}>
-          Choose presets or Custom… — new values are remembered for next time. Standout features
-          support multiple tags; hover × on a chip to clear it. Changes save automatically.
-        </p>
       </div>
 
       <div>

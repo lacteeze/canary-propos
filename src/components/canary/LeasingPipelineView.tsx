@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Calendar, ChevronDown, Mail, Phone, Plus, Trash2 } from 'lucide-react'
+import { ArrowRight, Calendar, Mail, Phone, Plus, Trash2 } from 'lucide-react'
 import {
   addInquiryNote,
   deleteInquiry,
@@ -79,7 +79,7 @@ function shortProperty(address: string): string {
 
 type SaveTone = 'idle' | 'saving' | 'saved' | 'error'
 
-const ACTIONS_HOVER_DELAY_MS = 5000
+const ACTIONS_HOVER_DELAY_MS = 3000
 
 function prefersNoHover(): boolean {
   if (typeof window === 'undefined') return false
@@ -114,9 +114,11 @@ function PipelineCard({
   onAdvance,
 }: PipelineCardProps) {
   const [actionsOpen, setActionsOpen] = useState(false)
+  const cardRef = useRef<HTMLElement | null>(null)
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hovering = useRef(false)
   const actionsFocusedRef = useRef(false)
+  const suppressClickRef = useRef(false)
 
   const clearHoverTimer = useCallback(() => {
     if (hoverTimer.current) {
@@ -125,7 +127,30 @@ function PipelineCard({
     }
   }, [])
 
+  const collapseActions = useCallback(() => {
+    clearHoverTimer()
+    actionsFocusedRef.current = false
+    const active = document.activeElement
+    if (active instanceof HTMLElement && cardRef.current?.contains(active)) {
+      active.blur()
+    }
+    setActionsOpen(false)
+  }, [clearHoverTimer])
+
   useEffect(() => () => clearHoverTimer(), [clearHoverTimer])
+
+  // Collapse when clicking outside the card.
+  useEffect(() => {
+    if (!actionsOpen) return
+    const onPointerDown = (e: PointerEvent) => {
+      const el = cardRef.current
+      if (!el) return
+      if (e.target instanceof Node && el.contains(e.target)) return
+      collapseActions()
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [actionsOpen, collapseActions])
 
   const onCardEnter = () => {
     hovering.current = true
@@ -143,9 +168,7 @@ function PipelineCard({
     if (!actionsFocusedRef.current) setActionsOpen(false)
   }
 
-  const toggleActions = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    e.preventDefault()
+  const toggleActions = () => {
     clearHoverTimer()
     setActionsOpen((open) => {
       if (open) {
@@ -172,16 +195,31 @@ function PipelineCard({
 
   return (
     <article
+      ref={cardRef}
       className={`cy-pipeline-card${selected ? ' is-selected' : ''}${
         dragging ? ' is-dragging' : ''
       }${actionsOpen ? ' is-actions-open' : ''}`}
       draggable
       onDragStart={(e) => {
+        suppressClickRef.current = true
         clearHoverTimer()
         onDragStart(e)
       }}
-      onDragEnd={onDragEnd}
-      onClick={onSelect}
+      onDragEnd={() => {
+        onDragEnd()
+        // Drop often synthesizes a click shortly after dragend.
+        window.setTimeout(() => {
+          suppressClickRef.current = false
+        }, 50)
+      }}
+      onClick={() => {
+        if (suppressClickRef.current) return
+        toggleActions()
+      }}
+      onDoubleClick={(e) => {
+        e.preventDefault()
+        onSelect()
+      }}
       onMouseEnter={onCardEnter}
       onMouseLeave={onCardLeave}
     >
@@ -213,27 +251,12 @@ function PipelineCard({
 
       <div
         className="cy-pipeline-card-actions"
-        onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
       >
-        <button
-          type="button"
-          className="cy-pipeline-actions-toggle"
-          aria-label={actionsOpen ? 'Hide card actions' : 'Show card actions'}
-          aria-expanded={actionsOpen}
-          onClick={toggleActions}
-          onMouseDown={(e) => {
-            // Keep note focus from bluring before toggle runs; stop card drag.
-            e.preventDefault()
-            e.stopPropagation()
-          }}
-        >
-          <ChevronDown size={14} aria-hidden />
-        </button>
-
         <div
           className="cy-pipeline-card-actions-panel"
           aria-hidden={!actionsOpen}
+          onClick={(e) => e.stopPropagation()}
           onFocusCapture={onPanelFocusCapture}
           onBlurCapture={onPanelBlurCapture}
         >
@@ -261,8 +284,6 @@ function PipelineCard({
               >
                 <Plus size={14} />
               </button>
-            </div>
-            <div className="cy-pipeline-card-btns">
               <button
                 type="button"
                 className="cy-pipeline-icon-btn is-danger"
@@ -272,18 +293,28 @@ function PipelineCard({
               >
                 <Trash2 size={14} />
               </button>
-              <button
-                type="button"
-                className="cy-pipeline-advance"
-                aria-label="Advance stage"
-                tabIndex={actionsOpen ? 0 : -1}
-                disabled={!nextInquiryStage(inquiry.status)}
-                onClick={onAdvance}
-              >
-                <ArrowRight size={16} />
-              </button>
             </div>
           </div>
+        </div>
+
+        <div className="cy-pipeline-card-foot">
+          <button
+            type="button"
+            className="cy-pipeline-advance"
+            aria-label="Advance stage"
+            disabled={!nextInquiryStage(inquiry.status)}
+            onClick={(e) => {
+              e.stopPropagation()
+              onAdvance()
+            }}
+            onMouseDown={(e) => {
+              // Avoid starting a card drag from the advance control.
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+          >
+            <ArrowRight size={16} />
+          </button>
         </div>
       </div>
     </article>

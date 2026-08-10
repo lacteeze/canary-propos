@@ -3227,49 +3227,23 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-}
-.cnry .cy-pipeline-actions-toggle {
-  align-self: center;
-  width: 28px;
-  height: 20px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--dim);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  flex: none;
-  transition: color 0.15s ease, background 0.15s ease;
-}
-.cnry .cy-pipeline-actions-toggle:hover,
-.cnry .cy-pipeline-actions-toggle:focus-visible {
-  color: var(--text);
-  background: color-mix(in srgb, var(--text) 8%, transparent);
-  outline: none;
-}
-.cnry .cy-pipeline-actions-toggle svg {
-  transition: transform 0.2s ease;
-}
-.cnry .cy-pipeline-card.is-actions-open .cy-pipeline-actions-toggle svg {
-  transform: rotate(180deg);
+  gap: 0;
 }
 .cnry .cy-pipeline-card-actions-panel {
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
-  margin-top: 0;
+  margin-bottom: 0;
   transition:
     grid-template-rows 0.22s ease,
     opacity 0.18s ease,
-    margin-top 0.22s ease;
+    margin-bottom 0.22s ease;
   pointer-events: none;
 }
 .cnry .cy-pipeline-card.is-actions-open .cy-pipeline-card-actions-panel {
   grid-template-rows: 1fr;
   opacity: 1;
-  margin-top: 6px;
+  margin-bottom: 8px;
   pointer-events: auto;
 }
 .cnry .cy-pipeline-card-actions-inner {
@@ -3278,6 +3252,11 @@
 }
 .cnry .cy-pipeline-card.is-actions-open .cy-pipeline-card-actions-inner {
   overflow: visible;
+}
+.cnry .cy-pipeline-card-foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
 }
 .cnry .cy-pipeline-note-row {
   display: flex;

@@ -2,6 +2,7 @@
 
 import { useState, type MouseEvent } from 'react'
 import { propertyPublicHref } from '@/lib/listings/listing-href'
+import { CopyIcon } from './CopyIcon'
 
 type PublicSlugFieldProps = {
   slug: string | null | undefined
@@ -90,19 +91,23 @@ export function PublicSlugField({ slug, disabled, onSave }: PublicSlugFieldProps
             <button
               type="button"
               onClick={copy}
+              aria-label={copied ? 'Copied' : 'Copy'}
+              title={copied ? 'Copied' : 'Copy'}
               style={{
                 border: '1px solid var(--border)',
                 background: 'var(--input)',
                 color: 'var(--text)',
                 borderRadius: 999,
-                padding: '4px 10px',
-                fontSize: 12,
-                fontWeight: 600,
+                padding: 6,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 cursor: 'pointer',
                 flex: 'none',
+                lineHeight: 0,
               }}
             >
-              {copied ? 'Copied' : 'Copy'}
+              <CopyIcon size={14} />
             </button>
           )}
         </span>

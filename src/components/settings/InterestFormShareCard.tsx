@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { CopyIcon } from '@/components/canary/CopyIcon'
 
 function publicRentUrl(): string {
   const base = (process.env.NEXT_PUBLIC_APP_URL || 'https://canarypm.ca').replace(/\/$/, '')
@@ -53,8 +54,21 @@ export function InterestFormShareCard() {
         >
           {display}
         </a>
-        <button type="button" className="cy-btn cy-btn--active" onClick={() => void handleCopy()}>
-          {copied ? 'Copied' : 'Copy share link'}
+        <button
+          type="button"
+          className="cy-btn cy-btn--active"
+          onClick={() => void handleCopy()}
+          aria-label={copied ? 'Copied' : 'Copy'}
+          title={copied ? 'Copied' : 'Copy'}
+          style={{
+            padding: 8,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            lineHeight: 0,
+          }}
+        >
+          <CopyIcon size={15} />
         </button>
       </div>
     </section>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { propertyPublicHref } from '@/lib/listings/listing-href'
+import { CopyIcon } from './CopyIcon'
 
 type CopyPublicLinkButtonProps = {
   slug: string | null | undefined
@@ -21,6 +22,7 @@ export function CopyPublicLinkButton({
   const href = propertyPublicHref({ slug }, { absolute: true })
   if (!href) return null
   const publicUrl = href
+  const label = copied ? 'Copied' : 'Copy'
 
   async function handleCopy(e: React.MouseEvent) {
     e.preventDefault()
@@ -40,20 +42,23 @@ export function CopyPublicLinkButton({
         type="button"
         className={className}
         onClick={handleCopy}
-        title={href}
+        aria-label={label}
+        title={copied ? 'Copied' : href}
         style={{
           border: '1px solid var(--border)',
           background: 'var(--elev)',
           color: 'var(--text)',
           borderRadius: 8,
-          padding: '4px 8px',
-          fontSize: 11,
-          fontWeight: 600,
+          padding: 6,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
           cursor: 'pointer',
+          lineHeight: 0,
           ...style,
         }}
       >
-        {copied ? 'Copied' : 'Copy link'}
+        <CopyIcon size={13} />
       </button>
     )
   }
@@ -78,19 +83,23 @@ export function CopyPublicLinkButton({
         type="button"
         className={className}
         onClick={handleCopy}
+        aria-label={label}
+        title={label}
         style={{
           border: '1px solid var(--border)',
           background: 'var(--input)',
           color: 'var(--text)',
           borderRadius: 999,
-          padding: '4px 10px',
-          fontSize: 12,
-          fontWeight: 600,
+          padding: 6,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
           cursor: 'pointer',
           flex: 'none',
+          lineHeight: 0,
         }}
       >
-        {copied ? 'Copied' : 'Copy'}
+        <CopyIcon size={14} />
       </button>
     </div>
   )

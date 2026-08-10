@@ -146,6 +146,42 @@ function isVacantProperty(property: CanaryProperty, leases: CanaryLease[]): bool
   return !hasActiveOrExpiringLease(leases, property.address)
 }
 
+/** Normalize Airbnb → STR; used for property card groups + badge labels. */
+function propertyStatusGroupKey(status: string | undefined | null): string {
+  if (!status) return '—'
+  if (status === 'Airbnb') return 'STR'
+  return status
+}
+
+/** Vacant → STR → remaining statuses (Leased, Maintenance, …) → Archived last. */
+function propertyStatusGroupRank(key: string): number {
+  if (key === 'Vacant') return 0
+  if (key === 'STR') return 1
+  if (key === 'Archived') return 10_000
+  const rest = ['Leased', 'Maintenance', 'Office']
+  const i = rest.indexOf(key)
+  if (i >= 0) return 2 + i
+  return 50 // unknown statuses: after known rest, before Archived; alpha via sort tiebreak
+}
+
+function groupPropertiesByStatus(rows: CanaryProperty[]): { key: string; items: CanaryProperty[] }[] {
+  const map = new Map<string, CanaryProperty[]>()
+  for (const p of rows) {
+    const key = propertyStatusGroupKey(p.status)
+    const list = map.get(key)
+    if (list) list.push(p)
+    else map.set(key, [p])
+  }
+  return [...map.entries()]
+    .sort(([a], [b]) => {
+      const ra = propertyStatusGroupRank(a)
+      const rb = propertyStatusGroupRank(b)
+      if (ra !== rb) return ra - rb
+      return a.localeCompare(b)
+    })
+    .map(([key, items]) => ({ key, items }))
+}
+
 type ChatMsg = { role: 'user' | 'assistant'; text: string }
 type AskNavTarget =
   | { kind: 'view'; view: string }
@@ -1308,9 +1344,6 @@ export default function CanaryApp({
     }
     return counts
   }, [activeProps])
-  const propCardIds = useMemo(() => filteredProps.map((p) => p.id), [filteredProps])
-  const propCardLayout = useViewLayout('properties_cards', propCardIds, layoutUserKey)
-
   const roles = ['', 'Client', 'Tenant', 'Vendor', 'Admin', 'Cleaner', 'Contact', 'Realtor', 'Accountant']
   const roleCounts: Record<string, number> = {}
   scoped.people.forEach((p) => { roleCounts[p.role] = (roleCounts[p.role] || 0) + 1 })
@@ -1420,8 +1453,8 @@ export default function CanaryApp({
         address: (p: CanaryProperty) => short(p.address).toLowerCase(), city: (p: CanaryProperty) => ((p.city || '') + ' ' + (p.area || '')).toLowerCase(), status: (p: CanaryProperty) => p.status || '', beds: (p: CanaryProperty) => parseFloat(p.beds) || 0, baths: (p: CanaryProperty) => parseFloat(p.baths) || 0, parking: (p: CanaryProperty) => parseFloat(p.parking) || 0, rate: (p: CanaryProperty) => p.rate || 0,
       }),
       open: (p: CanaryProperty) => () => setDrawer({ kind: 'property', id: p.id }),
-      group: (p: CanaryProperty) => p.status || '—',
-      groupOrder: ['Vacant', 'Leased', 'STR', 'Maintenance', 'Office'],
+      group: (p: CanaryProperty) => propertyStatusGroupKey(p.status),
+      groupOrder: ['Vacant', 'STR', 'Leased', 'Maintenance', 'Office', 'Archived'],
       card: (p: CanaryProperty) => ({ title: short(p.address), sub: [[p.beds, 'bd'].join(' '), [p.baths, 'ba'].join(' '), [p.city, p.area].filter(Boolean).join(' ')].join(' · '), right: p.rate ? money(p.rate) : '', rightColor: 'var(--text)' }),
       cols: [
         { key: 'address', label: 'Address', flex: '2', bold: true, get: (p: CanaryProperty) => short(p.address) },
@@ -3066,50 +3099,98 @@ export default function CanaryApp({
                 </div>
               )}
               {showDefault && (
-                <LayoutGrid
-                  preset={CARD_LAYOUT_PRESET}
-                  orderedIds={propCardLayout.orderedIds}
-                  sizes={propCardLayout.sizes}
-                  onReorder={propCardLayout.reorder}
-                  onSizeChange={propCardLayout.setSize}
-                  columns={12}
-                  gapPx={12}
-                  items={(genRows as CanaryProperty[]).map((p) => {
-                    const [chipBg, chipColor] = chipFor(p.status)
-                    const missingPhotos = !p.listingPhotoPaths?.length
-                    return {
-                      id: p.id,
-                      className: 'cy-hov-card cy-card',
-                      style: { padding: '12px 14px' },
-                      onActivate: () => setDrawer({ kind: 'property', id: p.id }),
-                      children: (
-                        <>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
-                              <div style={{ fontWeight: 700, fontSize: 15, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{short(p.address)}</div>
-                              {missingPhotos ? (
-                                <span
-                                  title="No listing photos"
-                                  aria-label="No listing photos"
-                                  style={{ flex: 'none', display: 'inline-flex', color: 'var(--faint)', opacity: 0.85 }}
-                                >
-                                  <ImageOff size={14} strokeWidth={2} aria-hidden="true" />
-                                </span>
-                              ) : null}
+                <div
+                  className="cy-layout-grid"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(12, minmax(0, 1fr))',
+                    gap: 12,
+                  }}
+                >
+                  {groupPropertiesByStatus(genRows as CanaryProperty[]).map((group, groupIndex) => {
+                    const [chipBg, chipColor] = chipFor(group.key)
+                    return (
+                      <React.Fragment key={group.key}>
+                        <div
+                          style={{
+                            gridColumn: '1 / -1',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            padding: groupIndex === 0 ? '2px 2px 0' : '10px 2px 0',
+                            minWidth: 0,
+                          }}
+                        >
+                          <span
+                            style={{
+                              flex: 'none',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              letterSpacing: '.04em',
+                              padding: '3px 9px',
+                              borderRadius: 6,
+                              background: chipBg,
+                              color: chipColor,
+                            }}
+                          >
+                            {group.key}
+                          </span>
+                          <span style={{ color: 'var(--dim)', fontSize: 12.5, fontFamily: MONO }}>
+                            {group.items.length}
+                          </span>
+                        </div>
+                        {group.items.map((p) => {
+                          const statusLabel = propertyStatusGroupKey(p.status)
+                          const [cardChipBg, cardChipColor] = chipFor(statusLabel)
+                          const missingPhotos = !p.listingPhotoPaths?.length
+                          return (
+                            <div
+                              key={p.id}
+                              className="cy-hov-card cy-card"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setDrawer({ kind: 'property', id: p.id })}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault()
+                                  setDrawer({ kind: 'property', id: p.id })
+                                }
+                              }}
+                              style={{
+                                gridColumn: 'span 12 / span 12',
+                                padding: '12px 14px',
+                                cursor: 'pointer',
+                                minWidth: 0,
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+                                  <div style={{ fontWeight: 700, fontSize: 15, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{short(p.address)}</div>
+                                  {missingPhotos ? (
+                                    <span
+                                      title="No listing photos"
+                                      aria-label="No listing photos"
+                                      style={{ flex: 'none', display: 'inline-flex', color: 'var(--faint)', opacity: 0.85 }}
+                                    >
+                                      <ImageOff size={14} strokeWidth={2} aria-hidden="true" />
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <span style={{ flex: 'none', fontSize: 11, fontWeight: 700, letterSpacing: '.04em', padding: '3px 9px', borderRadius: 6, background: cardChipBg, color: cardChipColor }}>{statusLabel}</span>
+                              </div>
+                              <div style={{ color: 'var(--dim)', fontSize: '12.5px', margin: '2px 0 10px' }}>{[p.city, p.area].filter(Boolean).join(' · ') || p.address.split(',').slice(1, 2).join('').trim()}</div>
+                              <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--dim)', flexWrap: 'wrap' }}>
+                                <span><b style={{ color: 'var(--text)' }}>{p.beds || '—'}</b> bed</span>
+                                <span><b style={{ color: 'var(--text)' }}>{p.baths || '—'}</b> bath</span>
+                                <span style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--text)' }}>{p.rate ? money(p.rate) + '/mo' : ''}</span>
+                              </div>
                             </div>
-                            <span style={{ flex: 'none', fontSize: 11, fontWeight: 700, letterSpacing: '.04em', padding: '3px 9px', borderRadius: 6, background: chipBg, color: chipColor }}>{p.status || '—'}</span>
-                          </div>
-                          <div style={{ color: 'var(--dim)', fontSize: '12.5px', margin: '2px 0 10px' }}>{[p.city, p.area].filter(Boolean).join(' · ') || p.address.split(',').slice(1, 2).join('').trim()}</div>
-                          <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--dim)', flexWrap: 'wrap' }}>
-                            <span><b style={{ color: 'var(--text)' }}>{p.beds || '—'}</b> bed</span>
-                            <span><b style={{ color: 'var(--text)' }}>{p.baths || '—'}</b> bath</span>
-                            <span style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--text)' }}>{p.rate ? money(p.rate) + '/mo' : ''}</span>
-                          </div>
-                        </>
-                      ),
-                    }
+                          )
+                        })}
+                      </React.Fragment>
+                    )
                   })}
-                />
+                </div>
               )}
               {showPhotos && (
                 <PropertyPhotosView

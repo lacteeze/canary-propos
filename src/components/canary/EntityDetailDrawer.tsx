@@ -802,10 +802,30 @@ function WebsiteListingsSection({
                     <div style={{ fontWeight: 650, fontSize: 13.5, lineHeight: 1.3, minWidth: 0 }}>
                       {title}
                     </div>
+                    <span
+                      style={{
+                        flex: 'none',
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        letterSpacing: '0.02em',
+                        padding: '2px 7px',
+                        borderRadius: 6,
+                        color: badge.color,
+                        border: '1px solid var(--border)',
+                        background: 'var(--panel)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {badge.label === 'PUBLIC' ? 'Published' : badge.label}
+                    </span>
+                  </div>
+                  {meta ? (
+                    <div style={{ color: 'var(--dim)', fontSize: 12, marginTop: 3 }}>{meta}</div>
+                  ) : null}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7, flexWrap: 'wrap' }}>
                     {rentLabel ? (
                       <div
                         style={{
-                          flex: 'none',
                           fontWeight: 700,
                           fontSize: 16,
                           lineHeight: 1.2,
@@ -816,25 +836,6 @@ function WebsiteListingsSection({
                         {rentLabel}
                       </div>
                     ) : null}
-                  </div>
-                  {meta ? (
-                    <div style={{ color: 'var(--dim)', fontSize: 12, marginTop: 3 }}>{meta}</div>
-                  ) : null}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7, flexWrap: 'wrap' }}>
-                    <span
-                      style={{
-                        fontSize: 10.5,
-                        fontWeight: 700,
-                        letterSpacing: '0.02em',
-                        padding: '2px 7px',
-                        borderRadius: 6,
-                        color: badge.color,
-                        border: '1px solid var(--border)',
-                        background: 'var(--panel)',
-                      }}
-                    >
-                      {badge.label === 'PUBLIC' ? 'Published' : badge.label}
-                    </span>
                     {publicHref ? (
                       <a
                         href={publicHref}

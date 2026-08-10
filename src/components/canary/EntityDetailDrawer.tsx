@@ -1275,7 +1275,7 @@ export default function EntityDetailDrawer({
       sections.push(
         <Section
           key="leases"
-          title={`Lease history (${hist.length})`}
+          title="Leases"
           rows={hist.slice(0, 10).map((l) => ({
             label: l.status || '—',
             value: `${l.start || '?'} → ${l.end || '?'} · ${l.rent || ''}${tenantNames(l.tenantInfo) ? ' · ' + tenantNames(l.tenantInfo) : ''}`,
@@ -1286,7 +1286,7 @@ export default function EntityDetailDrawer({
       const related = db.projects.filter((j) => j.property === p.address)
       if (related.length) {
         sections.push(
-          <Section key="proj" title="Open projects" rows={related.map((j) => ({ label: j.status || '—', value: j.name, onClick: () => onNavigate({ kind: 'project', id: j.id }) }))} />
+          <Section key="proj" title="Projects" rows={related.map((j) => ({ label: j.status || '—', value: j.name, onClick: () => onNavigate({ kind: 'project', id: j.id }) }))} />
         )
       }
     }

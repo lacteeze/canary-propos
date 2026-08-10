@@ -12,7 +12,6 @@ import {
 import {
   INQUIRY_PIPELINE_LABELS,
   INQUIRY_PIPELINE_STAGES,
-  inquiryTypeLabel,
   nextInquiryStage,
   type CanaryInquiry,
   type CanaryInquiryNote,
@@ -34,6 +33,14 @@ function formatMoveIn(moveIn: string): string {
   const d = new Date(moveIn + (moveIn.length === 10 ? 'T12:00:00' : ''))
   if (Number.isNaN(d.getTime())) return `Wants ${moveIn}`
   return `Wants ${d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}`
+}
+
+/** Compact move-in for the card badge (top-right). */
+function formatMoveInBadge(moveIn: string): string {
+  if (!moveIn) return 'TBD'
+  const d = new Date(moveIn + (moveIn.length === 10 ? 'T12:00:00' : ''))
+  if (Number.isNaN(d.getTime())) return 'TBD'
+  return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function formatViewingAt(iso: string | null): string {
@@ -183,27 +190,17 @@ function PipelineCard({
           <div className="cy-pipeline-card-name">{inquiry.name}</div>
           <div className="cy-pipeline-card-prop">{shortProperty(inquiry.property)}</div>
         </div>
-        <span
-          className={`cy-pipeline-term${
-            inquiry.type === 'application'
-              ? ' is-app'
-              : inquiry.isGeneralInterest
-                ? ' is-interest'
-                : ''
-          }`}
-        >
-          {inquiryTypeLabel(inquiry)}
+        <span className="cy-pipeline-movein" title="Desired move-in">
+          {formatMoveInBadge(inquiry.moveIn)}
         </span>
       </div>
 
-      <div className="cy-pipeline-card-meta">
-        <Calendar size={13} aria-hidden />
-        <span>
-          {inquiry.status === 'viewing' && inquiry.viewingAt
-            ? `Viewing ${formatViewingAt(inquiry.viewingAt)}`
-            : formatMoveIn(inquiry.moveIn)}
-        </span>
-      </div>
+      {inquiry.status === 'viewing' && inquiry.viewingAt ? (
+        <div className="cy-pipeline-card-meta">
+          <Calendar size={13} aria-hidden />
+          <span>{`Viewing ${formatViewingAt(inquiry.viewingAt)}`}</span>
+        </div>
+      ) : null}
 
       {inquiry.latestNote && (
         <div className="cy-pipeline-card-note">

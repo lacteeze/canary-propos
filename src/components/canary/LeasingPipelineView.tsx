@@ -147,11 +147,6 @@ function PipelineCard({
         <div className="cy-pipeline-card-top">
           <div className="cy-pipeline-card-name">
             {inquiry.name}
-            {inquiry.isGeneralInterest ? (
-              <span className="cy-pipeline-interest-pill" title="General interest pool">
-                Interest
-              </span>
-            ) : null}
           </div>
           <div className="cy-pipeline-card-prop">
             {shortProperty(inquiry.property)}
@@ -168,7 +163,8 @@ function PipelineCard({
           </div>
         ) : null}
 
-        {inquiry.latestNote && (
+        {inquiry.latestNote &&
+        !/^Converted to interest pool\b/i.test(inquiry.latestNote.body) ? (
           <div className="cy-pipeline-card-note">
             <div className="cy-pipeline-card-note-body">
               {inquiry.latestNote.body}
@@ -177,7 +173,7 @@ function PipelineCard({
               {relativeAge(inquiry.latestNote.createdAt)}
             </div>
           </div>
-        )}
+        ) : null}
       </div>
 
       {canAdvance ? (

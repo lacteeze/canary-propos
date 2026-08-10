@@ -3446,19 +3446,6 @@
   font-size: 13px;
   line-height: 1.4;
 }
-.cnry .cy-pipeline-interest-pill {
-  display: inline-flex;
-  align-items: center;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 6px;
-  color: var(--text);
-  background: color-mix(in srgb, var(--accent) 22%, var(--elev));
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
-}
 .cnry .cy-pipeline-recycle {
   margin: 0 0 16px;
   padding: 12px;

@@ -1402,7 +1402,6 @@ export default function EntityDetailDrawer({
               ← Close
             </button>
             <div className="cy-property-modal-title-block">
-              <div className="cy-eyebrow" style={{ marginBottom: 3 }}>{kindLabel}</div>
               <div className="cy-property-modal-title-row">
                 <div id="property-modal-title" style={{ fontWeight: 700, fontSize: 17, letterSpacing: '-.01em', lineHeight: 1.25 }}>{title}</div>
                 {propertyForEdit && (

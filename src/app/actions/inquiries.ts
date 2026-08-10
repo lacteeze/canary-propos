@@ -1093,6 +1093,8 @@ export async function convertInquiriesToInterestPool(
 
   let updated = 0
   for (const row of rows) {
+    // In-app only — never email prospects or managers from recycle flows.
+    if (row.status === 'closed' || row.status === 'signed') continue
     const fromProp = row.properties as { street_address?: string; city?: string } | null
     const fromListing = (
       row.listings as {

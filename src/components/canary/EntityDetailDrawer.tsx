@@ -31,6 +31,7 @@ import {
   normalizeHospitableWidgetPropertyIdInput,
   parseHospitableWidgetPropertyId,
 } from '@/lib/hospitable/parse-widget-property-id'
+import { PropertyOpenInquiriesSection } from './PropertyOpenInquiriesSection'
 
 const MONO = "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif"
 
@@ -1159,6 +1160,13 @@ export default function EntityDetailDrawer({
             },
             ...(p.archivedAt ? [{ label: 'Archived', value: new Date(p.archivedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) }] : []),
           ]}
+        />,
+        <PropertyOpenInquiriesSection
+          key="open-inquiries"
+          property={p}
+          inquiries={db.inquiries}
+          canEdit={canEdit}
+          onConverted={refresh}
         />,
       ]
       const siblingUnitIds = new Set(

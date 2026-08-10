@@ -918,6 +918,8 @@ const OVERVIEW_FIELD_GRID: React.CSSProperties = {
   display: 'grid',
   gap: 8,
   gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+  justifyItems: 'start',
+  alignItems: 'start',
 }
 
 export default function EntityDetailDrawer({

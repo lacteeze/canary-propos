@@ -1320,14 +1320,18 @@
 
 /*
  * Overview / listing quick-field bubble: muted label prefix + value/control
- * in one pill (inline, not stacked).
+ * in one pill (inline, not stacked). Width hugs content; grid tracks must not
+ * stretch these full-width (see justify-self / parent justify-items: start).
  */
 .cnry .cy-field-inline {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  width: 100%;
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
   min-width: 0;
+  justify-self: start;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   background: var(--input);
@@ -1348,19 +1352,21 @@
 }
 
 .cnry .cy-field-inline__value {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   font-weight: 600;
   word-break: break-word;
+  overflow-wrap: anywhere;
   padding: 9px 0;
 }
 
 /* Nested select borrows chrome from .cy-field-inline */
 .cnry .cy-field-inline .cy-select,
 .cnry .cy-field-inline .cy-select--field {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   width: auto;
+  max-width: 100%;
   margin-top: 0;
   border: none;
   border-radius: 0;

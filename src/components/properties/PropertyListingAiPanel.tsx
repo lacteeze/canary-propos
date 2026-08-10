@@ -96,7 +96,17 @@ function BriefCombobox({
   const selectValue = known && !customMode ? value : showCustom ? '__custom__' : ''
 
   return (
-    <label style={{ display: 'grid', gap: 4, fontSize: 12, minWidth: 0 }}>
+    <label
+      style={{
+        display: 'grid',
+        gap: 4,
+        fontSize: 12,
+        minWidth: 0,
+        width: 'fit-content',
+        maxWidth: '100%',
+        justifySelf: 'start',
+      }}
+    >
       <div className="cy-field-inline">
         <span className="cy-field-inline__label">{label}</span>
         <select
@@ -337,6 +347,8 @@ const FIELD_GRID_STYLE: React.CSSProperties = {
   display: 'grid',
   gap: 8,
   gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+  justifyItems: 'start',
+  alignItems: 'start',
 }
 
 export function PropertyListingAiPanel({

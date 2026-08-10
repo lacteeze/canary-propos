@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Calendar, Mail, Phone, Plus, Trash2 } from 'lucide-react'
+import { ArrowRight, Calendar, Mail, Phone, Trash2 } from 'lucide-react'
 import {
   addInquiryNote,
   deleteInquiry,
@@ -264,7 +264,7 @@ function PipelineCard({
             <div className="cy-pipeline-note-row">
               <input
                 type="text"
-                placeholder="Log a call or note…"
+                placeholder="Log note..."
                 value={noteDraft}
                 tabIndex={actionsOpen ? 0 : -1}
                 onChange={(e) => onNoteChange(e.target.value)}
@@ -275,15 +275,6 @@ function PipelineCard({
                   }
                 }}
               />
-              <button
-                type="button"
-                className="cy-pipeline-icon-btn"
-                aria-label="Add note"
-                tabIndex={actionsOpen ? 0 : -1}
-                onClick={onSubmitNote}
-              >
-                <Plus size={14} />
-              </button>
               <button
                 type="button"
                 className="cy-pipeline-icon-btn is-danger"

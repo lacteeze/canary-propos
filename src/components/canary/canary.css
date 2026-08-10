@@ -3463,3 +3463,43 @@
     grid-template-columns: repeat(4, minmax(220px, 80vw));
   }
 }
+
+/* Mobile: stack kanban columns vertically (match Canary 768px breakpoint) */
+@media (max-width: 768px) {
+  .cnry .cy-pipeline {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+  .cnry .cy-pipeline-title {
+    font-size: 22px;
+  }
+  .cnry .cy-pipeline-head-right {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .cnry .cy-pipeline-search {
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+  }
+  .cnry .cy-pipeline-board {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    overflow-x: visible;
+    width: 100%;
+  }
+  .cnry .cy-pipeline-col {
+    min-width: 0;
+    width: 100%;
+    min-height: 0;
+    max-height: min(60vh, 480px);
+  }
+  .cnry .cy-pipeline-col-body {
+    overflow-y: auto;
+    min-height: 0;
+  }
+  .cnry .cy-pipeline-stages {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

@@ -96,30 +96,32 @@ function BriefCombobox({
   const selectValue = known && !customMode ? value : showCustom ? '__custom__' : ''
 
   return (
-    <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
-      <span style={{ color: 'var(--dim)' }}>{label}</span>
-      <select
-        className="cy-select cy-select--field"
-        value={selectValue}
-        onChange={(e) => {
-          const v = e.target.value
-          if (v === '__custom__') {
-            setCustomMode(true)
-            return
-          }
-          setCustomMode(false)
-          onChange(v)
-        }}
-        aria-label={label}
-      >
-        <option value="">— Select —</option>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-        <option value="__custom__">Custom…</option>
-      </select>
+    <label style={{ display: 'grid', gap: 4, fontSize: 12, minWidth: 0 }}>
+      <div className="cy-field-inline">
+        <span className="cy-field-inline__label">{label}</span>
+        <select
+          className="cy-select cy-select--field"
+          value={selectValue}
+          onChange={(e) => {
+            const v = e.target.value
+            if (v === '__custom__') {
+              setCustomMode(true)
+              return
+            }
+            setCustomMode(false)
+            onChange(v)
+          }}
+          aria-label={label}
+        >
+          <option value="">— Select —</option>
+          {options.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+          <option value="__custom__">Custom…</option>
+        </select>
+      </div>
       {showCustom && (
         <input
           list={`${listId}-${fieldKey}`}

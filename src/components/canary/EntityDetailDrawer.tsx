@@ -902,15 +902,14 @@ function OverviewFieldCard({
 }) {
   return (
     <div
+      className="cy-field-inline"
       style={{
-        display: 'grid',
-        gap: 4,
         fontSize: 12,
         ...(wide ? { gridColumn: '1 / -1' } : null),
       }}
     >
-      <span style={{ color: 'var(--dim)' }}>{label}</span>
-      <div className="cy-field-card-value">{value}</div>
+      <span className="cy-field-inline__label">{label}</span>
+      <div className="cy-field-inline__value">{value}</div>
     </div>
   )
 }

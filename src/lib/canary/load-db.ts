@@ -33,7 +33,9 @@ type Caller = {
 }
 
 function fullAddress(street: string, city: string | null): string {
-  return city ? `${street}, ${city}` : street
+  // street_address is often a full Google-style line that already includes city;
+  // formatPropertyFullLabel avoids appending a duplicate trailing city segment.
+  return formatPropertyFullLabel(street, city) ?? street
 }
 
 /** Match property/lease timeline keys — include unit suffix only for multi-unit buildings. */
@@ -629,8 +631,7 @@ export async function loadCanaryDb(
       // Keep general-interest /rent leads even when no property is linked.
       if (!prop && !generalInterest) return null
       const propertyLabel = prop
-        ? (formatPropertyFullLabel(prop.street_address, prop.city) ??
-          fullAddress(prop.street_address, prop.city))
+        ? fullAddress(prop.street_address, prop.city)
         : 'General interest'
       // Once re-linked to a listing, treat as a normal prospect for labels.
       const isGeneralInterest = generalInterest && !i.listing_id

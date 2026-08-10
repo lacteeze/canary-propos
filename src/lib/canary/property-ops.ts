@@ -8,7 +8,7 @@ export function propertyAddressKey(addr: PropertyAddress): string {
 }
 
 export function formatPropertyAddress(addr: PropertyAddress): string {
-  return `${addr.street_address}, ${addr.city}`
+  return formatPropertyFullLabel(addr.street_address, addr.city) ?? addr.street_address
 }
 
 /** Street-only label — drops city/province/postal after the first comma. */
@@ -17,6 +17,25 @@ export function shortStreetAddress(streetAddress: string | null | undefined): st
   const trimmed = streetAddress.trim()
   if (!trimmed) return ''
   return trimmed.split(',')[0]?.trim() || trimmed
+}
+
+/**
+ * True when `city` already appears as its own comma-separated segment after the
+ * street line (case-insensitive). Does not treat city substrings inside the
+ * street name (e.g. "Paradise Lane") as a match.
+ */
+export function streetAddressHasCitySegment(
+  streetAddress: string,
+  city: string,
+): boolean {
+  const cityKey = city.trim().toLowerCase()
+  if (!cityKey) return false
+  const parts = streetAddress
+    .split(',')
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean)
+  // First segment is the street line; only later location segments count.
+  return parts.slice(1).some((part) => part === cityKey)
 }
 
 /**
@@ -43,7 +62,7 @@ export function formatPropertyFullLabel(
   if (!street) return null
   const cityTrim = city?.trim()
   const base =
-    cityTrim && !street.toLowerCase().includes(cityTrim.toLowerCase())
+    cityTrim && !streetAddressHasCitySegment(street, cityTrim)
       ? `${street}, ${cityTrim}`
       : street
   const unit = unitNumber?.trim()

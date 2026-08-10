@@ -6,6 +6,7 @@ import { str, writeAuditEntries } from '@/lib/canary/audit'
 import { addressesMatch, formatPropertyAddress } from '@/lib/canary/property-ops'
 import { normalizeLeaseTermType, validateLeaseDates } from '@/lib/canary/lease-term'
 import type { LeaseTermType } from '@/lib/canary/lease-term'
+import { parseHospitableWidgetPropertyId } from '@/lib/hospitable/parse-widget-property-id'
 import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/supabase'
 
@@ -192,17 +193,25 @@ export async function updatePropertyField(
     patch.hospitable_property_id = next
   } else if (field === 'hospitable_widget_property_id') {
     const trimmed = value.trim()
-    if (trimmed && !/^\d+$/.test(trimmed)) {
-      return {
-        success: false,
-        error: 'Hospitable widget property ID must be numeric (from Direct Booking widget code), or leave blank.',
+    if (!trimmed) {
+      const prev = unit.hospitable_widget_property_id?.trim() || null
+      if (prev === null) return { success: true }
+      changes.push({ field: 'hospitable_widget_property_id', oldValue: prev, newValue: null })
+      patch.hospitable_widget_property_id = null
+    } else {
+      const next = parseHospitableWidgetPropertyId(trimmed)
+      if (!next) {
+        return {
+          success: false,
+          error:
+            'Paste a Hospitable widget URL, embed snippet, or numeric property ID (or leave blank).',
+        }
       }
+      const prev = unit.hospitable_widget_property_id?.trim() || null
+      if (next === prev) return { success: true }
+      changes.push({ field: 'hospitable_widget_property_id', oldValue: prev, newValue: next })
+      patch.hospitable_widget_property_id = next
     }
-    const next = trimmed || null
-    const prev = unit.hospitable_widget_property_id?.trim() || null
-    if (next === prev) return { success: true }
-    changes.push({ field: 'hospitable_widget_property_id', oldValue: prev, newValue: next })
-    patch.hospitable_widget_property_id = next
   }
 
   const { error } = await ctx.supabase.from('units').update(patch).eq('id', unitId).eq('org_id', ctx.person.org_id)
@@ -380,13 +389,12 @@ const propertyDetailsSchema = z.object({
     (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
     z.string().uuid().nullable()
   ),
-  hospitableWidgetPropertyId: z.preprocess(
-    (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
-    z
-      .string()
-      .regex(/^\d+$/, 'Hospitable widget property ID must be numeric')
-      .nullable()
-  ),
+  hospitableWidgetPropertyId: z.preprocess((val) => {
+    if (typeof val !== 'string') return val
+    const trimmed = val.trim()
+    if (!trimmed) return null
+    return parseHospitableWidgetPropertyId(trimmed) ?? trimmed
+  }, z.string().regex(/^\d+$/, 'Hospitable widget property ID must be numeric').nullable()),
 })
 
 export type PropertyDetailsInput = z.infer<typeof propertyDetailsSchema>

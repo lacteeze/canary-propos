@@ -27,6 +27,10 @@ import { PublicSlugField } from './PublicSlugField'
 import { PropertyPhotoUpload } from '@/components/properties/PropertyPhotoUpload'
 import { PropertyListingAiPanel } from '@/components/properties/PropertyListingAiPanel'
 import { updateLeaseListingFields } from '@/app/actions/property-knowledge'
+import {
+  normalizeHospitableWidgetPropertyIdInput,
+  parseHospitableWidgetPropertyId,
+} from '@/lib/hospitable/parse-widget-property-id'
 
 const MONO = "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif"
 
@@ -549,10 +553,12 @@ function PropertyEditForm({
     if (hospId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(hospId)) {
       return setErr('Hospitable property ID must be a UUID (or leave blank).')
     }
-    const widgetId = hospitableWidgetPropertyId.trim()
-    if (widgetId && !/^\d+$/.test(widgetId)) {
-      return setErr('Hospitable widget property ID must be numeric (or leave blank).')
+    const widgetRaw = hospitableWidgetPropertyId.trim()
+    const widgetId = widgetRaw ? parseHospitableWidgetPropertyId(widgetRaw) : null
+    if (widgetRaw && !widgetId) {
+      return setErr('Paste a Hospitable widget URL or numeric ID (or leave blank).')
     }
+    if (widgetId) setHospitableWidgetPropertyId(widgetId)
     if (!window.confirm('Save these property changes?')) return
 
     const payload: PropertyDetailsInput = {
@@ -569,7 +575,7 @@ function PropertyEditForm({
       managementFeeType: feeType as PropertyDetailsInput['managementFeeType'],
       managementFeeValue: feeN,
       hospitablePropertyId: hospId || null,
-      hospitableWidgetPropertyId: widgetId || null,
+      hospitableWidgetPropertyId: widgetId,
     }
     setSaving(true)
     const res = await updatePropertyDetails(property.unitId, payload)
@@ -670,16 +676,27 @@ function PropertyEditForm({
                 <input
                   type="text"
                   value={hospitableWidgetPropertyId}
-                  onChange={(e) => setHospitableWidgetPropertyId(e.target.value)}
-                  placeholder="e.g. 796518"
+                  onChange={(e) => {
+                    const v = e.target.value
+                    const parsed = parseHospitableWidgetPropertyId(v)
+                    setHospitableWidgetPropertyId(
+                      parsed && v.trim() !== parsed ? parsed : v,
+                    )
+                  }}
+                  onBlur={() => {
+                    setHospitableWidgetPropertyId(
+                      normalizeHospitableWidgetPropertyIdInput(hospitableWidgetPropertyId),
+                    )
+                  }}
+                  placeholder="Paste widget URL or numeric ID"
                   style={{ ...formFieldStyle, fontFamily: MONO, fontSize: 12 }}
                 />
               </label>
             </div>
             <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--dim)', lineHeight: 1.45 }}>
-              API UUID matches STR bookings on the leases timeline. Widget property ID is the numeric{' '}
-              <code>data-property-id</code> from Direct Bookings → Website → Copy widget code (embeds the
-              calendar on the public property page). Leave both blank for long-term-only units.
+              API UUID matches STR bookings on the leases timeline. Widget ID: paste the Direct Booking
+              widget URL or numeric <code>data-property-id</code> (embeds the calendar on the public
+              property page). Leave both blank for long-term-only units.
             </p>
           </div>
         )}
@@ -1104,9 +1121,20 @@ export default function EntityDetailDrawer({
                         label="Hospitable widget property ID"
                         type="text"
                         confirm
-                        onSave={wrapSave((v) =>
-                          updatePropertyField(p.id, 'hospitable_widget_property_id', v)
-                        )}
+                        onSave={wrapSave((v) => {
+                          const trimmed = v.trim()
+                          if (!trimmed) {
+                            return updatePropertyField(p.id, 'hospitable_widget_property_id', '')
+                          }
+                          const id = parseHospitableWidgetPropertyId(trimmed)
+                          if (!id) {
+                            return Promise.resolve({
+                              success: false,
+                              error: 'Paste a Hospitable widget URL or numeric ID (or leave blank).',
+                            })
+                          }
+                          return updatePropertyField(p.id, 'hospitable_widget_property_id', id)
+                        })}
                       />
                     ) : (
                       p.hospitableWidgetPropertyId || '—'

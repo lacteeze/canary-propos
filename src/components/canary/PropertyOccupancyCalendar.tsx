@@ -19,6 +19,10 @@ import {
   strBarRange,
   tlRangesOverlap,
 } from '@/lib/canary/timeline-times'
+import {
+  normalizeHospitableWidgetPropertyIdInput,
+  parseHospitableWidgetPropertyId,
+} from '@/lib/hospitable/parse-widget-property-id'
 
 const MONO = "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif"
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -250,10 +254,12 @@ function PropertyQuickEdit({
     if (hospId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(hospId)) {
       return setErr('Hospitable property ID must be a UUID (or leave blank).')
     }
-    const widgetId = hospitableWidgetPropertyId.trim()
-    if (widgetId && !/^\d+$/.test(widgetId)) {
-      return setErr('Hospitable widget property ID must be numeric (or leave blank).')
+    const widgetRaw = hospitableWidgetPropertyId.trim()
+    const widgetId = widgetRaw ? parseHospitableWidgetPropertyId(widgetRaw) : null
+    if (widgetRaw && !widgetId) {
+      return setErr('Paste a Hospitable widget URL or numeric ID (or leave blank).')
     }
+    if (widgetId) setHospitableWidgetPropertyId(widgetId)
 
     const payload: PropertyDetailsInput = {
       status: status as PropertyDetailsInput['status'],
@@ -269,7 +275,7 @@ function PropertyQuickEdit({
       managementFeeType: feeType as PropertyDetailsInput['managementFeeType'],
       managementFeeValue: feeN,
       hospitablePropertyId: hospId || null,
-      hospitableWidgetPropertyId: widgetId || null,
+      hospitableWidgetPropertyId: widgetId,
     }
     setSaving(true)
     const res = await updatePropertyDetails(property.unitId, payload)
@@ -361,14 +367,25 @@ function PropertyQuickEdit({
               <input
                 type="text"
                 value={hospitableWidgetPropertyId}
-                onChange={(e) => setHospitableWidgetPropertyId(e.target.value)}
-                placeholder="e.g. 796518"
+                onChange={(e) => {
+                  const v = e.target.value
+                  const parsed = parseHospitableWidgetPropertyId(v)
+                  setHospitableWidgetPropertyId(
+                    parsed && v.trim() !== parsed ? parsed : v,
+                  )
+                }}
+                onBlur={() => {
+                  setHospitableWidgetPropertyId(
+                    normalizeHospitableWidgetPropertyIdInput(hospitableWidgetPropertyId),
+                  )
+                }}
+                placeholder="Paste widget URL or numeric ID"
                 style={{ ...fieldStyle, fontFamily: MONO, fontSize: 11.5 }}
               />
             </label>
           </div>
           <p style={{ margin: '8px 0 0', fontSize: 11.5, color: 'var(--dim)', lineHeight: 1.4 }}>
-            Widget ID is the numeric <code>data-property-id</code> from Direct Bookings → Copy widget code.
+            Paste widget URL or numeric ID (<code>data-property-id</code> from Direct Bookings).
           </p>
         </div>
       )}

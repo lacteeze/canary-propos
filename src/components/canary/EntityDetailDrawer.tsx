@@ -822,7 +822,16 @@ function WebsiteListingsSection({
                   {meta ? (
                     <div style={{ color: 'var(--dim)', fontSize: 12, marginTop: 3 }}>{meta}</div>
                   ) : null}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7, flexWrap: 'wrap' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      marginTop: 7,
+                      flexWrap: 'wrap',
+                    }}
+                  >
                     {rentLabel ? (
                       <div
                         style={{
@@ -835,7 +844,9 @@ function WebsiteListingsSection({
                       >
                         {rentLabel}
                       </div>
-                    ) : null}
+                    ) : (
+                      <span />
+                    )}
                     {publicHref ? (
                       <a
                         href={publicHref}
@@ -843,10 +854,12 @@ function WebsiteListingsSection({
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
                         style={{
+                          marginLeft: 'auto',
                           fontSize: 12,
                           fontWeight: 600,
                           color: 'var(--blue, #2563eb)',
                           textDecoration: 'none',
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         Open public page ↗

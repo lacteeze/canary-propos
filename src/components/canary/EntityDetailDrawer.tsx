@@ -1085,7 +1085,7 @@ export default function EntityDetailDrawer({
     if (!p) found = false
     else {
       title = short(p.address)
-      sub = p.address
+      sub = ''
       kindLabel = p.archivedAt ? 'Property · Archived' : 'Property'
       propertyForEdit = p
       const siblingUnitIds = new Set(
@@ -1458,7 +1458,13 @@ export default function EntityDetailDrawer({
                   )
                 )}
               </div>
-              {sub && <div style={{ color: 'var(--dim)', fontSize: 13, marginTop: 2 }}>{sub}</div>}
+              <div className="cy-property-modal-public-url">
+                {propertyForEdit?.slug ? (
+                  <CopyPublicLinkButton slug={propertyForEdit.slug} />
+                ) : (
+                  <span className="cy-property-modal-public-url-fallback">No public URL</span>
+                )}
+              </div>
             </div>
             <div className="cy-property-modal-actions">
               <button

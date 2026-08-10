@@ -1595,6 +1595,16 @@
   min-width: 0;
 }
 
+.cnry .cy-property-modal-public-url {
+  margin-top: 2px;
+  min-width: 0;
+}
+
+.cnry .cy-property-modal-public-url-fallback {
+  color: var(--dim);
+  font-size: 13px;
+}
+
 .cnry .cy-property-modal-status-text {
   font-weight: 600;
   font-size: 13px;

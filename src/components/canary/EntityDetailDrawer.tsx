@@ -835,8 +835,8 @@ function WebsiteListingsSection({
                     {rentLabel ? (
                       <div
                         style={{
-                          fontWeight: 700,
-                          fontSize: 16,
+                          fontWeight: 550,
+                          fontSize: 13.5,
                           lineHeight: 1.2,
                           color: 'var(--text)',
                           whiteSpace: 'nowrap',

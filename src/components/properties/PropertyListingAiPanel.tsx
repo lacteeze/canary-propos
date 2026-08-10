@@ -50,8 +50,8 @@ const PRE_GARAGE_FIELDS: {
   label: string
   placeholder: string
 }[] = [
-  { key: 'laundry', label: 'Laundry', placeholder: 'e.g. In-unit washer/dryer' },
   { key: 'furnished', label: 'Furnished', placeholder: 'e.g. Unfurnished' },
+  { key: 'laundry', label: 'Laundry', placeholder: 'e.g. In-unit washer/dryer' },
 ]
 
 const NEIGHBORHOOD_FIELD: {

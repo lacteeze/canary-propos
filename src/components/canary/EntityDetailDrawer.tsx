@@ -1055,7 +1055,7 @@ export default function EntityDetailDrawer({
     else {
       title = short(p.address)
       sub = p.address
-      kindLabel = p.archivedAt ? 'Property · Archived' : 'Property · ' + (p.status || '')
+      kindLabel = p.archivedAt ? 'Property · Archived' : 'Property'
       propertyForEdit = p
       const siblingUnitIds = new Set(
         db.properties
@@ -1078,12 +1078,6 @@ export default function EntityDetailDrawer({
           key="overview"
           title="Overview"
           rows={[
-            {
-              label: 'Status',
-              value: canEdit ? (
-                <StatusSelect value={propertyStatusOption(p.status)} options={PROPERTY_STATUSES} onSave={wrapSave((v) => updatePropertyField(p.id, 'status', v))} />
-              ) : (p.status || '—'),
-            },
             {
               label: 'Type',
               value: p.type ? formatPropertyTypeLabel(p.type) : '—',
@@ -1409,7 +1403,20 @@ export default function EntityDetailDrawer({
             </button>
             <div className="cy-property-modal-title-block">
               <div className="cy-eyebrow" style={{ marginBottom: 3 }}>{kindLabel}</div>
-              <div id="property-modal-title" style={{ fontWeight: 700, fontSize: 17, letterSpacing: '-.01em', lineHeight: 1.25 }}>{title}</div>
+              <div className="cy-property-modal-title-row">
+                <div id="property-modal-title" style={{ fontWeight: 700, fontSize: 17, letterSpacing: '-.01em', lineHeight: 1.25 }}>{title}</div>
+                {propertyForEdit && (
+                  canEdit ? (
+                    <StatusSelect
+                      value={propertyStatusOption(propertyForEdit.status)}
+                      options={PROPERTY_STATUSES}
+                      onSave={wrapSave((v) => updatePropertyField(propertyForEdit!.id, 'status', v))}
+                    />
+                  ) : (
+                    <span className="cy-property-modal-status-text">{propertyForEdit.status || '—'}</span>
+                  )
+                )}
+              </div>
               {sub && <div style={{ color: 'var(--dim)', fontSize: 13, marginTop: 2 }}>{sub}</div>}
             </div>
             <div className="cy-property-modal-actions">

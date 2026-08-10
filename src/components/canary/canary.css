@@ -1540,6 +1540,20 @@
   min-width: 0;
 }
 
+.cnry .cy-property-modal-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cnry .cy-property-modal-status-text {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--dim);
+}
+
 .cnry .cy-property-modal-actions {
   display: flex;
   align-items: center;

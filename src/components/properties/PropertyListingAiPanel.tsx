@@ -22,6 +22,13 @@ const BRIEF_AUTOSAVE_MS = 500
 const FEATURES_AUTOSAVE_MS = 150
 const KB_AUTOSAVE_MS = 500
 
+const PARKING_FIELD: {
+  key: ListingBriefScalarField
+  label: string
+  placeholder: string
+} = { key: 'parking', label: 'Parking', placeholder: 'e.g. 1 driveway spot' }
+
+/** After Parking (and mid overview cards); Type/Area stay in trailingFields */
 const SCALAR_FIELDS: {
   key: ListingBriefScalarField
   label: string
@@ -29,7 +36,6 @@ const SCALAR_FIELDS: {
 }[] = [
   { key: 'pets', label: 'Pets', placeholder: 'e.g. Cats OK with deposit' },
   { key: 'utilities', label: 'Utilities', placeholder: 'e.g. Heat included; tenant pays power' },
-  { key: 'parking', label: 'Parking', placeholder: 'e.g. 1 driveway spot' },
   { key: 'laundry', label: 'Laundry', placeholder: 'e.g. In-unit washer/dryer' },
   { key: 'furnished', label: 'Furnished', placeholder: 'e.g. Unfurnished' },
   { key: 'neighborhood', label: 'Neighborhood', placeholder: 'Near downtown, quiet street…' },
@@ -312,12 +318,15 @@ export function PropertyListingAiPanel({
   propertyId,
   canEdit,
   leadingFields,
+  midFields,
   trailingFields,
 }: {
   propertyId: string
   canEdit: boolean
-  /** Read-only overview cards rendered before listing quick fields in the shared grid */
+  /** Read-only overview cards before Parking (e.g. Beds, Baths) */
   leadingFields?: React.ReactNode
+  /** Read-only overview cards after Parking (e.g. Asking rate, Garage) */
+  midFields?: React.ReactNode
   /** Meta overview cards rendered after Neighborhood (e.g. Type, Area) */
   trailingFields?: React.ReactNode
 }) {
@@ -448,9 +457,10 @@ export function PropertyListingAiPanel({
   if (!canEdit) {
     return (
       <div style={{ display: 'grid', gap: 14 }}>
-        {leadingFields || trailingFields ? (
+        {leadingFields || midFields || trailingFields ? (
           <div style={FIELD_GRID_STYLE}>
             {leadingFields}
+            {midFields}
             {trailingFields}
           </div>
         ) : null}
@@ -496,6 +506,15 @@ export function PropertyListingAiPanel({
         </div>
         <div style={FIELD_GRID_STYLE}>
           {leadingFields}
+          <BriefCombobox
+            fieldKey={PARKING_FIELD.key}
+            label={PARKING_FIELD.label}
+            placeholder={PARKING_FIELD.placeholder}
+            value={brief[PARKING_FIELD.key]}
+            options={briefOptions[PARKING_FIELD.key] ?? DEFAULT_LISTING_BRIEF_OPTIONS[PARKING_FIELD.key]}
+            onChange={(v) => updateScalarField(PARKING_FIELD.key, v)}
+          />
+          {midFields}
           {SCALAR_FIELDS.map((f) => (
             <BriefCombobox
               key={f.key}

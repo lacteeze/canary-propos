@@ -1144,16 +1144,15 @@ export default function EntityDetailDrawer({
         <>
           <OverviewFieldCard label="Beds" value={p.beds || '—'} />
           <OverviewFieldCard label="Baths" value={p.baths || '—'} />
+        </>
+      )
+      const overviewMidFields = (
+        <>
           <OverviewFieldCard
             label="Asking rate"
             value={p.rate != null ? money(p.rate) + '/mo' : '—'}
           />
           <OverviewFieldCard label="Garage" value={p.hasGarage ? 'Yes' : 'No'} />
-          <OverviewFieldCard
-            label="Public URL slug"
-            value={p.slug ? <CopyPublicLinkButton slug={p.slug} /> : '—'}
-            wide
-          />
         </>
       )
       const overviewTrailingFields = (
@@ -1208,11 +1207,13 @@ export default function EntityDetailDrawer({
               propertyId={p.propertyDbId}
               canEdit={canEdit}
               leadingFields={overviewLeadingFields}
+              midFields={overviewMidFields}
               trailingFields={overviewTrailingFields}
             />
           ) : (
             <div style={OVERVIEW_FIELD_GRID}>
               {overviewLeadingFields}
+              {overviewMidFields}
               {overviewTrailingFields}
             </div>
           )}

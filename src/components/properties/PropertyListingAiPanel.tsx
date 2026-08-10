@@ -28,13 +28,18 @@ const PARKING_FIELD: {
   placeholder: string
 } = { key: 'parking', label: 'Parking', placeholder: 'e.g. 1 driveway spot' }
 
-/** After Parking (and mid overview cards); Type/Area stay in trailingFields */
+const PETS_FIELD: {
+  key: ListingBriefScalarField
+  label: string
+  placeholder: string
+} = { key: 'pets', label: 'Pets', placeholder: 'e.g. Cats OK with deposit' }
+
+/** After Parking + Pets + mid overview cards; Type/Area stay in trailingFields */
 const SCALAR_FIELDS: {
   key: ListingBriefScalarField
   label: string
   placeholder: string
 }[] = [
-  { key: 'pets', label: 'Pets', placeholder: 'e.g. Cats OK with deposit' },
   { key: 'utilities', label: 'Utilities', placeholder: 'e.g. Heat included; tenant pays power' },
   { key: 'laundry', label: 'Laundry', placeholder: 'e.g. In-unit washer/dryer' },
   { key: 'furnished', label: 'Furnished', placeholder: 'e.g. Unfurnished' },
@@ -325,7 +330,7 @@ export function PropertyListingAiPanel({
   canEdit: boolean
   /** Read-only overview cards before Parking (e.g. Beds, Baths) */
   leadingFields?: React.ReactNode
-  /** Read-only overview cards after Parking (e.g. Asking rate, Garage) */
+  /** Read-only overview cards after Parking + Pets (e.g. Asking rate, Garage) */
   midFields?: React.ReactNode
   /** Meta overview cards rendered after Neighborhood (e.g. Type, Area) */
   trailingFields?: React.ReactNode
@@ -513,6 +518,14 @@ export function PropertyListingAiPanel({
             value={brief[PARKING_FIELD.key]}
             options={briefOptions[PARKING_FIELD.key] ?? DEFAULT_LISTING_BRIEF_OPTIONS[PARKING_FIELD.key]}
             onChange={(v) => updateScalarField(PARKING_FIELD.key, v)}
+          />
+          <BriefCombobox
+            fieldKey={PETS_FIELD.key}
+            label={PETS_FIELD.label}
+            placeholder={PETS_FIELD.placeholder}
+            value={brief[PETS_FIELD.key]}
+            options={briefOptions[PETS_FIELD.key] ?? DEFAULT_LISTING_BRIEF_OPTIONS[PETS_FIELD.key]}
+            onChange={(v) => updateScalarField(PETS_FIELD.key, v)}
           />
           {midFields}
           {SCALAR_FIELDS.map((f) => (

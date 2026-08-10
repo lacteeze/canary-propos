@@ -82,6 +82,21 @@ function shortProperty(address: string): string {
   return street.length > 42 ? `${street.slice(0, 40)}…` : street
 }
 
+/** Drop a trailing city segment when it already appears earlier in the address. */
+function cleanPropertyDisplay(address: string): string {
+  const parts = address
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)
+  if (parts.length < 2) return address
+  const last = parts[parts.length - 1]!
+  const earlier = parts.slice(0, -1)
+  if (earlier.some((p) => p.toLowerCase() === last.toLowerCase())) {
+    return earlier.join(', ')
+  }
+  return address
+}
+
 type SaveTone = 'idle' | 'saving' | 'saved' | 'error'
 
 type PipelineCardProps = {
@@ -191,9 +206,11 @@ type Props = {
   inquiries: CanaryInquiry[]
   /** Debounced background sync only — never awaited for UI. */
   onChanged?: () => void
+  /** Open Canary property detail (EntityDetailDrawer). */
+  onOpenProperty?: (args: { propertyId: string | null; address: string }) => void
 }
 
-export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
+export function LeasingPipelineView({ inquiries: initial, onChanged, onOpenProperty }: Props) {
   const [items, setItems] = useState(initial)
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -704,7 +721,26 @@ export function LeasingPipelineView({ inquiries: initial, onChanged }: Props) {
               <div className="cy-pipeline-avatar">{initials(selected.name)}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="cy-pipeline-card-name">{selected.name}</div>
-                <div className="cy-pipeline-card-prop">{selected.property}</div>
+                {selected.property !== 'General interest' && onOpenProperty ? (
+                  <button
+                    type="button"
+                    className="cy-pipeline-card-prop is-link"
+                    title="Open property"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const propertyId = selected.propertyId
+                      const address = selected.property
+                      setSelectedId(null)
+                      onOpenProperty({ propertyId, address })
+                    }}
+                  >
+                    {cleanPropertyDisplay(selected.property)}
+                  </button>
+                ) : (
+                  <div className="cy-pipeline-card-prop">
+                    {cleanPropertyDisplay(selected.property)}
+                  </div>
+                )}
               </div>
               <button type="button" className="cy-btn" onClick={() => setSelectedId(null)}>
                 Close

@@ -20,6 +20,7 @@ import type {
   InquiryType,
 } from './types'
 import { isGeneralInterestNote } from './types'
+import { formatPropertyFullLabel } from './property-ops'
 
 const EXPIRY_WINDOW_DAYS = 90
 
@@ -628,7 +629,8 @@ export async function loadCanaryDb(
       // Keep general-interest /rent leads even when no property is linked.
       if (!prop && !generalInterest) return null
       const propertyLabel = prop
-        ? fullAddress(prop.street_address, prop.city)
+        ? (formatPropertyFullLabel(prop.street_address, prop.city) ??
+          fullAddress(prop.street_address, prop.city))
         : 'General interest'
       // Once re-linked to a listing, treat as a normal prospect for labels.
       const isGeneralInterest = generalInterest && !i.listing_id

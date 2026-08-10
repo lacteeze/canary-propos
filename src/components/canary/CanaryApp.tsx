@@ -2906,6 +2906,19 @@ export default function CanaryApp({
             <LeasingPipelineView
               inquiries={scoped.inquiries}
               onChanged={() => router.refresh()}
+              onOpenProperty={({ propertyId, address }) => {
+                if (propertyId) {
+                  setDrawer({ kind: 'property', id: propertyId })
+                  return
+                }
+                const prop = db.properties.find(
+                  (p) =>
+                    p.address === address ||
+                    short(p.address) === short(address) ||
+                    p.address.startsWith(short(address)),
+                )
+                if (prop) setDrawer({ kind: 'property', id: prop.id })
+              }}
             />
           )}
 

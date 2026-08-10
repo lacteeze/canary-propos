@@ -855,10 +855,12 @@ export default function EntityDetailDrawer({
   const router = useRouter()
   const [auditKey, setAuditKey] = useState(0)
   const [editingProperty, setEditingProperty] = useState(false)
+  const [showPhotos, setShowPhotos] = useState(false)
   const [deletingLease, setDeletingLease] = useState(false)
 
   React.useEffect(() => {
     setEditingProperty(false)
+    setShowPhotos(false)
   }, [drawer?.kind, drawer?.id])
 
   React.useEffect(() => {
@@ -866,12 +868,13 @@ export default function EntityDetailDrawer({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (editingProperty) setEditingProperty(false)
+        else if (showPhotos) setShowPhotos(false)
         else onClose()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [drawer, onClose, editingProperty])
+  }, [drawer, onClose, editingProperty, showPhotos])
 
   const refresh = () => {
     setAuditKey((k) => k + 1)
@@ -894,6 +897,7 @@ export default function EntityDetailDrawer({
   let auditId = drawer.id
   let sections: React.ReactNode[] = []
   let propertyPhotoSection: React.ReactNode = null
+  let propertyPhotoCount = 0
   let found = true
   let propertyForEdit: CanaryProperty | null = null
 
@@ -1202,6 +1206,7 @@ export default function EntityDetailDrawer({
           </div>
         )
       }
+      propertyPhotoCount = p.listingPhotoPaths?.length ?? 0
       if (canEdit && p.propertyDbId && db.orgId) {
         propertyPhotoSection = (
           <PropertyPhotoUpload
@@ -1474,6 +1479,18 @@ export default function EntityDetailDrawer({
               {sub && <div style={{ color: 'var(--dim)', fontSize: 13, marginTop: 2 }}>{sub}</div>}
             </div>
             <div className="cy-property-modal-actions">
+              <button
+                type="button"
+                className="cy-property-modal-photos-btn"
+                onClick={() => setShowPhotos((v) => !v)}
+                aria-pressed={showPhotos}
+              >
+                {showPhotos
+                  ? 'Hide photos'
+                  : propertyPhotoCount > 0
+                    ? `View photos (${propertyPhotoCount})`
+                    : 'View photos'}
+              </button>
               {propertyForEdit && canEdit && (
                 <button type="button" className="cy-property-modal-secondary-btn" onClick={() => setEditingProperty(true)}>✎ Edit</button>
               )}
@@ -1485,18 +1502,20 @@ export default function EntityDetailDrawer({
               )}
             </div>
           </header>
-          <div className="cy-property-modal-body">
+          <div className={`cy-property-modal-body${showPhotos ? ' is-photos-open' : ''}`}>
             <div className="cy-property-modal-fields">
               {sections}
               {auditTable && <AuditLogPanel key={auditKey} tableName={auditTable} recordId={auditId} canEdit={canEdit} />}
             </div>
-            <div className="cy-property-modal-media">
-              {propertyPhotoSection ?? (
-                <div className="cy-property-modal-media-empty">
-                  {canEdit ? 'Photos can be added once this property is linked to a database record.' : 'No photos available.'}
-                </div>
-              )}
-            </div>
+            {showPhotos && (
+              <div className="cy-property-modal-media">
+                {propertyPhotoSection ?? (
+                  <div className="cy-property-modal-media-empty">
+                    {canEdit ? 'Photos can be added once this property is linked to a database record.' : 'No photos available.'}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
         {editingProperty && propertyForEdit && canEdit && (

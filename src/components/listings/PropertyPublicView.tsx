@@ -182,7 +182,17 @@ export function PropertyPublicView({
         </div>
       </ListingPhotoGallery>
 
-      <main style={{ maxWidth: 1180, margin: '0 auto', padding: '40px clamp(20px, 4vw, 32px) 64px' }}>
+      <main
+        style={{
+          boxSizing: 'border-box',
+          width: '100%',
+          maxWidth: 1180,
+          minWidth: 0,
+          margin: '0 auto',
+          padding: '40px clamp(20px, 4vw, 32px) 64px',
+          overflowX: 'clip',
+        }}
+      >
         <div
           style={{
             marginBottom: 32,
@@ -190,6 +200,8 @@ export function PropertyPublicView({
             borderRadius: 14,
             border: '1px solid var(--border)',
             background: 'var(--elev)',
+            minWidth: 0,
+            maxWidth: '100%',
           }}
         >
           <p
@@ -214,7 +226,17 @@ export function PropertyPublicView({
           </div>
         </div>
 
-        <div style={{ display: 'grid', gap: 40 }}>
+        {/* minmax(0,1fr) prevents Hospitable iframe / carousel min-content from blowing the column */}
+        <div
+          style={{
+            display: 'grid',
+            gap: 40,
+            gridTemplateColumns: 'minmax(0, 1fr)',
+            width: '100%',
+            maxWidth: '100%',
+            minWidth: 0,
+          }}
+        >
           {hospitableSiteUuid && hospitableWidgetPropertyId ? (
             <HospitableDirectBookingWidget
               siteUuid={hospitableSiteUuid}
@@ -223,7 +245,7 @@ export function PropertyPublicView({
           ) : null}
 
           {unit?.amenities && unit.amenities.length > 0 && (
-            <section>
+            <section style={{ minWidth: 0, maxWidth: '100%' }}>
               <h2 style={{ margin: '0 0 14px', fontSize: 18, fontWeight: 700 }}>Amenities</h2>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {unit.amenities.map((a, i) => (
@@ -236,14 +258,14 @@ export function PropertyPublicView({
           )}
 
           {fullAddress && mapsApiKey && (
-            <section>
+            <section style={{ minWidth: 0, maxWidth: '100%' }}>
               <h2 style={{ margin: '0 0 14px', fontSize: 18, fontWeight: 700 }}>Location</h2>
               <div style={{ overflow: 'hidden', borderRadius: 16, border: '1px solid var(--border)' }}>
                 <iframe
                   title="Property location"
                   width="100%"
                   height="320"
-                  style={{ border: 0, display: 'block' }}
+                  style={{ border: 0, display: 'block', maxWidth: '100%' }}
                   loading="lazy"
                   allowFullScreen
                   referrerPolicy="no-referrer-when-downgrade"

@@ -30,6 +30,7 @@
   width: 100%;
   min-width: 0;
   max-width: 100%;
+  overflow-wrap: anywhere;
   background: var(--elev);
   border: 1px solid var(--border);
   border-radius: 18px;
@@ -37,12 +38,32 @@
   box-shadow: var(--shadow);
 }
 
-/* Forms grid: share columns when multiple cards; solo card fills content width */
+/*
+ * Forms grid: share columns when multiple cards.
+ * Use minmax(0, …) so auto-fit cannot expand past the content column when a
+ * sibling (Hospitable iframe, similar-homes track) has huge intrinsic width.
+ */
 .cpub-forms-stack {
   display: grid;
   gap: 24px;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Solo interest form: comfortable reading width; full width on small screens */
+.cpub-forms-stack:has(> .cpub-form-card:only-child) {
+  max-width: min(100%, 720px);
+}
+
+/* Two+ cards (listing inquiry + interest): side-by-side from tablet up */
+@media (min-width: 720px) {
+  .cpub-forms-stack:has(> .cpub-form-card:nth-child(2)) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 100%;
+  }
 }
 
 .cpub-forms-stack > .cpub-form-card {
@@ -325,7 +346,10 @@
  */
 .cpub-booking-widget {
   margin-bottom: 8px;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
+  box-sizing: border-box;
 }
 
 .cpub-booking-widget__intro {
@@ -378,6 +402,9 @@
 .cpub-booking-widget__frame {
   position: relative;
   z-index: 1;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   border-radius: 14px;
   border: 1px solid color-mix(in srgb, var(--border) 70%, #d0d0d0);
@@ -390,8 +417,10 @@
 .cpub-booking-widget__frame iframe,
 .cpub-booking-widget__frame #booking-iframe {
   display: block;
-  width: 100%;
-  max-width: 100%;
+  /* Loader may set a large inline width — force containment in the content column */
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
   border: 0;
   background: #ffffff;
   /* Loader sets an initial height; postMessage then resizes. */
@@ -412,7 +441,11 @@
 .cpub-similar-track {
   display: flex;
   gap: 18px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
   scroll-padding-inline: 4px;
   padding-bottom: 8px;

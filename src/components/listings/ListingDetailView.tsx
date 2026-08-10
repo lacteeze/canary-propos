@@ -232,8 +232,27 @@ export function ListingDetailView({
         </div>
       </ListingPhotoGallery>
 
-      <main style={{ maxWidth: 1180, margin: '0 auto', padding: '40px clamp(20px, 4vw, 32px) 64px' }}>
-        <div style={{ display: 'grid', gap: 40, gridTemplateColumns: 'minmax(0, 1fr)' }}>
+      <main
+        style={{
+          boxSizing: 'border-box',
+          width: '100%',
+          maxWidth: 1180,
+          minWidth: 0,
+          margin: '0 auto',
+          padding: '40px clamp(20px, 4vw, 32px) 64px',
+          overflowX: 'clip',
+        }}
+      >
+        <div
+          style={{
+            display: 'grid',
+            gap: 40,
+            gridTemplateColumns: 'minmax(0, 1fr)',
+            width: '100%',
+            maxWidth: '100%',
+            minWidth: 0,
+          }}
+        >
           <div
             style={{
               display: 'grid',

@@ -34,17 +34,35 @@ const PETS_FIELD: {
   placeholder: string
 } = { key: 'pets', label: 'Pets', placeholder: 'e.g. Cats OK with deposit' }
 
-/** After Parking + Pets + mid overview cards; Type/Area stay in trailingFields */
-const SCALAR_FIELDS: {
+const UTILITIES_FIELD: {
+  key: ListingBriefScalarField
+  label: string
+  placeholder: string
+} = {
+  key: 'utilities',
+  label: 'Utilities',
+  placeholder: 'e.g. Heat included; tenant pays power',
+}
+
+/** After Asking rate (midFields); Garage slots in via postFurnishedFields */
+const PRE_GARAGE_FIELDS: {
   key: ListingBriefScalarField
   label: string
   placeholder: string
 }[] = [
-  { key: 'utilities', label: 'Utilities', placeholder: 'e.g. Heat included; tenant pays power' },
   { key: 'laundry', label: 'Laundry', placeholder: 'e.g. In-unit washer/dryer' },
   { key: 'furnished', label: 'Furnished', placeholder: 'e.g. Unfurnished' },
-  { key: 'neighborhood', label: 'Neighborhood', placeholder: 'Near downtown, quiet street…' },
 ]
+
+const NEIGHBORHOOD_FIELD: {
+  key: ListingBriefScalarField
+  label: string
+  placeholder: string
+} = {
+  key: 'neighborhood',
+  label: 'Neighborhood',
+  placeholder: 'Near downtown, quiet street…',
+}
 
 const fieldStyle: React.CSSProperties = {
   border: '1px solid var(--border)',
@@ -324,14 +342,17 @@ export function PropertyListingAiPanel({
   canEdit,
   leadingFields,
   midFields,
+  postFurnishedFields,
   trailingFields,
 }: {
   propertyId: string
   canEdit: boolean
   /** Read-only overview cards before Parking (e.g. Beds, Baths) */
   leadingFields?: React.ReactNode
-  /** Read-only overview cards after Parking + Pets (e.g. Asking rate, Garage) */
+  /** Read-only overview cards after Utilities (e.g. Asking rate) */
   midFields?: React.ReactNode
+  /** Read-only overview cards after Furnished (e.g. Garage) */
+  postFurnishedFields?: React.ReactNode
   /** Meta overview cards rendered after Neighborhood (e.g. Type, Area) */
   trailingFields?: React.ReactNode
 }) {
@@ -462,10 +483,11 @@ export function PropertyListingAiPanel({
   if (!canEdit) {
     return (
       <div style={{ display: 'grid', gap: 14 }}>
-        {leadingFields || midFields || trailingFields ? (
+        {leadingFields || midFields || postFurnishedFields || trailingFields ? (
           <div style={FIELD_GRID_STYLE}>
             {leadingFields}
             {midFields}
+            {postFurnishedFields}
             {trailingFields}
           </div>
         ) : null}
@@ -527,8 +549,19 @@ export function PropertyListingAiPanel({
             options={briefOptions[PETS_FIELD.key] ?? DEFAULT_LISTING_BRIEF_OPTIONS[PETS_FIELD.key]}
             onChange={(v) => updateScalarField(PETS_FIELD.key, v)}
           />
+          <BriefCombobox
+            fieldKey={UTILITIES_FIELD.key}
+            label={UTILITIES_FIELD.label}
+            placeholder={UTILITIES_FIELD.placeholder}
+            value={brief[UTILITIES_FIELD.key]}
+            options={
+              briefOptions[UTILITIES_FIELD.key] ??
+              DEFAULT_LISTING_BRIEF_OPTIONS[UTILITIES_FIELD.key]
+            }
+            onChange={(v) => updateScalarField(UTILITIES_FIELD.key, v)}
+          />
           {midFields}
-          {SCALAR_FIELDS.map((f) => (
+          {PRE_GARAGE_FIELDS.map((f) => (
             <BriefCombobox
               key={f.key}
               fieldKey={f.key}
@@ -539,6 +572,18 @@ export function PropertyListingAiPanel({
               onChange={(v) => updateScalarField(f.key, v)}
             />
           ))}
+          {postFurnishedFields}
+          <BriefCombobox
+            fieldKey={NEIGHBORHOOD_FIELD.key}
+            label={NEIGHBORHOOD_FIELD.label}
+            placeholder={NEIGHBORHOOD_FIELD.placeholder}
+            value={brief[NEIGHBORHOOD_FIELD.key]}
+            options={
+              briefOptions[NEIGHBORHOOD_FIELD.key] ??
+              DEFAULT_LISTING_BRIEF_OPTIONS[NEIGHBORHOOD_FIELD.key]
+            }
+            onChange={(v) => updateScalarField(NEIGHBORHOOD_FIELD.key, v)}
+          />
           {trailingFields}
           <FeaturesMultiSelect
             selected={brief.features}

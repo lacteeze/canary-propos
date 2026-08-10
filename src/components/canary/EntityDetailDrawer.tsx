@@ -1147,13 +1147,13 @@ export default function EntityDetailDrawer({
         </>
       )
       const overviewMidFields = (
-        <>
-          <OverviewFieldCard
-            label="Asking rate"
-            value={p.rate != null ? money(p.rate) + '/mo' : '—'}
-          />
-          <OverviewFieldCard label="Garage" value={p.hasGarage ? 'Yes' : 'No'} />
-        </>
+        <OverviewFieldCard
+          label="Asking rate"
+          value={p.rate != null ? money(p.rate) + '/mo' : '—'}
+        />
+      )
+      const overviewPostFurnishedFields = (
+        <OverviewFieldCard label="Garage" value={p.hasGarage ? 'Yes' : 'No'} />
       )
       const overviewTrailingFields = (
         <>
@@ -1208,12 +1208,14 @@ export default function EntityDetailDrawer({
               canEdit={canEdit}
               leadingFields={overviewLeadingFields}
               midFields={overviewMidFields}
+              postFurnishedFields={overviewPostFurnishedFields}
               trailingFields={overviewTrailingFields}
             />
           ) : (
             <div style={OVERVIEW_FIELD_GRID}>
               {overviewLeadingFields}
               {overviewMidFields}
+              {overviewPostFurnishedFields}
               {overviewTrailingFields}
             </div>
           )}

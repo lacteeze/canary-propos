@@ -761,7 +761,7 @@ function WebsiteListingsSection({
 }) {
   return (
     <div style={{ marginTop: 14 }}>
-      <div className="cy-drawer-section-title">Website listing</div>
+      <div className="cy-drawer-section-title">Listing</div>
       {listings.length === 0 ? (
         <div style={{ color: 'var(--dim)', fontSize: 13, padding: '4px 0 2px' }}>
           No live website listing

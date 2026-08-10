@@ -1457,7 +1457,7 @@ export default function EntityDetailDrawer({
   if (isPropertyModal) {
     return (
       <>
-        <div className="cy-property-modal-backdrop" onClick={onClose} aria-hidden="true" />
+        <div className="cy-property-modal-backdrop" aria-hidden="true" />
         <div
           className="cy-property-modal"
           role="dialog"

@@ -189,7 +189,7 @@
 }
 
 .cnry[data-ui='macos27'] .cy-property-modal {
-  border-radius: var(--mac-radius-window);
+  border-radius: 0;
 }
 
 /* ---------- DropdownMenu (Menus / Popovers pages) ---------- */

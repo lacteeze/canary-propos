@@ -2907,17 +2907,30 @@ export default function CanaryApp({
               inquiries={scoped.inquiries}
               onChanged={() => router.refresh()}
               onOpenProperty={({ propertyId, address }) => {
-                if (propertyId) {
-                  setDrawer({ kind: 'property', id: propertyId })
+                // Inquiry.propertyId is properties.id (propertyDbId). Drawer expects
+                // CanaryProperty.id (unit id). Also accept a unit id if passed.
+                const byId = propertyId
+                  ? db.properties.find(
+                      (p) => p.propertyDbId === propertyId || p.id === propertyId,
+                    )
+                  : undefined
+                const street = short(address)
+                const byAddress =
+                  byId ??
+                  db.properties.find(
+                    (p) =>
+                      p.address === address ||
+                      short(p.address) === street ||
+                      (street.length > 0 &&
+                        (p.address.startsWith(street) ||
+                          short(p.address).startsWith(street) ||
+                          street.startsWith(short(p.address)))),
+                  )
+                if (byAddress) {
+                  setDrawer({ kind: 'property', id: byAddress.id })
                   return
                 }
-                const prop = db.properties.find(
-                  (p) =>
-                    p.address === address ||
-                    short(p.address) === short(address) ||
-                    p.address.startsWith(short(address)),
-                )
-                if (prop) setDrawer({ kind: 'property', id: prop.id })
+                toast.error('Property not found')
               }}
             />
           )}

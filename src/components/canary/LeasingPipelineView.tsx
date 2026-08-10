@@ -99,6 +99,8 @@ function PipelineCard({
   onAdvance,
 }: PipelineCardProps) {
   const canAdvance = Boolean(nextInquiryStage(inquiry.status))
+  // Drop often synthesizes a click after dragend — ignore that click.
+  const suppressClickRef = useRef(false)
 
   return (
     <article
@@ -106,10 +108,18 @@ function PipelineCard({
         dragging ? ' is-dragging' : ''
       }`}
       draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onDoubleClick={(e) => {
-        e.preventDefault()
+      onDragStart={(e) => {
+        suppressClickRef.current = true
+        onDragStart(e)
+      }}
+      onDragEnd={() => {
+        onDragEnd()
+        window.setTimeout(() => {
+          suppressClickRef.current = false
+        }, 50)
+      }}
+      onClick={() => {
+        if (suppressClickRef.current) return
         onSelect()
       }}
     >

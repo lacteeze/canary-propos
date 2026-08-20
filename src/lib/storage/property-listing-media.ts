@@ -5,9 +5,12 @@ import { createPublicClient } from '@/lib/supabase/public'
 
 /** Listing photo paths for a property, ordered. Empty if none / not readable. */
 export async function getListingPhotoPathsForProperty(
-  propertyId: string
+  propertyId: string,
+  // Staff lookup client when anon RLS hides leased-home media.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client?: { from: (table: string) => any },
 ): Promise<string[]> {
-  const supabase = createPublicClient()
+  const supabase = client ?? createPublicClient()
   const { data, error } = await supabase
     .from('property_media')
     .select('storage_path, sort_order')
@@ -21,7 +24,7 @@ export async function getListingPhotoPathsForProperty(
     return []
   }
 
-  return (data ?? []).map((r) => r.storage_path).filter(Boolean)
+  return (data ?? []).map((r: { storage_path: string }) => r.storage_path).filter(Boolean)
 }
 
 /** Batch: property_id → ordered listing photo paths */

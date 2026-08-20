@@ -13,7 +13,6 @@ export type PropertyPublicUnit = {
   bathrooms: number | null
   sq_footage: number | null
   amenities: string[] | null
-  asking_rent: number | null
   status: string | null
 }
 
@@ -51,14 +50,6 @@ export type PropertyPublicViewProps = {
     longTerm: string
     midTerm: string
   }
-}
-
-function formatCAD(n: number) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: 'CAD',
-    maximumFractionDigits: 0,
-  }).format(n)
 }
 
 export function PropertyPublicView({
@@ -103,7 +94,7 @@ export function PropertyPublicView({
   const heroAddress = [streetLine, cityLine, provinceLine].filter(Boolean).join(', ')
   const fullAddress = heroAddress || streetLine || 'Property'
   const homesHref = orgSlug && orgSlug !== 'canary' ? `/?org=${orgSlug}#homes` : '/#homes'
-  const rent = unit?.asking_rent
+  const amenityList = Array.isArray(unit?.amenities) ? unit.amenities : []
 
   const briefParking =
     property.listing_brief &&
@@ -113,7 +104,7 @@ export function PropertyPublicView({
       : ''
   const parkingResolved = resolveParkingDisplay({
     briefParking,
-    amenities: unit?.amenities ?? null,
+    amenities: amenityList,
   })
   const parkingFromText = parkingResolved === '—' ? null : parkingResolved
 
@@ -171,12 +162,6 @@ export function PropertyPublicView({
             <div className="cpub-listing-hero-stat">
               {unit.sq_footage}
               <span>Sq ft</span>
-            </div>
-          )}
-          {rent != null && (
-            <div className="cpub-listing-hero-price">
-              {formatCAD(Number(rent))}
-              <span>/mo</span>
             </div>
           )}
         </div>
@@ -244,11 +229,11 @@ export function PropertyPublicView({
             />
           ) : null}
 
-          {unit?.amenities && unit.amenities.length > 0 && (
+          {amenityList.length > 0 && (
             <section style={{ minWidth: 0, maxWidth: '100%' }}>
               <h2 style={{ margin: '0 0 14px', fontSize: 18, fontWeight: 700 }}>Amenities</h2>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {unit.amenities.map((a, i) => (
+                {amenityList.map((a, i) => (
                   <span key={i} className="cpub-amenity">
                     {a}
                   </span>
@@ -290,15 +275,4 @@ export function PropertyPublicView({
       </main>
     </>
   )
-}
-
-/** Format lease availability for public property pages (en-CA). */
-export function formatPropertyAvailabilityLabel(leaseEndDate: string | null | undefined): string {
-  if (!leaseEndDate) return 'Currently leased'
-  const formatted = new Date(`${leaseEndDate}T12:00:00`).toLocaleDateString('en-CA', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-  return `Leased until ${formatted}`
 }

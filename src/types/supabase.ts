@@ -1919,6 +1919,18 @@ export type Database = {
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       org_id: { Args: never; Returns: string }
       person_id: { Args: never; Returns: string }
+      public_property_id_for_listing: {
+        Args: { p_listing_id: string; p_org_id: string }
+        Returns: string | null
+      }
+      public_property_id_for_slug: {
+        Args: { p_org_id: string; p_slug: string }
+        Returns: string | null
+      }
+      public_property_is_leased: {
+        Args: { p_property_id: string }
+        Returns: boolean
+      }
       public_property_lease_end: {
         Args: { p_property_id: string }
         Returns: string | null

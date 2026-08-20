@@ -1,21 +1,17 @@
 // src/app/(public)/listings/[id]/page.tsx
-// Public listing detail — UUID path; redirects to /{slug} when slug is set.
+// Public listing detail — UUID path; redirects to /{slug} when a public slug exists.
 import { notFound, permanentRedirect } from 'next/navigation'
-import { preload } from 'react-dom'
 import {
-  LISTING_DETAIL_SELECT,
-  ListingDetailView,
-  type ListingDetailListing,
-} from '@/components/listings/ListingDetailView'
-import { getLandingCopy } from '@/lib/landing/content'
-import { getPublishedListings } from '@/lib/landing/get-published-listings'
-import { getDetailPageCarouselGroups } from '@/lib/listings/browse-utils'
+  listingIsPubliclyAvailable,
+  loadPublishedListingById,
+  loadPropertyForListingId,
+  loadPropertyFromListing,
+  renderPublishedListingPage,
+  renderPropertyPublicPage,
+} from '@/lib/listings/public-slug-page'
 import { isListingUuid } from '@/lib/listings/listing-href'
-import { createPublicClient } from '@/lib/supabase/public'
 import { getOrgBySlug } from '@/lib/orgs'
 import { headers } from 'next/headers'
-import { getListingPhotoPathsForProperty } from '@/lib/storage/property-listing-media'
-import { resolveListingGalleryPhotos } from '@/lib/storage/listing-photos'
 
 /** Signed cover URLs expire (~1h) — must not reuse a cached RSC/fetch payload. */
 export const dynamic = 'force-dynamic'
@@ -40,76 +36,27 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
   if (!org) notFound()
 
   const orgQuery = orgSlugParam ? `?org=${orgSlugParam}` : ''
-  const supabase = createPublicClient()
 
-  let listing: ListingDetailListing | null = null
+  if (!isListingUuid(id)) {
+    permanentRedirect(`/${id}${orgQuery}`)
+  }
 
-  if (isListingUuid(id)) {
-    const { data } = await supabase
-      .from('listings')
-      .select(LISTING_DETAIL_SELECT)
-      .eq('id', id)
-      .eq('org_id', org.id)
-      .eq('status', 'published')
-      .single()
-    listing = data as ListingDetailListing | null
-    if (!listing) notFound()
+  const listing = await loadPublishedListingById(org.id, id)
+  if (listing && (await listingIsPubliclyAvailable(listing))) {
     if (listing.slug) {
       permanentRedirect(`/${listing.slug}${orgQuery}`)
     }
-  } else {
-    const { data } = await supabase
-      .from('listings')
-      .select(LISTING_DETAIL_SELECT)
-      .eq('slug', id)
-      .eq('org_id', org.id)
-      .eq('status', 'published')
-      .single()
-    listing = data as ListingDetailListing | null
-    if (!listing) notFound()
-    permanentRedirect(`/${listing.slug ?? id}${orgQuery}`)
+    return renderPublishedListingPage({ listing, orgSlug })
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const unit = listing.units as any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const property = unit?.properties as any
-  const listingCity = property?.city ?? "St. John's"
+  const property = listing
+    ? await loadPropertyFromListing(org.id, listing)
+    : await loadPropertyForListingId(org.id, id)
+  if (!property) notFound()
 
-  const galleryPromise = (async () => {
-    const fromMedia = property?.id ? await getListingPhotoPathsForProperty(property.id) : []
-    const photoPaths: string[] = (
-      fromMedia.length > 0 ? fromMedia : (property?.photo_paths ?? [])
-    ).filter((p: string) => !!p && !/^https?:\/\//i.test(p))
-    return resolveListingGalleryPhotos(photoPaths)
-  })()
-  const [{ all: listingPhotos, full: listingPhotosFull }, allPublished] = await Promise.all([
-    galleryPromise,
-    getPublishedListings(orgSlug),
-  ])
-
-  if (listingPhotos[0]) {
-    preload(listingPhotos[0], { as: 'image', fetchPriority: 'high' })
+  if (property.slug) {
+    permanentRedirect(`/${property.slug}${orgQuery}`)
   }
 
-  const carouselGroups = getDetailPageCarouselGroups(allPublished, listing.id, listingCity)
-  const cardCopy = getLandingCopy('en')
-  const listingCardCopy = {
-    tBed: cardCopy.tBed,
-    tBath: cardCopy.tBath,
-    tPark: cardCopy.tPark,
-    longTerm: cardCopy.longTerm,
-    midTerm: cardCopy.midTerm,
-  }
-
-  return (
-    <ListingDetailView
-      listing={listing}
-      listingPhotos={listingPhotos}
-      listingPhotosFull={listingPhotosFull}
-      carouselGroups={carouselGroups}
-      orgSlug={orgSlug}
-      listingCardCopy={listingCardCopy}
-    />
-  )
+  return renderPropertyPublicPage({ property, orgSlug, orgId: org.id })
 }

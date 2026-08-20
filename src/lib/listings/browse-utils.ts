@@ -450,7 +450,7 @@ export function filterSimilarListings(
 export function getDetailPageCarouselGroups(
   listings: BrowseListing[],
   currentId: string,
-  currentCity: string,
+  currentCity: string | null | undefined,
   options: CityGroupOptions = { mergeOuterBay: true }
 ): CityGroup[] {
   const currentDisplay = displayCityGroup(currentCity, options)
@@ -472,11 +472,11 @@ export type CityGroupOptions = {
   mergeOuterBay?: boolean
 }
 
-function normalizeCity(city: string): string {
-  return city.trim() || 'Other'
+function normalizeCity(city: string | null | undefined): string {
+  return (city ?? '').trim() || 'Other'
 }
 
-function displayCityGroup(city: string, options?: CityGroupOptions): string {
+function displayCityGroup(city: string | null | undefined, options?: CityGroupOptions): string {
   const normalized = normalizeCity(city)
   if (options?.mergeOuterBay) {
     if (/clarke'?s?\s*beach/i.test(normalized) || /^dildo$/i.test(normalized)) {

@@ -2,9 +2,10 @@
 // Root-level SEO slug: published listing first, else public property page (incl. leased).
 import { notFound, permanentRedirect } from 'next/navigation'
 import {
+  listingIsPubliclyAvailable,
   loadPublishedListingBySlug,
   loadPublishedListingForProperty,
-  loadPropertyBySlug,
+  loadPropertyForPublicSlug,
   renderPublishedListingPage,
   renderPropertyPublicPage,
 } from '@/lib/listings/public-slug-page'
@@ -43,19 +44,23 @@ export default async function PublicSlugPage({ params, searchParams }: PageProps
     permanentRedirect(`/listings/${slug}${orgQuery}`)
   }
 
-  // 1) Published listing with this slug
+  // 1) Published listing with this slug — only if the unit is still available
   const listingBySlug = await loadPublishedListingBySlug(org.id, slug)
-  if (listingBySlug) {
+  if (listingBySlug && (await listingIsPubliclyAvailable(listingBySlug))) {
     return renderPublishedListingPage({ listing: listingBySlug, orgSlug })
   }
 
-  // 2) Property with this slug
-  const property = await loadPropertyBySlug(org.id, slug)
+  // 2) Property with this slug, or an unpublished listing slug that maps to a property
+  const property = await loadPropertyForPublicSlug(org.id, slug)
   if (!property) notFound()
 
-  // Prefer full listing detail when any unit on the property is published
+  if (property.slug && property.slug !== slug) {
+    permanentRedirect(`/${property.slug}${orgQuery}`)
+  }
+
+  // Prefer full listing detail when a unit on the property is still publicly available
   const publishedOnProperty = await loadPublishedListingForProperty(org.id, property.id)
-  if (publishedOnProperty) {
+  if (publishedOnProperty && (await listingIsPubliclyAvailable(publishedOnProperty))) {
     return renderPublishedListingPage({ listing: publishedOnProperty, orgSlug })
   }
 

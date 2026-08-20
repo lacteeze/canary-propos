@@ -509,3 +509,26 @@ describe('filterListings garage', () => {
     expect(filtered.map((l) => l.id)).toEqual(['with'])
   })
 })
+
+describe('filterListings street suffix', () => {
+  it('matches rd addresses when the query uses road', () => {
+    const listings = [
+      listing({
+        id: 'pond',
+        hasGarage: false,
+        href: '/156-three-island-pond-rd',
+        shortAddress: '156 Three Island Pond Rd',
+      }),
+    ]
+    const filtered = filterListings(listings, {
+      q: 'https://canarypm.ca/156-three-island-pond-road',
+      term: 'all',
+      beds: '',
+      price: '',
+      pets: false,
+      garage: false,
+      sort: 'new',
+    })
+    expect(filtered.map((l) => l.id)).toEqual(['pond'])
+  })
+})

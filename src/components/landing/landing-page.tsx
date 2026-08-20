@@ -17,6 +17,7 @@ import {
 } from '@/lib/landing/content'
 import { DEFAULT_STAYS_HREF } from '@/lib/hospitable/map-property-to-stay'
 import type { BrowseListing } from '@/lib/listings/browse-types'
+import { listingMatchesAddressQuery } from '@/lib/listings/slug-aliases'
 import { createClient } from '@/lib/supabase/client'
 import { subscribeListingAlerts } from '@/app/actions/listing-alerts'
 import './landing-styles.css'
@@ -58,7 +59,13 @@ function matchListings(query: string, listings: BrowseListing[]) {
       if (priceM && !(listing.rentN && listing.rentN <= parseFloat(priceM[1].replace(/,/g, '')))) return false
       if (wantsPets && !listing.petFriendly) return false
       if (wantsGarage && !listing.hasGarage) return false
-      if (free && !`${listing.shortAddress} ${listing.city}`.toLowerCase().includes(free)) return false
+      if (
+        free &&
+        !listingMatchesAddressQuery(free, listing) &&
+        !listingMatchesAddressQuery(query, listing)
+      ) {
+        return false
+      }
       return true
     })
     .slice(0, 6)

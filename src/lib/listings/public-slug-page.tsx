@@ -22,6 +22,7 @@ import {
   publicPropertyIsLeased,
   publicPropertyLookupClient,
 } from '@/lib/listings/public-property-lookup'
+import { publicSlugLookupCandidates } from '@/lib/listings/slug-aliases'
 import { createPublicClient } from '@/lib/supabase/public'
 import { getListingPhotoPathsForProperty } from '@/lib/storage/property-listing-media'
 import { resolveListingGalleryPhotos } from '@/lib/storage/listing-photos'
@@ -112,11 +113,12 @@ export async function loadPublishedListingBySlug(
   const { data } = await supabase
     .from('listings')
     .select(LISTING_DETAIL_SELECT)
-    .eq('slug', slug)
     .eq('org_id', orgId)
     .eq('status', 'published')
-    .maybeSingle()
-  return (data as ListingDetailListing | null) ?? null
+    .in('slug', publicSlugLookupCandidates(slug))
+  const rows = (data as ListingDetailListing[] | null) ?? []
+  const exact = rows.find((row) => row.slug === slug)
+  return exact ?? rows[0] ?? null
 }
 
 export async function loadPublishedListingById(

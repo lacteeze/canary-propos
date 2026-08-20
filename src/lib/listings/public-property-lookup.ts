@@ -1,5 +1,6 @@
 import type { PropertyPublicProperty } from '@/components/listings/PropertyPublicView'
 import { unitLooksLeased } from '@/lib/listings/public-property-page'
+import { publicSlugLookupCandidates } from '@/lib/listings/slug-aliases'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createPublicClient } from '@/lib/supabase/public'
 
@@ -30,23 +31,45 @@ export function publicPropertyLookupClient(): LookupClient {
   return createPublicClient()
 }
 
+function pickPreferredSlugRow<T extends { slug?: string | null }>(
+  rows: T[],
+  requestedSlug: string,
+): T | null {
+  if (!rows.length) return null
+  const exact = rows.find((row) => row.slug === requestedSlug)
+  if (exact) return exact
+  const candidates = publicSlugLookupCandidates(requestedSlug)
+  const aliased = rows.find((row) => row.slug && candidates.includes(row.slug))
+  return aliased ?? rows[0] ?? null
+}
+
 async function selectPublicProperty(
   client: LookupClient,
   orgId: string,
   column: 'id' | 'slug',
   value: string,
 ): Promise<PropertyPublicProperty | null> {
-  const { data, error } = await client
+  const query = client
     .from('properties')
     .select(PROPERTY_PUBLIC_SELECT)
-    .eq(column, value)
     .eq('org_id', orgId)
-    .maybeSingle()
+
+  const { data, error } =
+    column === 'id'
+      ? await query.eq('id', value).maybeSingle()
+      : await (async () => {
+          const candidates = publicSlugLookupCandidates(value)
+          if (!candidates.length) return { data: [] as PropertyPublicProperty[], error: null }
+          return query.in('slug', candidates)
+        })()
+
   if (error) {
     console.error(`[selectPublicProperty:${column}]`, error.message)
     return null
   }
-  return (data as PropertyPublicProperty | null) ?? null
+  if (column === 'id') return (data as PropertyPublicProperty | null) ?? null
+  const rows = (Array.isArray(data) ? data : data ? [data] : []) as PropertyPublicProperty[]
+  return pickPreferredSlugRow(rows, value)
 }
 
 async function loadPropertyByUnitId(
@@ -91,16 +114,16 @@ export async function loadPropertyForPublicSlug(
   const bySlug = await selectPublicProperty(client, orgId, 'slug', slug)
   if (bySlug) return bySlug
 
-  const { data: listing, error } = await client
+  const { data: listings, error } = await client
     .from('listings')
-    .select('unit_id')
+    .select('unit_id, slug')
     .eq('org_id', orgId)
-    .eq('slug', slug)
-    .maybeSingle()
+    .in('slug', publicSlugLookupCandidates(slug))
   if (error) {
     console.error('[loadPropertyForPublicSlug:listing]', error.message)
     return null
   }
+  const listing = pickPreferredSlugRow(listings ?? [], slug)
   return loadPropertyByUnitId(client, orgId, listing?.unit_id)
 }
 

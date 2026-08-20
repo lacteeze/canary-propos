@@ -47,6 +47,9 @@ export default async function PublicSlugPage({ params, searchParams }: PageProps
   // 1) Published listing with this slug — only if the unit is still available
   const listingBySlug = await loadPublishedListingBySlug(org.id, slug)
   if (listingBySlug && (await listingIsPubliclyAvailable(listingBySlug))) {
+    if (listingBySlug.slug && listingBySlug.slug !== slug) {
+      permanentRedirect(`/${listingBySlug.slug}${orgQuery}`)
+    }
     return renderPublishedListingPage({ listing: listingBySlug, orgSlug })
   }
 

@@ -3,6 +3,7 @@ import {
   hasGarage,
   hasUtilitiesIncluded,
   filterListings,
+  getDetailPageCarouselGroups,
   isPetFriendly,
   mapListingRow,
   parseBrowseFilters,
@@ -480,6 +481,13 @@ describe('parseBrowseFilters garage', () => {
   it('defaults missing/empty garage to false', () => {
     expect(parseBrowseFilters({}).garage).toBe(false)
     expect(parseBrowseFilters({ garage: '' }).garage).toBe(false)
+  })
+})
+
+describe('getDetailPageCarouselGroups', () => {
+  it('does not throw when the current city is missing', () => {
+    expect(() => getDetailPageCarouselGroups([], 'listing-1', null)).not.toThrow()
+    expect(getDetailPageCarouselGroups([], 'listing-1', undefined)).toEqual([])
   })
 })
 

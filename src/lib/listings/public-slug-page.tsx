@@ -6,13 +6,16 @@ import {
 } from '@/components/listings/ListingDetailView'
 import {
   PropertyPublicView,
-  formatPropertyAvailabilityLabel,
   type PropertyPublicProperty,
   type PropertyPublicUnit,
 } from '@/components/listings/PropertyPublicView'
 import { getLandingCopy } from '@/lib/landing/content'
 import { getPublishedListings } from '@/lib/landing/get-published-listings'
 import { getDetailPageCarouselGroups } from '@/lib/listings/browse-utils'
+import {
+  propertyAvailabilityLabel,
+  unitLooksLeased,
+} from '@/lib/listings/public-property-page'
 import { createPublicClient } from '@/lib/supabase/public'
 import { getListingPhotoPathsForProperty } from '@/lib/storage/property-listing-media'
 import { resolveListingGalleryPhotos } from '@/lib/storage/listing-photos'
@@ -38,6 +41,33 @@ function listingCardCopyFromLanding() {
     longTerm: cardCopy.longTerm,
     midTerm: cardCopy.midTerm,
   }
+}
+
+function listingPropertyId(listing: ListingDetailListing): string | null {
+  return listing.units?.properties?.id ?? null
+}
+
+export async function listingIsPubliclyAvailable(
+  listing: ListingDetailListing,
+): Promise<boolean> {
+  const status = listing.units?.status ?? null
+  if ((status ?? '').toLowerCase() === 'str') return true
+  if (unitLooksLeased(status)) return false
+  const propertyId = listingPropertyId(listing)
+  if (!propertyId) return true
+  return !(await publicPropertyIsLeased(propertyId))
+}
+
+async function publicPropertyIsLeased(propertyId: string): Promise<boolean> {
+  const supabase = createPublicClient()
+  const { data, error } = await supabase.rpc('public_property_is_leased', {
+    p_property_id: propertyId,
+  })
+  if (error) {
+    console.error('[publicPropertyIsLeased]', error.message)
+    return false
+  }
+  return data === true
 }
 
 export async function renderPublishedListingPage(opts: {
@@ -99,6 +129,21 @@ export async function loadPublishedListingBySlug(
   return (data as ListingDetailListing | null) ?? null
 }
 
+export async function loadPublishedListingById(
+  orgId: string,
+  id: string,
+): Promise<ListingDetailListing | null> {
+  const supabase = createPublicClient()
+  const { data } = await supabase
+    .from('listings')
+    .select(LISTING_DETAIL_SELECT)
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .eq('status', 'published')
+    .maybeSingle()
+  return (data as ListingDetailListing | null) ?? null
+}
+
 export async function loadPublishedListingForProperty(
   orgId: string,
   propertyId: string,
@@ -134,19 +179,26 @@ export async function renderPropertyPublicPage(opts: {
   const { property, orgSlug, orgId } = opts
   const supabase = createPublicClient()
 
-  const [unitsRes, leaseEndRes, fromMedia, allPublished] = await Promise.all([
+  const [unitsRes, leasedRes, fromMedia, allPublished] = await Promise.all([
     supabase
       .from('units')
       .select(
-        'id, bedrooms, bathrooms, sq_footage, amenities, asking_rent, status, hospitable_widget_property_id'
+        'id, bedrooms, bathrooms, sq_footage, amenities, status, hospitable_widget_property_id'
       )
       .eq('property_id', property.id)
       .eq('org_id', orgId)
       .order('unit_number', { ascending: true }),
-    supabase.rpc('public_property_lease_end', { p_property_id: property.id }),
+    supabase.rpc('public_property_is_leased', { p_property_id: property.id }),
     getListingPhotoPathsForProperty(property.id),
     getPublishedListings(orgSlug),
   ])
+
+  if (unitsRes.error) {
+    console.error('[renderPropertyPublicPage:units]', unitsRes.error.message)
+  }
+  if (leasedRes.error) {
+    console.error('[renderPropertyPublicPage:leased]', leasedRes.error.message)
+  }
 
   const unitRows = unitsRes.data ?? []
   const unit = (unitRows[0] as PropertyPublicUnit | null) ?? null
@@ -172,23 +224,10 @@ export async function renderPropertyPublicPage(opts: {
     linkedListingId = publishedListing?.id ?? null
   }
 
-  const leaseEnd =
-    typeof leaseEndRes.data === 'string'
-      ? leaseEndRes.data
-      : leaseEndRes.data
-        ? String(leaseEndRes.data)
-        : null
-
-  const unitLooksLeased =
-    !!leaseEnd ||
-    (unit?.status ?? '').toLowerCase() === 'leased' ||
-    (unit?.status ?? '').toLowerCase() === 'occupied'
-
-  const availabilityLabel = leaseEnd
-    ? formatPropertyAvailabilityLabel(leaseEnd)
-    : unitLooksLeased
-      ? 'Currently leased'
-      : 'Not currently available'
+  const leased =
+    leasedRes.data === true ||
+    unitRows.some((row) => unitLooksLeased(row.status as string | null))
+  const availabilityLabel = propertyAvailabilityLabel(leased)
 
   const photoPaths: string[] = (
     fromMedia.length > 0 ? fromMedia : (property.photo_paths ?? [])
@@ -200,7 +239,11 @@ export async function renderPropertyPublicPage(opts: {
   }
 
   // Show similar published homes only — never inject this leased property into carousels
-  const carouselGroups = getDetailPageCarouselGroups(allPublished, '__property__', property.city)
+  const carouselGroups = getDetailPageCarouselGroups(
+    allPublished,
+    '__property__',
+    property.city ?? "St. John's",
+  )
 
   return (
     <PropertyPublicView
@@ -232,4 +275,66 @@ export async function loadPropertyBySlug(
     .eq('org_id', orgId)
     .maybeSingle()
   return (data as PropertyPublicProperty | null) ?? null
+}
+
+export async function loadPropertyById(
+  orgId: string,
+  propertyId: string,
+): Promise<PropertyPublicProperty | null> {
+  const supabase = createPublicClient()
+  const { data } = await supabase
+    .from('properties')
+    .select(PROPERTY_PUBLIC_SELECT)
+    .eq('id', propertyId)
+    .eq('org_id', orgId)
+    .maybeSingle()
+  return (data as PropertyPublicProperty | null) ?? null
+}
+
+/** Property for a public slug, including unpublished listing slugs (SECURITY DEFINER RPC). */
+export async function loadPropertyForPublicSlug(
+  orgId: string,
+  slug: string,
+): Promise<PropertyPublicProperty | null> {
+  const bySlug = await loadPropertyBySlug(orgId, slug)
+  if (bySlug) return bySlug
+
+  const supabase = createPublicClient()
+  const { data: propertyId, error } = await supabase.rpc('public_property_id_for_slug', {
+    p_org_id: orgId,
+    p_slug: slug,
+  })
+  if (error) {
+    console.error('[loadPropertyForPublicSlug]', error.message)
+    return null
+  }
+  if (!propertyId) return null
+  return loadPropertyById(orgId, propertyId)
+}
+
+/** Property for a listing UUID after the listing is unlisted (SECURITY DEFINER RPC). */
+export async function loadPropertyForListingId(
+  orgId: string,
+  listingId: string,
+): Promise<PropertyPublicProperty | null> {
+  const supabase = createPublicClient()
+  const { data: propertyId, error } = await supabase.rpc('public_property_id_for_listing', {
+    p_org_id: orgId,
+    p_listing_id: listingId,
+  })
+  if (error) {
+    console.error('[loadPropertyForListingId]', error.message)
+    return null
+  }
+  if (!propertyId) return null
+  return loadPropertyById(orgId, propertyId)
+}
+
+export async function loadPropertyFromListing(
+  orgId: string,
+  listing: ListingDetailListing,
+): Promise<PropertyPublicProperty | null> {
+  const propertyId = listingPropertyId(listing)
+  if (propertyId) return loadPropertyById(orgId, propertyId)
+  return loadPropertyForListingId(orgId, listing.id)
 }

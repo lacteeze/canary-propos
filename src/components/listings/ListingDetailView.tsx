@@ -33,6 +33,7 @@ export type ListingDetailListing = {
     sq_footage: number | null
     amenities: string[] | null
     asking_rent: number | null
+    status?: string | null
     hospitable_widget_property_id?: string | null
     properties: {
       id: string
@@ -79,6 +80,7 @@ export const LISTING_DETAIL_SELECT = `
     sq_footage,
     amenities,
     asking_rent,
+    status,
     hospitable_widget_property_id,
     properties (
       id,

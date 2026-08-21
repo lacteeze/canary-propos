@@ -118,3 +118,23 @@ export function ensureGeneralInterestNote(
   }
   return lines.join('\n').trim()
 }
+
+/**
+ * Parse preferred bedroom count from a general-interest note
+ * (e.g. "Beds: 2+" written by submitGeneralInterest).
+ */
+export function parseInterestBedsFromNote(note: string | null | undefined): number | null {
+  if (!note) return null
+  const match = note.match(/^\s*Beds:\s*(\d+)\+?\s*$/im)
+  if (!match?.[1]) return null
+  const n = Number.parseInt(match[1], 10)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/** Parse preferred area / city hint from a general-interest note. */
+export function parseInterestAreaFromNote(note: string | null | undefined): string | null {
+  if (!note) return null
+  const match = note.match(/^\s*Preferred area:\s*(.+?)\s*$/im)
+  const area = match?.[1]?.trim()
+  return area || null
+}

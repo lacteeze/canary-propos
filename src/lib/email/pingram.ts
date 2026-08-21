@@ -18,6 +18,11 @@ export interface SendPingramEmailOptions {
    * Mapped to Pingram `options.email.replyToAddresses`.
    */
   replyTo?: string | string[]
+  /**
+   * BCC address(es). Bare email or "Name <email@domain>".
+   * Mapped to Pingram `options.email.bccAddresses`.
+   */
+  bcc?: string | string[]
 }
 
 export interface SendPingramEmailResult {
@@ -42,9 +47,9 @@ export function formatEmailAddress(email: string, name?: string | null): string 
   return `"${safeName}" <${trimmedEmail}>`
 }
 
-function normalizeReplyTo(replyTo?: string | string[]): string[] | undefined {
-  if (!replyTo) return undefined
-  const list = (Array.isArray(replyTo) ? replyTo : [replyTo])
+function normalizeAddressList(value?: string | string[]): string[] | undefined {
+  if (!value) return undefined
+  const list = (Array.isArray(value) ? value : [value])
     .map((a) => a.trim())
     .filter(Boolean)
   return list.length > 0 ? list : undefined
@@ -61,6 +66,7 @@ export async function sendPingramEmail({
   template,
   from = DEFAULT_EMAIL_FROM,
   replyTo,
+  bcc,
 }: SendPingramEmailOptions): Promise<SendPingramEmailResult> {
   const apiKey = process.env.PINGRAM_API_KEY
   if (!apiKey) {
@@ -70,8 +76,19 @@ export async function sendPingramEmail({
   try {
     const html = await render(template)
     const { senderName, senderEmail } = parseFromHeader(from)
-    const replyToAddresses = normalizeReplyTo(replyTo)
+    const replyToAddresses = normalizeAddressList(replyTo)
+    const bccAddresses = normalizeAddressList(bcc)
     const client = new Pingram({ apiKey, region: 'ca' })
+
+    const emailOptions =
+      replyToAddresses || bccAddresses
+        ? {
+            email: {
+              ...(replyToAddresses ? { replyToAddresses } : {}),
+              ...(bccAddresses ? { bccAddresses } : {}),
+            },
+          }
+        : undefined
 
     await client.send({
       type,
@@ -85,9 +102,7 @@ export async function sendPingramEmail({
         ...(senderName ? { senderName } : {}),
         senderEmail,
       },
-      ...(replyToAddresses
-        ? { options: { email: { replyToAddresses } } }
-        : {}),
+      ...(emailOptions ? { options: emailOptions } : {}),
     })
 
     return { success: true }

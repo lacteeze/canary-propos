@@ -17,12 +17,22 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import {
   ensureGeneralInterestNote,
+  parseInterestAreaFromNote,
+  parseInterestBedsFromNote,
   rankMatchingHomes,
   type MatchHomeCandidate,
   type MatchHomeCriteria,
   type ScoredMatchHome,
 } from '@/lib/canary/match-homes'
 import { listingPublicHref, propertyPublicHref } from '@/lib/listings/listing-href'
+import { EMAIL_CONTACT, PUBLIC_SITE_URL } from '@/lib/email/brand'
+import {
+  MatchingHomesEmail,
+  type MatchingHomeEmailCard,
+} from '@/lib/email/templates/MatchingHomesEmail'
+import { mapListingRow, type ListingRow } from '@/lib/listings/browse-utils'
+import { getListingPhotoPathsByPropertyIds } from '@/lib/storage/property-listing-media'
+import { signListingPhotoPathsForEmail } from '@/lib/storage/listing-photos'
 
 // --- Action result type ---
 export type InquiryActionResult =
@@ -1207,7 +1217,7 @@ export async function listMatchingHomesForInquiry(
   const { data: inquiry } = await auth.supabase
     .from('inquiries')
     .select(
-      `id, property_id, listing_id, budget,
+      `id, property_id, listing_id, budget, note,
        properties!property_id(id, street_address, city),
        listings!listing_id(
          id, display_rent, unit_id,
@@ -1238,10 +1248,13 @@ export async function listMatchingHomesForInquiry(
     listingUnit?.properties ??
     null
 
+  const noteBeds = parseInterestBedsFromNote(inquiry.note)
+  const noteArea = parseInterestAreaFromNote(inquiry.note)
+
   const criteria: MatchHomeCriteria = {
     propertyId: inquiry.property_id ?? listingUnit?.property_id ?? sourceProp?.id ?? null,
-    city: sourceProp?.city ?? null,
-    bedrooms: listingUnit?.bedrooms ?? null,
+    city: sourceProp?.city ?? noteArea ?? null,
+    bedrooms: listingUnit?.bedrooms ?? noteBeds ?? null,
     bathrooms: listingUnit?.bathrooms != null ? Number(listingUnit.bathrooms) : null,
     rent:
       inquiry.budget ??
@@ -1528,4 +1541,169 @@ export async function assignInquiryToHome(
 
   revalidatePath('/app')
   return {}
+}
+
+function absolutePublicUrl(pathOrUrl: string): string {
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl
+  const path = pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`
+  return `${PUBLIC_SITE_URL}${path}`
+}
+
+function termBadgeForEmail(termType: string): string {
+  if (termType === 'mid') return 'MID TERM'
+  if (termType === 'short') return 'SHORT TERM'
+  return 'LONG TERM'
+}
+
+/**
+ * Manual staff action: email the inquirer branded cards for currently published
+ * matches. Never auto-sends — only runs when a manager clicks send.
+ * Always BCC leasing@ so the team has a delivery record.
+ */
+export async function sendMatchingHomesEmail(
+  inquiryId: string,
+): Promise<{ error?: string; sent?: number }> {
+  const idParsed = z.string().uuid().safeParse(inquiryId)
+  if (!idParsed.success) return { error: 'Invalid inquiry ID.' }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const person = await resolveAuthorPerson(supabase, user.id)
+  if (!person) return { error: 'Not authorized' }
+
+  const matchResult = await listMatchingHomesForInquiry(idParsed.data)
+  if (matchResult.error) return { error: matchResult.error }
+
+  const listed = (matchResult.homes ?? []).filter((h) => h.listingId)
+  if (listed.length === 0) {
+    return { error: 'No currently listed matches to email.' }
+  }
+
+  const { data: inquiry } = await supabase
+    .from('inquiries')
+    .select('id, name, email, status, org_id')
+    .eq('id', idParsed.data)
+    .eq('org_id', person.orgId)
+    .maybeSingle()
+
+  if (!inquiry?.email?.trim()) {
+    return { error: 'Inquiry has no email address.' }
+  }
+
+  const listingIds = listed.map((h) => h.listingId!).filter(Boolean)
+  const { data: listingRows, error: listingError } = await supabase
+    .from('listings')
+    .select(
+      `id, slug, listing_title, listing_description, display_rent, highlights, available_from, status, created_at,
+       units!unit_id(id, bedrooms, bathrooms, asking_rent, amenities,
+         properties!property_id(id, street_address, city, province, photo_paths, listing_brief))`,
+    )
+    .eq('org_id', person.orgId)
+    .eq('status', 'published')
+    .in('id', listingIds)
+
+  if (listingError) {
+    console.error('[sendMatchingHomesEmail] listings', listingError)
+    return { error: 'Failed to load listing details.' }
+  }
+
+  const rows = (listingRows ?? []) as ListingRow[]
+  if (!rows.length) {
+    return { error: 'No currently listed matches to email.' }
+  }
+
+  // Preserve match ranking order
+  const rowById = new Map(rows.map((r) => [r.id, r]))
+  const orderedRows = listingIds
+    .map((id) => rowById.get(id))
+    .filter((r): r is ListingRow => !!r)
+
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('slug')
+    .eq('id', person.orgId)
+    .maybeSingle()
+  const orgSlug = org?.slug ?? ''
+  const orgQuery = orgSlug ? `?org=${encodeURIComponent(orgSlug)}` : ''
+
+  const propertyIds = orderedRows
+    .map((r) => r.units?.properties?.id)
+    .filter((id): id is string => !!id)
+  const pathsByProperty = await getListingPhotoPathsByPropertyIds(propertyIds)
+
+  const coverPaths = orderedRows.map((row) => {
+    const propertyId = row.units?.properties?.id
+    const fromMedia = propertyId ? pathsByProperty.get(propertyId) : undefined
+    const fromLegacy = (row.units?.properties?.photo_paths ?? []).filter(
+      (p): p is string => !!p && !/^https?:\/\//i.test(p),
+    )
+    const paths = fromMedia?.length ? fromMedia : fromLegacy
+    return paths[0] ?? ''
+  })
+  const signedCovers = await signListingPhotoPathsForEmail(coverPaths)
+
+  const cards: MatchingHomeEmailCard[] = orderedRows.map((row, index) => {
+    const mapped = mapListingRow(row, '', orgQuery, index)
+    return {
+      href: absolutePublicUrl(mapped.href),
+      shortAddress: mapped.shortAddress,
+      rentFormatted: mapped.rentFormatted,
+      beds: mapped.beds,
+      bathsLabel: mapped.bathsLabel,
+      parking: mapped.parking,
+      termBadge: termBadgeForEmail(mapped.termType),
+      tags: mapped.tags,
+      photoUrl: signedCovers[index] || null,
+    }
+  })
+
+  const browseUrl = absolutePublicUrl(orgSlug ? `/?org=${encodeURIComponent(orgSlug)}#homes` : '/#homes')
+  const firstName = inquiry.name?.trim().split(/\s+/)[0] || 'there'
+  const subject =
+    cards.length === 1
+      ? `${cards[0].shortAddress} — a home that may fit`
+      : `${cards.length} homes that may fit what you're looking for`
+
+  const result = await sendEmail({
+    type: PINGRAM_EMAIL_TYPES.matchingHomes,
+    to: inquiry.email.trim(),
+    subject,
+    from: 'Canary PM <notifications@canarypm.ca>',
+    replyTo: formatEmailAddress(EMAIL_CONTACT.leasing, 'Canary Leasing'),
+    bcc: EMAIL_CONTACT.leasing,
+    template: React.createElement(MatchingHomesEmail, {
+      recipientName: inquiry.name?.trim() || firstName,
+      homes: cards,
+      browseUrl,
+    }),
+  })
+
+  if (!result.success) {
+    console.error('[sendMatchingHomesEmail] send failed:', result.error)
+    return { error: result.error || 'Failed to send email.' }
+  }
+
+  const addressSummary = cards.map((c) => c.shortAddress).join('; ')
+  await appendStaffNotes(
+    supabase,
+    person.orgId,
+    person.id,
+    [idParsed.data],
+    `Emailed ${cards.length} matching listed home${cards.length === 1 ? '' : 's'} to ${inquiry.email.trim()}: ${addressSummary}.`,
+  )
+
+  if (inquiry.status === 'new') {
+    await supabase
+      .from('inquiries')
+      .update({ status: 'contacted', updated_at: new Date().toISOString() })
+      .eq('id', idParsed.data)
+      .eq('org_id', person.orgId)
+  }
+
+  revalidatePath('/app')
+  return { sent: cards.length }
 }

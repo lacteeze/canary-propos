@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   ensureGeneralInterestNote,
+  parseInterestAreaFromNote,
+  parseInterestBedsFromNote,
   rankMatchingHomes,
   scoreHomeMatch,
   type MatchHomeCandidate,
@@ -74,5 +76,23 @@ describe('ensureGeneralInterestNote', () => {
     const once = ensureGeneralInterestNote(null, 'A')
     const twice = ensureGeneralInterestNote(once, 'B')
     expect(twice.match(/Converted from:/g)?.length).toBe(1)
+  })
+})
+
+describe('parseInterestBedsFromNote', () => {
+  it('reads Beds: N+ lines', () => {
+    expect(parseInterestBedsFromNote('[General interest]\nBeds: 2+\nPets: yes')).toBe(2)
+    expect(parseInterestBedsFromNote('Beds: 3')).toBe(3)
+  })
+
+  it('returns null when missing', () => {
+    expect(parseInterestBedsFromNote('Preferred area: Paradise')).toBeNull()
+    expect(parseInterestBedsFromNote(null)).toBeNull()
+  })
+})
+
+describe('parseInterestAreaFromNote', () => {
+  it('reads Preferred area lines', () => {
+    expect(parseInterestAreaFromNote('Preferred area: Mount Pearl')).toBe('Mount Pearl')
   })
 })

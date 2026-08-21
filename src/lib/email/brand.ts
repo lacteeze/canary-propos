@@ -7,9 +7,18 @@ export const DEFAULT_EMAIL_FROM = 'Canary PM <notifications@canarypm.ca>'
 
 export const EMAIL_CONTACT = {
   email: 'info@canarypm.ca',
+  /** BCC on tenant-facing match emails so leasing always has a copy. */
+  leasing: 'leasing@canarypm.ca',
   phoneDisplay: '(709) 200-9626',
   phoneTel: '+17092009626',
 } as const
+
+/** Public marketing site (listing links in outbound emails). */
+export const PUBLIC_SITE_URL = (
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  process.env.NEXT_PUBLIC_APP_URL ??
+  'https://canarypm.ca'
+).replace(/\/$/, '')
 
 /** Landing light palette (from landing-styles.css .cland2) */
 export const emailColors = {

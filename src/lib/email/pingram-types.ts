@@ -6,6 +6,8 @@ export const PINGRAM_EMAIL_TYPES = {
   listingAlertConfirm: 'listing_alert_confirm',
   listingAlertNotify: 'listing_alert_notify',
   inquiryNotification: 'inquiry_notification',
+  /** Manual staff send: matching published homes → inquirer. */
+  matchingHomes: 'matching_homes_offer',
   tenantInvite: 'tenant_invite',
   teamInvite: 'team_invite',
   workOrderOwnerApproval: 'work_order_owner_approval',

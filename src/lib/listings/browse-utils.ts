@@ -1,5 +1,6 @@
 import { deriveTermTypeFromHighlights } from '@/lib/landing/listing-term'
 import { listingPublicHref } from '@/lib/listings/listing-href'
+import { listingMatchesAddressQuery } from '@/lib/listings/slug-aliases'
 import type {
   BrowseFilters,
   BrowseListing,
@@ -382,10 +383,7 @@ export function filterListings(listings: BrowseListing[], filters: BrowseFilters
   const q = filters.q.toLowerCase()
 
   return listings.filter((listing) => {
-    if (q) {
-      const haystack = `${listing.shortAddress} ${listing.city} ${listing.province}`.toLowerCase()
-      if (!haystack.includes(q)) return false
-    }
+    if (q && !listingMatchesAddressQuery(q, listing)) return false
 
     if (filters.term === 'long' && listing.termType !== 'long') return false
     if (filters.term === 'mid' && listing.termType !== 'mid') return false

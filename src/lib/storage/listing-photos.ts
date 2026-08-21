@@ -366,14 +366,16 @@ export async function resolveListingCoverPhoto(
  * originals for every strip thumb on first paint.
  */
 export async function resolveListingGalleryPhotos(
-  paths: string[]
+  paths: string[],
+  signer?: OrgAssetsSigner,
 ): Promise<{ hero: string | null; gallery: string[]; all: string[]; full: string[] }> {
   if (!paths.length) {
     return { hero: null, gallery: [], all: [], full: [] }
   }
+  const client = signer ?? createPublicClient()
   const [previews, fulls] = await Promise.all([
-    signListingPhotoPaths(paths, 'preview'),
-    signListingPhotoPaths(paths, 'full'),
+    signOrgAssetPaths(paths, client, 'signListingPhotoPaths', 'preview'),
+    signOrgAssetPaths(paths, client, 'signListingPhotoPaths', 'full'),
   ])
   const pairs = paths
     .map((_, i) => {

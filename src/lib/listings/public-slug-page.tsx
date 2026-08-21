@@ -16,21 +16,24 @@ import {
   propertyAvailabilityLabel,
   unitLooksLeased,
 } from '@/lib/listings/public-property-page'
+import {
+  loadPropertyById,
+  loadPropertyForListingId,
+  publicPropertyIsLeased,
+  publicPropertyLookupClient,
+} from '@/lib/listings/public-property-lookup'
+import { publicSlugLookupCandidates } from '@/lib/listings/slug-aliases'
 import { createPublicClient } from '@/lib/supabase/public'
 import { getListingPhotoPathsForProperty } from '@/lib/storage/property-listing-media'
 import { resolveListingGalleryPhotos } from '@/lib/storage/listing-photos'
 import { getHospitableSiteUuid } from '@/lib/hospitable/site-uuid'
 
-const PROPERTY_PUBLIC_SELECT = `
-  id,
-  slug,
-  street_address,
-  city,
-  province,
-  photo_paths,
-  property_type,
-  listing_brief
-`
+export {
+  loadPropertyById,
+  loadPropertyBySlug,
+  loadPropertyForListingId,
+  loadPropertyForPublicSlug,
+} from '@/lib/listings/public-property-lookup'
 
 function listingCardCopyFromLanding() {
   const cardCopy = getLandingCopy('en')
@@ -56,18 +59,6 @@ export async function listingIsPubliclyAvailable(
   const propertyId = listingPropertyId(listing)
   if (!propertyId) return true
   return !(await publicPropertyIsLeased(propertyId))
-}
-
-async function publicPropertyIsLeased(propertyId: string): Promise<boolean> {
-  const supabase = createPublicClient()
-  const { data, error } = await supabase.rpc('public_property_is_leased', {
-    p_property_id: propertyId,
-  })
-  if (error) {
-    console.error('[publicPropertyIsLeased]', error.message)
-    return false
-  }
-  return data === true
 }
 
 export async function renderPublishedListingPage(opts: {
@@ -122,11 +113,12 @@ export async function loadPublishedListingBySlug(
   const { data } = await supabase
     .from('listings')
     .select(LISTING_DETAIL_SELECT)
-    .eq('slug', slug)
     .eq('org_id', orgId)
     .eq('status', 'published')
-    .maybeSingle()
-  return (data as ListingDetailListing | null) ?? null
+    .in('slug', publicSlugLookupCandidates(slug))
+  const rows = (data as ListingDetailListing[] | null) ?? []
+  const exact = rows.find((row) => row.slug === slug)
+  return exact ?? rows[0] ?? null
 }
 
 export async function loadPublishedListingById(
@@ -178,9 +170,10 @@ export async function renderPropertyPublicPage(opts: {
 }) {
   const { property, orgSlug, orgId } = opts
   const supabase = createPublicClient()
+  const lookup = publicPropertyLookupClient()
 
-  const [unitsRes, leasedRes, fromMedia, allPublished] = await Promise.all([
-    supabase
+  const [unitsRes, leased, fromMedia, allPublished] = await Promise.all([
+    lookup
       .from('units')
       .select(
         'id, bedrooms, bathrooms, sq_footage, amenities, status, hospitable_widget_property_id'
@@ -188,16 +181,13 @@ export async function renderPropertyPublicPage(opts: {
       .eq('property_id', property.id)
       .eq('org_id', orgId)
       .order('unit_number', { ascending: true }),
-    supabase.rpc('public_property_is_leased', { p_property_id: property.id }),
-    getListingPhotoPathsForProperty(property.id),
+    publicPropertyIsLeased(property.id),
+    getListingPhotoPathsForProperty(property.id, lookup),
     getPublishedListings(orgSlug),
   ])
 
   if (unitsRes.error) {
     console.error('[renderPropertyPublicPage:units]', unitsRes.error.message)
-  }
-  if (leasedRes.error) {
-    console.error('[renderPropertyPublicPage:leased]', leasedRes.error.message)
   }
 
   const unitRows = unitsRes.data ?? []
@@ -224,15 +214,17 @@ export async function renderPropertyPublicPage(opts: {
     linkedListingId = publishedListing?.id ?? null
   }
 
-  const leased =
-    leasedRes.data === true ||
-    unitRows.some((row) => unitLooksLeased(row.status as string | null))
-  const availabilityLabel = propertyAvailabilityLabel(leased)
+  const availabilityLabel = propertyAvailabilityLabel(
+    leased || unitRows.some((row) => unitLooksLeased(row.status as string | null)),
+  )
 
   const photoPaths: string[] = (
     fromMedia.length > 0 ? fromMedia : (property.photo_paths ?? [])
   ).filter((p: string) => !!p && !/^https?:\/\//i.test(p))
-  const { all: photos, full: photosFull } = await resolveListingGalleryPhotos(photoPaths)
+  const { all: photos, full: photosFull } = await resolveListingGalleryPhotos(
+    photoPaths,
+    lookup,
+  )
 
   if (photos[0]) {
     preload(photos[0], { as: 'image', fetchPriority: 'high' })
@@ -261,73 +253,6 @@ export async function renderPropertyPublicPage(opts: {
       listingCardCopy={listingCardCopyFromLanding()}
     />
   )
-}
-
-export async function loadPropertyBySlug(
-  orgId: string,
-  slug: string,
-): Promise<PropertyPublicProperty | null> {
-  const supabase = createPublicClient()
-  const { data } = await supabase
-    .from('properties')
-    .select(PROPERTY_PUBLIC_SELECT)
-    .eq('slug', slug)
-    .eq('org_id', orgId)
-    .maybeSingle()
-  return (data as PropertyPublicProperty | null) ?? null
-}
-
-export async function loadPropertyById(
-  orgId: string,
-  propertyId: string,
-): Promise<PropertyPublicProperty | null> {
-  const supabase = createPublicClient()
-  const { data } = await supabase
-    .from('properties')
-    .select(PROPERTY_PUBLIC_SELECT)
-    .eq('id', propertyId)
-    .eq('org_id', orgId)
-    .maybeSingle()
-  return (data as PropertyPublicProperty | null) ?? null
-}
-
-/** Property for a public slug, including unpublished listing slugs (SECURITY DEFINER RPC). */
-export async function loadPropertyForPublicSlug(
-  orgId: string,
-  slug: string,
-): Promise<PropertyPublicProperty | null> {
-  const bySlug = await loadPropertyBySlug(orgId, slug)
-  if (bySlug) return bySlug
-
-  const supabase = createPublicClient()
-  const { data: propertyId, error } = await supabase.rpc('public_property_id_for_slug', {
-    p_org_id: orgId,
-    p_slug: slug,
-  })
-  if (error) {
-    console.error('[loadPropertyForPublicSlug]', error.message)
-    return null
-  }
-  if (!propertyId) return null
-  return loadPropertyById(orgId, propertyId)
-}
-
-/** Property for a listing UUID after the listing is unlisted (SECURITY DEFINER RPC). */
-export async function loadPropertyForListingId(
-  orgId: string,
-  listingId: string,
-): Promise<PropertyPublicProperty | null> {
-  const supabase = createPublicClient()
-  const { data: propertyId, error } = await supabase.rpc('public_property_id_for_listing', {
-    p_org_id: orgId,
-    p_listing_id: listingId,
-  })
-  if (error) {
-    console.error('[loadPropertyForListingId]', error.message)
-    return null
-  }
-  if (!propertyId) return null
-  return loadPropertyById(orgId, propertyId)
 }
 
 export async function loadPropertyFromListing(

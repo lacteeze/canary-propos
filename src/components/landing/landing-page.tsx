@@ -481,21 +481,15 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
       </section>
 
       <section data-screen-label="Why Canary" style={{ maxWidth: 1380, margin: '0 auto', padding: '130px 26px 110px' }}>
-        <div className="cl2-grid2" style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 220px) 1fr', gap: 30, alignItems: 'start' }}>
-          <div className="cl2-sticky" style={{ position: 'sticky', top: 110, fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--faint)', paddingTop: 10 }}>
-            {copy.tWhyKicker}<br /><span aria-hidden="true" style={{ display: 'inline-block', width: 44, height: 2, background: 'var(--yellow)', marginTop: 10 }} />
-          </div>
-          <p id="cl2-reveal" style={{ margin: 0, fontSize: 'clamp(26px, 3.6vw, 52px)', fontWeight: 600, letterSpacing: '-.025em', lineHeight: 1.22, maxWidth: '24ch' }}>
-            {revealWords.map((item, index) => (
-              <span key={`${item.word}-${index}`} style={{ color: item.color, transition: 'color .35s ease' }}>{item.word} </span>
-            ))}
-          </p>
-        </div>
+        <p id="cl2-reveal" style={{ margin: 0, fontSize: 'clamp(26px, 3.6vw, 52px)', fontWeight: 600, letterSpacing: '-.025em', lineHeight: 1.22, maxWidth: '24ch' }}>
+          {revealWords.map((item, index) => (
+            <span key={`${item.word}-${index}`} style={{ color: item.color, transition: 'color .35s ease' }}>{item.word} </span>
+          ))}
+        </p>
       </section>
 
       <section data-screen-label="Rent Own Stay" className="cl2-big-section" style={{ background: 'var(--ink)', color: 'var(--ink-text)' }}>
         <div className="cl2-big-inner">
-          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--ink-dim)', marginBottom: 26 }}>{copy.tBigKicker}</div>
           {copy.bigRows.map((row) => (
             <a key={row.href} href={row.href} className="cl2-big-row">
               <span className="cl2-big-word"><span className="cl2-big-title">{row.word}</span><em>{row.tail}</em></span>
@@ -507,18 +501,12 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
           ))}
           <div style={{ borderTop: '1px solid var(--ink-border)' }} />
         </div>
-        <div aria-hidden="true" style={{ overflow: 'hidden', borderTop: '1px solid var(--ink-border)', padding: '16px 0', whiteSpace: 'nowrap' }}>
-          <div style={{ display: 'inline-flex', gap: 0, animation: 'cl2marq 28s linear infinite', willChange: 'transform' }}>
-            <span style={{ fontFamily: "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif", fontSize: '12.5px', letterSpacing: '.06em', color: 'var(--ink-dim)', paddingRight: 0 }}>{copy.marquee}{copy.marquee}</span>
-          </div>
-        </div>
       </section>
 
       <section id="homes" data-screen-label="Available homes" style={{ maxWidth: 1380, margin: '0 auto', padding: '96px clamp(16px, 4vw, 26px) 30px', width: '100%', minWidth: 0 }}>
         <div style={{ marginBottom: 8 }}>
           <h2 style={{ margin: 0, fontSize: 'clamp(30px, 4.4vw, 54px)', fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.05 }}>{copy.tHomes1} <em style={displayAccentStyle}>{copy.tHomes2}</em></h2>
         </div>
-        <p style={{ margin: '0 0 26px', color: 'var(--dim)', maxWidth: '56ch' }}>{copy.tHomesIntro}</p>
         <LandingHomesBrowse
           listings={listings}
           staysHref={staysHref}
@@ -526,6 +514,7 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
             tBed: copy.tBed,
             tBath: copy.tBath,
             tPark: copy.tPark,
+            tAvailable: copy.tAvailable,
             longTerm: copy.longTerm,
             midTerm: copy.midTerm,
           }}
@@ -585,19 +574,15 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
             {copy.steps.map((step) => (
-              <div key={step.num} className="cl2-step" style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 20, padding: '28px 28px 26px', display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-                <span style={{ fontFamily: fontDisplay, fontStyle: 'normal', fontWeight: 500, fontSize: 52, lineHeight: 1, color: 'var(--yellow)', flex: 'none', width: 74 }}>{step.num}</span>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 19, marginBottom: 6 }}>{step.title}</div>
-                  <div style={{ color: 'var(--dim)', fontSize: '14.5px', maxWidth: '52ch' }}>{step.body}</div>
-                </div>
+              <div key={step.title} className="cl2-step" style={{ background: 'var(--elev)', border: '1px solid var(--border)', borderRadius: 20, padding: '28px 28px 26px' }}>
+                <div style={{ fontWeight: 700, fontSize: 19, marginBottom: 6 }}>{step.title}</div>
+                <div style={{ color: 'var(--dim)', fontSize: '14.5px', maxWidth: '52ch' }}>{step.body}</div>
               </div>
             ))}
           </div>
         </div>
         <div className="cl2-fees-plan">
           <div className="cl2-fees-col">
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: '.12em', color: 'var(--faint)' }}>{copy.tFeeKicker}</div>
             <div className="cl2-services-grid">
               {copy.services.map((service) => (
                 <div key={service.name} style={{ background: 'var(--ink)', color: 'var(--ink-text)', borderRadius: 16, padding: '18px 20px' }}>
@@ -653,7 +638,6 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
       </section>
 
       <section id="faq" data-screen-label="FAQ" style={{ maxWidth: 900, margin: '0 auto', padding: '0 26px 90px' }}>
-        <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11.5px', letterSpacing: '.14em', color: 'var(--faint)', marginBottom: 14 }}>{copy.tFaqKicker}</div>
         <h2 style={{ margin: '0 0 8px', fontSize: 'clamp(28px, 3.6vw, 44px)', fontWeight: 700, letterSpacing: '-.03em' }}>{copy.tFaqH2}</h2>
         <p style={{ margin: '0 0 24px', color: 'var(--dim)' }}>{copy.tFaqSub} <a href="mailto:info@canarypm.ca" style={{ color: 'var(--accent)', fontWeight: 600 }}>{copy.tEmailUs}</a>.</p>
         <div style={{ display: 'flex', flexDirection: 'column' }}>

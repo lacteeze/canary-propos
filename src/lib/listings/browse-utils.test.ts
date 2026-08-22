@@ -3,6 +3,7 @@ import {
   hasGarage,
   hasUtilitiesIncluded,
   filterListings,
+  formatMoveInShort,
   getDetailPageCarouselGroups,
   isPetFriendly,
   mapListingRow,
@@ -488,6 +489,21 @@ describe('getDetailPageCarouselGroups', () => {
   it('does not throw when the current city is missing', () => {
     expect(() => getDetailPageCarouselGroups([], 'listing-1', null)).not.toThrow()
     expect(getDetailPageCarouselGroups([], 'listing-1', undefined)).toEqual([])
+  })
+})
+
+describe('formatMoveInShort', () => {
+  it('returns now when the date is missing, invalid, or already available', () => {
+    expect(formatMoveInShort(null)).toBe('now')
+    expect(formatMoveInShort('not-a-date')).toBe('now')
+    expect(formatMoveInShort('2020-01-15')).toBe('now')
+  })
+
+  it('formats future dates as short month and day without a year', () => {
+    const label = formatMoveInShort('2099-09-30')
+    expect(label).toMatch(/Sep\.?\s*30/)
+    expect(label).not.toMatch(/2099/)
+    expect(label).not.toMatch(/,/)
   })
 })
 

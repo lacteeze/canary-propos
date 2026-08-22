@@ -47,6 +47,7 @@ export type PropertyPublicViewProps = {
     tBed: string
     tBath: string
     tPark: string
+    tAvailable: string
     longTerm: string
     midTerm: string
   }

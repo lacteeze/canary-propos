@@ -3,14 +3,28 @@
 import { useState, type CSSProperties, type MouseEvent } from 'react'
 import Link from 'next/link'
 import type { BrowseListing } from '@/lib/listings/browse-types'
+import { formatMoveInShort } from '@/lib/listings/browse-utils'
 import { fetchListingCardPhotos } from '@/app/actions/listing-card-photos'
+import {
+  BathStatIcon,
+  BedStatIcon,
+  ParkingStatIcon,
+} from '@/components/icons/coolicons/ListingStatIcons'
 
 export type ListingCardCopy = {
   tBed: string
   tBath: string
   tPark: string
+  tAvailable: string
   longTerm: string
   midTerm: string
+}
+
+function cardMoveInLabel(listing: BrowseListing): string | null {
+  if (!listing.availableFrom) return null
+  const moveIn = listing.moveIn.trim()
+  if (!moveIn || moveIn === '—' || /^tbd$/i.test(moveIn)) return null
+  return formatMoveInShort(listing.availableFrom)
 }
 
 function termBadge(listing: BrowseListing, copy: ListingCardCopy) {
@@ -77,6 +91,7 @@ export function LandingListingCard({
   const knownCount = galleryLoaded ? photos.length : (listing.photoCount ?? photos.length)
   const canCycle = knownCount > 1
   const activePhoto = photos[photoIndex] ?? photos[0] ?? null
+  const moveInLabel = cardMoveInLabel(listing)
 
   async function cyclePhoto(delta: number, e: MouseEvent) {
     e.preventDefault()
@@ -314,16 +329,53 @@ export function LandingListingCard({
             ) : null}
           </span>
         </div>
-        <div style={{ display: 'flex', gap: 12, fontSize: 13, color: 'var(--dim)' }}>
-          <span>
-            <b style={{ color: 'var(--text)' }}>{listing.beds}</b> {copy.tBed}
-          </span>
-          <span>
-            <b style={{ color: 'var(--text)' }}>{listing.bathsLabel}</b> {copy.tBath}
-          </span>
-          <span>
-            <b style={{ color: 'var(--text)' }}>{listing.parking}</b> {copy.tPark}
-          </span>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            fontSize: 13,
+            color: 'var(--dim)',
+          }}
+        >
+          <div style={{ display: 'flex', gap: 12, flex: 'none' }}>
+            <span>
+              <span aria-hidden="true" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <b style={{ color: 'var(--text)' }}>{listing.beds}</b>
+                <BedStatIcon />
+              </span>
+              <span className="sr-only">{listing.beds} {copy.tBed}</span>
+            </span>
+            <span>
+              <span aria-hidden="true" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <b style={{ color: 'var(--text)' }}>{listing.bathsLabel}</b>
+                <BathStatIcon />
+              </span>
+              <span className="sr-only">{listing.bathsLabel} {copy.tBath}</span>
+            </span>
+            <span>
+              <span aria-hidden="true" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <b style={{ color: 'var(--text)' }}>{listing.parking}</b>
+                <ParkingStatIcon />
+              </span>
+              <span className="sr-only">{listing.parking} {copy.tPark}</span>
+            </span>
+          </div>
+          {moveInLabel ? (
+            <div
+              style={{
+                fontSize: 13,
+                color: 'var(--dim)',
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+                flexShrink: 1,
+                textAlign: 'right',
+              }}
+            >
+              {copy.tAvailable} {moveInLabel}
+            </div>
+          ) : null}
         </div>
         {listing.tags.length > 0 ? (
           <div className="cl2-card-highlights" aria-label="Listing highlights">

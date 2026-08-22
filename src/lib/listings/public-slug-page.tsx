@@ -41,6 +41,7 @@ function listingCardCopyFromLanding() {
     tBed: cardCopy.tBed,
     tBath: cardCopy.tBath,
     tPark: cardCopy.tPark,
+    tAvailable: cardCopy.tAvailable,
     longTerm: cardCopy.longTerm,
     midTerm: cardCopy.midTerm,
   }

@@ -36,12 +36,29 @@ function shortAddress(address: string): string {
   return address.split(',')[0]?.trim() ?? address
 }
 
+function parseMoveInDate(dateStr: string): Date {
+  // Date-only ISO strings are UTC midnight; noon local keeps the calendar day.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return new Date(`${dateStr}T12:00:00`)
+  }
+  return new Date(dateStr)
+}
+
 function formatMoveIn(dateStr: string | null): string {
   if (!dateStr) return 'now'
-  const d = new Date(dateStr)
+  const d = parseMoveInDate(dateStr)
   if (Number.isNaN(d.getTime())) return 'now'
   if (d <= new Date()) return 'now'
   return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+/** Card label: "now" or "Sep 30" (no year). Detail pages keep the year via their own formatter. */
+export function formatMoveInShort(dateStr: string | null): string {
+  if (!dateStr) return 'now'
+  const d = parseMoveInDate(dateStr)
+  if (Number.isNaN(d.getTime())) return 'now'
+  if (d <= new Date()) return 'now'
+  return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
 }
 
 function listingCorpus(

@@ -89,15 +89,6 @@ html:has(.cland2) body {
   }
 }
 
-@keyframes cl2marq {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
 .cland2.cl2-dark {
   --bg: #141414;
   --panel: #1a1a1a;
@@ -469,14 +460,7 @@ html:has(.cland2.cl2-dark) body {
   }
 
   .cland2 .cl2-step {
-    flex-direction: column;
-    gap: 12px !important;
     padding: 20px 18px !important;
-  }
-
-  .cland2 .cl2-step > span:first-child {
-    width: auto !important;
-    font-size: 40px !important;
   }
 
   .cland2 .cl2-homes-browse .cnry-browse select.ml-auto {

@@ -59,6 +59,7 @@ export type ListingDetailViewProps = {
     tBed: string
     tBath: string
     tPark: string
+    tAvailable: string
     longTerm: string
     midTerm: string
   }

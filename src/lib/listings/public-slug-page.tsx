@@ -14,6 +14,7 @@ import { getPublishedListings } from '@/lib/landing/get-published-listings'
 import { getDetailPageCarouselGroups } from '@/lib/listings/browse-utils'
 import {
   propertyAvailabilityLabel,
+  publishedListingIsListed,
   unitLooksLeased,
 } from '@/lib/listings/public-property-page'
 import {
@@ -51,15 +52,9 @@ function listingPropertyId(listing: ListingDetailListing): string | null {
   return listing.units?.properties?.id ?? null
 }
 
-export async function listingIsPubliclyAvailable(
-  listing: ListingDetailListing,
-): Promise<boolean> {
-  const status = listing.units?.status ?? null
-  if ((status ?? '').toLowerCase() === 'str') return true
-  if (unitLooksLeased(status)) return false
-  const propertyId = listingPropertyId(listing)
-  if (!propertyId) return true
-  return !(await publicPropertyIsLeased(propertyId))
+/** Published listings are listed; occupancy is ignored (available now / soon). */
+export function listingIsPubliclyAvailable(listing: ListingDetailListing): boolean {
+  return publishedListingIsListed(listing.status)
 }
 
 export async function renderPublishedListingPage(opts: {

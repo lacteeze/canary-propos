@@ -42,7 +42,7 @@ export default async function ListingDetailPage({ params, searchParams }: PagePr
   }
 
   const listing = await loadPublishedListingById(org.id, id)
-  if (listing && (await listingIsPubliclyAvailable(listing))) {
+  if (listing && listingIsPubliclyAvailable(listing)) {
     if (listing.slug) {
       permanentRedirect(`/${listing.slug}${orgQuery}`)
     }

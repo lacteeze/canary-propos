@@ -44,9 +44,9 @@ export default async function PublicSlugPage({ params, searchParams }: PageProps
     permanentRedirect(`/listings/${slug}${orgQuery}`)
   }
 
-  // 1) Published listing with this slug — only if the unit is still available
+  // 1) Published listing with this slug — listed even if a current lease exists
   const listingBySlug = await loadPublishedListingBySlug(org.id, slug)
-  if (listingBySlug && (await listingIsPubliclyAvailable(listingBySlug))) {
+  if (listingBySlug && listingIsPubliclyAvailable(listingBySlug)) {
     if (listingBySlug.slug && listingBySlug.slug !== slug) {
       permanentRedirect(`/${listingBySlug.slug}${orgQuery}`)
     }
@@ -61,9 +61,9 @@ export default async function PublicSlugPage({ params, searchParams }: PageProps
     permanentRedirect(`/${property.slug}${orgQuery}`)
   }
 
-  // Prefer full listing detail when a unit on the property is still publicly available
+  // Prefer full listing detail when a published listing exists on this property
   const publishedOnProperty = await loadPublishedListingForProperty(org.id, property.id)
-  if (publishedOnProperty && (await listingIsPubliclyAvailable(publishedOnProperty))) {
+  if (publishedOnProperty && listingIsPubliclyAvailable(publishedOnProperty)) {
     return renderPublishedListingPage({ listing: publishedOnProperty, orgSlug })
   }
 

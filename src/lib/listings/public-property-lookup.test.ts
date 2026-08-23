@@ -17,4 +17,16 @@ describe('leased public URL lookup', () => {
     expect(lookup).not.toMatch(/\.rpc\(/)
     expect(page).not.toMatch(/\.rpc\(/)
   })
+
+  it('does not hide published listing details because the unit is occupied', () => {
+    const page = readFileSync('src/lib/listings/public-slug-page.tsx', 'utf8')
+    const start = page.indexOf('export function listingIsPubliclyAvailable')
+    const end = page.indexOf('export async function renderPublishedListingPage')
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const fn = page.slice(start, end)
+    expect(fn).toContain('publishedListingIsListed')
+    expect(fn).not.toContain('unitLooksLeased')
+    expect(fn).not.toContain('publicPropertyIsLeased')
+  })
 })

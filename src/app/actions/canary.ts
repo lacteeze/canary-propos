@@ -7,7 +7,13 @@ import { createClient } from '@/lib/supabase/server'
 import { normalizeLeaseTermType, validateLeaseDates } from '@/lib/canary/lease-term'
 import type { LeaseTermType } from '@/lib/canary/lease-term'
 import { allocateListingSlugPreferProperty } from '@/lib/listings/slugify'
+import { auditListingFieldChanges } from '@/app/actions/listing-social'
 import type { Database } from '@/types/supabase'
+import {
+  DEFAULT_EXPENSE_RATES,
+  snapshotExpenseBilling,
+  type OrgRates,
+} from '@/lib/billing/expense-breakdown'
 
 type ActionResult = { success: true; id?: string } | { success: false; error: string }
 type ListingUpsert = Database['public']['Tables']['listings']['Insert']
@@ -89,6 +95,27 @@ export async function saveDraftListing(input: {
     descriptionParts.push('Utilities included.')
   }
 
+  let existing: {
+    listing_title: string
+    listing_description: string | null
+    display_rent: number | null
+    available_from: string | null
+    highlights: string[] | null
+    status: string
+    published_at: string | null
+    slug: string | null
+    unit_id: string
+  } | null = null
+  if (d.id) {
+    const { data } = await ctx.supabase
+      .from('listings')
+      .select('listing_title, listing_description, display_rent, available_from, highlights, status, published_at, slug, unit_id')
+      .eq('id', d.id)
+      .eq('org_id', ctx.person.org_id)
+      .maybeSingle()
+    existing = data
+  }
+
   const record: ListingUpsert = {
     org_id: ctx.person.org_id,
     unit_id: d.unitId,
@@ -99,20 +126,13 @@ export async function saveDraftListing(input: {
     status: d.status,
     updated_at: new Date().toISOString(),
   }
+  if (d.status === 'published') {
+    record.published_at = existing?.published_at ?? new Date().toISOString()
+  }
 
   if (d.status === 'published') {
-    let existingSlug: string | null = null
-    let existingUnitId: string | null = null
-    if (d.id) {
-      const { data: existing } = await ctx.supabase
-        .from('listings')
-        .select('slug, unit_id')
-        .eq('id', d.id)
-        .eq('org_id', ctx.person.org_id)
-        .single()
-      existingSlug = existing?.slug ?? null
-      existingUnitId = existing?.unit_id ?? null
-    }
+    const existingSlug = existing?.slug ?? null
+    const existingUnitId = existing?.unit_id ?? null
     const unitChanged = existingUnitId != null && existingUnitId !== d.unitId
     if (existingSlug && !unitChanged) {
       record.slug = existingSlug
@@ -149,6 +169,16 @@ export async function saveDraftListing(input: {
         ? 'Could not save — run database migration 0030_listing_status_renewal_sent (renewal_sent status).'
         : error.message || 'Failed to save the draft listing.'
       return { success: false, error: msg }
+    }
+    if (existing) {
+      await auditListingFieldChanges(
+        ctx.supabase,
+        ctx.person.org_id,
+        d.id,
+        ctx.person.id,
+        existing,
+        record,
+      )
     }
     revalidatePath('/app')
     return { success: true, id: d.id }
@@ -303,21 +333,58 @@ export async function deleteDraftListing(id: string): Promise<ActionResult> {
 
 // ---------- Payments / expenses ----------
 
-const paymentSchema = z.object({
-  date: z.string().min(1, 'Date is required'),
-  unitId: z.string().uuid('Property is required'),
-  category: z.string().min(1),
-  description: z.string().optional().nullable(),
-  amount: z.coerce.number().positive('Amount must be positive'),
-  type: z.enum(['Credit', 'Debit']),
-})
+const paymentSchema = z
+  .object({
+    date: z.string().min(1, 'Date is required'),
+    unitId: z.string().uuid('Property is required'),
+    category: z.string().min(1),
+    description: z.string().optional().nullable(),
+    amount: z.coerce.number().min(0).optional(),
+    suppliesCost: z.coerce.number().min(0).optional(),
+    labourHours: z.coerce.number().min(0).optional(),
+    type: z.enum(['Credit', 'Debit']),
+  })
+  .superRefine((val, ctx) => {
+    if (val.type === 'Credit' && !(val.amount && val.amount > 0)) {
+      ctx.addIssue({ code: 'custom', message: 'Amount must be positive', path: ['amount'] })
+    }
+    if (val.type === 'Debit') {
+      const supplies = val.suppliesCost ?? 0
+      const hours = val.labourHours ?? 0
+      if (supplies <= 0 && hours <= 0) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Enter supplies cost or labour hours.',
+          path: ['suppliesCost'],
+        })
+      }
+    }
+  })
+
+async function loadOrgExpenseRates(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orgId: string
+): Promise<OrgRates> {
+  const { data } = await supabase
+    .from('organizations')
+    .select('expense_markup_rate, expense_labour_rate, expense_hst_rate')
+    .eq('id', orgId)
+    .single()
+  return {
+    markupRate: Number(data?.expense_markup_rate ?? DEFAULT_EXPENSE_RATES.markupRate),
+    labourRate: Number(data?.expense_labour_rate ?? DEFAULT_EXPENSE_RATES.labourRate),
+    hstRate: Number(data?.expense_hst_rate ?? DEFAULT_EXPENSE_RATES.hstRate),
+  }
+}
 
 export async function savePaymentEntry(input: {
   date: string
   unitId: string
   category: string
   description?: string | null
-  amount: number | string
+  amount?: number | string
+  suppliesCost?: number | string
+  labourHours?: number | string
   type: 'Credit' | 'Debit'
 }): Promise<ActionResult> {
   const ctx = await getStaffContext()
@@ -340,15 +407,21 @@ export async function savePaymentEntry(input: {
   }
 
   if (d.type === 'Debit') {
-    // Money going out → record as a property expense
+    const rates = await loadOrgExpenseRates(ctx.supabase, ctx.person.org_id)
+    // computeExpenseBilling via snapshotExpenseBilling — supplies_cost + subtotal snapshotted; billed_amount is owner total
+    const snapshot = snapshotExpenseBilling({
+      suppliesCost: d.suppliesCost ?? 0,
+      labourHours: d.labourHours ?? 0,
+      rates,
+      sourceChannel: 'manual',
+    })
     const { error } = await ctx.supabase.from('expenses').insert({
       org_id: ctx.person.org_id,
       property_id: unit.property_id,
       description: [d.category, d.description].filter(Boolean).join(' — '),
-      vendor_cost: d.amount,
-      billed_amount: d.amount,
       expense_date: d.date,
       created_by: ctx.person.id,
+      ...snapshot,
     })
     if (error) {
       console.error('[savePaymentEntry:expense]', error)

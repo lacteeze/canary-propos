@@ -3,6 +3,11 @@
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import {
+  DEFAULT_EXPENSE_RATES,
+  snapshotExpenseBilling,
+  type OrgRates,
+} from '@/lib/billing/expense-breakdown'
 
 // --- Action result type ---
 export type ActionResult =
@@ -110,13 +115,30 @@ export async function recordPayment(formData: RecordPaymentInput): Promise<Actio
   return { success: true }
 }
 
+async function loadOrgExpenseRates(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orgId: string
+): Promise<OrgRates> {
+  const { data } = await supabase
+    .from('organizations')
+    .select('expense_markup_rate, expense_labour_rate, expense_hst_rate')
+    .eq('id', orgId)
+    .single()
+  return {
+    markupRate: Number(data?.expense_markup_rate ?? DEFAULT_EXPENSE_RATES.markupRate),
+    labourRate: Number(data?.expense_labour_rate ?? DEFAULT_EXPENSE_RATES.labourRate),
+    hstRate: Number(data?.expense_hst_rate ?? DEFAULT_EXPENSE_RATES.hstRate),
+  }
+}
+
 // --- recordExpense ---
 const recordExpenseSchema = z.object({
   property_id: z.string().uuid(),
   description: z.string().min(1),
-  vendor_cost: z.number().min(0),
-  billed_amount: z.number().min(0),
+  supplies_cost: z.number().min(0),
+  labour_hours: z.number().min(0),
   expense_date: z.string(), // ISO date string
+  staff_notes: z.string().optional(),
 })
 
 export type RecordExpenseInput = z.infer<typeof recordExpenseSchema>
@@ -137,7 +159,12 @@ export async function recordExpense(formData: RecordExpenseInput): Promise<Actio
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
   }
 
-  const { property_id, description, vendor_cost, billed_amount, expense_date } = parsed.data
+  const { property_id, description, supplies_cost, labour_hours, expense_date, staff_notes } =
+    parsed.data
+
+  if (supplies_cost <= 0 && labour_hours <= 0) {
+    return { success: false, error: 'Enter supplies cost or labour hours.' }
+  }
 
   // T-04-13: Verify property belongs to caller's org
   const { data: property, error: propertyError } = await ctx.supabase
@@ -151,17 +178,23 @@ export async function recordExpense(formData: RecordExpenseInput): Promise<Actio
     return { success: false, error: 'Property not found in your organization.' }
   }
 
-  const { error: insertError } = await ctx.supabase
-    .from('expenses')
-    .insert({
-      org_id: ctx.person.org_id,
-      property_id,
-      description,
-      vendor_cost,
-      billed_amount,
-      expense_date,
-      created_by: ctx.person.id,
-    })
+  const rates = await loadOrgExpenseRates(ctx.supabase, ctx.person.org_id)
+  const snapshot = snapshotExpenseBilling({
+    suppliesCost: supplies_cost,
+    labourHours: labour_hours,
+    rates,
+    sourceChannel: 'manual',
+  })
+
+  const { error: insertError } = await ctx.supabase.from('expenses').insert({
+    org_id: ctx.person.org_id,
+    property_id,
+    description,
+    expense_date,
+    created_by: ctx.person.id,
+    staff_notes: staff_notes?.trim() ? staff_notes.trim() : null,
+    ...snapshot,
+  })
 
   if (insertError) {
     return { success: false, error: insertError.message }

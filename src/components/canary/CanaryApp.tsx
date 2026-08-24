@@ -13,6 +13,7 @@ import { generateListingDescription } from '@/app/actions/listing-ai'
 import { updateOwnAvatarPath } from '@/app/actions/profile'
 import { archiveProperties, unarchiveProperties, deleteProperties, mergeProperties } from '@/app/actions/entity-updates'
 import { invitePersonToPortal } from '@/app/(manager)/people/actions'
+import { computeExpenseBilling, DEFAULT_EXPENSE_RATES } from '@/lib/billing/expense-breakdown'
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -218,7 +219,16 @@ type DraftForm = {
   status: DraftListingStatus
   address?: string
 }
-type PayFormState = { date: string; property: string; category: string; description: string; amount: string; type: 'Credit' | 'Debit' }
+type PayFormState = {
+  date: string
+  property: string
+  category: string
+  description: string
+  amount: string
+  suppliesCost: string
+  labourHours: string
+  type: 'Credit' | 'Debit'
+}
 
 interface CanaryAppProps {
   db: CanaryDb
@@ -736,14 +746,42 @@ export default function CanaryApp({
   }, [draft, draftSaving, router])
 
   // ---------- payments ----------
-  const emptyPayForm = useCallback((): PayFormState => ({ date: new Date().toISOString().slice(0, 10), property: '', category: 'Rent Payment', description: '', amount: '', type: 'Credit' }), [])
+  const emptyPayForm = useCallback((): PayFormState => ({
+    date: new Date().toISOString().slice(0, 10),
+    property: '',
+    category: 'Rent Payment',
+    description: '',
+    amount: '',
+    suppliesCost: '',
+    labourHours: '',
+    type: 'Credit',
+  }), [])
   const submitPayment = useCallback(async () => {
     const f = payForm
-    if (!f || !f.amount || paySaving) return
+    if (!f || paySaving) return
     if (!f.property) { setPayError('Choose a property.'); return }
+    if (f.type === 'Debit') {
+      const supplies = parseFloat(f.suppliesCost) || 0
+      const hours = parseFloat(f.labourHours) || 0
+      if (supplies <= 0 && hours <= 0) {
+        setPayError('Enter supplies cost or labour hours.')
+        return
+      }
+    } else if (!f.amount) {
+      return
+    }
     setPaySaving(true)
     setPayError('')
-    const res = await savePaymentEntry({ date: f.date, unitId: f.property, category: f.category, description: f.description, amount: f.amount, type: f.type })
+    const res = await savePaymentEntry({
+      date: f.date,
+      unitId: f.property,
+      category: f.category,
+      description: f.description,
+      amount: f.amount,
+      suppliesCost: f.suppliesCost,
+      labourHours: f.labourHours,
+      type: f.type,
+    })
     setPaySaving(false)
     if (!res.success) { setPayError(res.error); return }
     setPayFormOpen(false)
@@ -4277,12 +4315,32 @@ export default function CanaryApp({
                   {PAY_CATEGORIES.map((c) => (<option key={c} value={c}>{c}</option>))}
                 </select></label>
               <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Description</span><input value={curPayForm.description} onChange={setPayField('description')} placeholder="e.g. June rent" style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }} /></label>
-              <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Amount $</span><input type="number" value={curPayForm.amount} onChange={setPayField('amount')} placeholder="0.00" style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }} /></label>
+              {curPayForm.type === 'Debit' ? (
+                <>
+                  <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Supplies $</span><input type="number" value={curPayForm.suppliesCost} onChange={setPayField('suppliesCost')} placeholder="0.00" style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }} /></label>
+                  <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Hours</span><input type="number" step="0.25" value={curPayForm.labourHours} onChange={setPayField('labourHours')} placeholder="0" style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }} /></label>
+                </>
+              ) : (
+                <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Amount $</span><input type="number" value={curPayForm.amount} onChange={setPayField('amount')} placeholder="0.00" style={{ width: '100%', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4 }} /></label>
+              )}
               <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Type</span>
                 <select className="cy-select cy-select--field" value={curPayForm.type} onChange={setPayField('type')}>
                   <option value="Credit">Credit</option><option value="Debit">Debit</option>
                 </select></label>
             </div>
+            {curPayForm.type === 'Debit' && (() => {
+              const preview = computeExpenseBilling({
+                suppliesCost: parseFloat(curPayForm.suppliesCost) || 0,
+                labourHours: parseFloat(curPayForm.labourHours) || 0,
+                rates: DEFAULT_EXPENSE_RATES,
+              })
+              return (
+                <div style={{ marginTop: 12, fontSize: 12, color: 'var(--dim)', display: 'grid', gap: 4 }}>
+                  <div>Supplies × 1.30 = {money(preview.suppliesMarkedUp)} · Labour = {money(preview.labourAmount)}</div>
+                  <div>Subtotal {money(preview.subtotal)} · HST 15% {money(preview.hstAmount)} · <strong style={{ color: 'var(--text)' }}>Total {money(preview.total)}</strong></div>
+                </div>
+              )
+            })()}
             {payError && <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 12 }}>{payError}</div>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
               <button type="button" className="cy-btn" onClick={() => { setPayFormOpen(false); setPayForm(null) }}>Cancel</button>

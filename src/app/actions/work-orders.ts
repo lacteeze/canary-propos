@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { validateTransition } from '@/lib/work-orders/transitions'
 import { notifyOwnerPendingApproval } from '@/lib/work-orders/notifications'
+import { snapshotWorkOrderExpense } from '@/lib/billing/expense-breakdown'
 
 // --- Action result type ---
 export type ActionResult =
@@ -150,14 +151,14 @@ export async function updateWorkOrderStatus(
 
   // Auto-create expense on completion (MAINT-09, D-14)
   if (effectiveStatus === 'completed' && opts?.vendorCost !== undefined) {
+    const billed = opts.billedAmount ?? opts.vendorCost
     await ctx.supabase.from('expenses').insert({
       org_id: ctx.person.org_id,
       property_id: wo.property_id,
       description: 'Work order completion',
-      vendor_cost: opts.vendorCost,
-      billed_amount: opts.billedAmount ?? opts.vendorCost,
       expense_date: new Date().toISOString().split('T')[0],
       created_by: ctx.person.id,
+      ...snapshotWorkOrderExpense(opts.vendorCost, billed),
     })
   }
 
@@ -234,10 +235,9 @@ export async function updateViaVendorToken(
         org_id: wo.org_id,
         property_id: wo.property_id,
         description: 'Work order completed by vendor',
-        vendor_cost: invoiceAmount,
-        billed_amount: invoiceAmount,
         expense_date: new Date().toISOString().split('T')[0],
         created_by: mgr.id,
+        ...snapshotWorkOrderExpense(invoiceAmount, invoiceAmount),
       })
     }
   }

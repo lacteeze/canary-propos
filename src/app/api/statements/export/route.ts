@@ -125,12 +125,14 @@ export async function GET(request: NextRequest) {
 
     if (format === 'csv') {
       const lines = [
-        ['line', 'amount'].join(','),
-        ['rent_collected', summary.rentCollected].join(','),
-        ['str_net', summary.strNetToOwner].join(','),
-        ...summary.expenses.map((e) => [csvEscape(e.description), e.billedAmount].join(',')),
-        [csvEscape(summary.managementFeeLabel), summary.managementFee].join(','),
-        ['net', summary.net].join(','),
+        ['line', 'subtotal', 'amount'].join(','),
+        ['rent_collected', '', summary.rentCollected].join(','),
+        ['str_net', '', summary.strNetToOwner].join(','),
+        ...summary.expenses.map((e) =>
+          [csvEscape(e.description), e.subtotal, e.billedAmount].join(',')
+        ),
+        [csvEscape(summary.managementFeeLabel), '', summary.managementFee].join(','),
+        ['net', '', summary.net].join(','),
       ]
       return new NextResponse(lines.join('\n'), {
         headers: {

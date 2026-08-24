@@ -119,7 +119,7 @@ export default async function DisbursementPage({ params, searchParams }: PagePro
         </CardContent>
       </Card>
 
-      {/* Expenses detail — billed_amount ONLY, vendor_cost intentionally excluded */}
+      {/* Expenses detail — subtotal (before HST) + billed total; vendor_cost/cost/markup/labour excluded */}
       {summary.expenses.length > 0 && (
         <Card>
           <CardHeader>
@@ -131,13 +131,15 @@ export default async function DisbursementPage({ params, searchParams }: PagePro
                 <thead>
                   <tr className="border-b border-stone-200">
                     <th className="text-left py-2 pr-4 text-stone-500 font-medium">Description</th>
-                    <th className="text-right py-2 text-stone-500 font-medium">Billed Amount</th>
+                    <th className="text-right py-2 pr-4 text-stone-500 font-medium">Subtotal</th>
+                    <th className="text-right py-2 text-stone-500 font-medium">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
                   {summary.expenses.map((expense) => (
                     <tr key={expense.id}>
                       <td className="py-2 pr-4 text-stone-700">{expense.description}</td>
+                      <td className="py-2 pr-4 text-right text-stone-700">{formatCAD(expense.subtotal)}</td>
                       <td className="py-2 text-right text-stone-700">{formatCAD(expense.billedAmount)}</td>
                     </tr>
                   ))}

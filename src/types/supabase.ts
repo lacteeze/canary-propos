@@ -407,9 +407,21 @@ export type Database = {
           created_by: string | null
           description: string
           expense_date: string
+          hst_amount: number
+          hst_rate: number
           id: string
+          labour_amount: number
+          labour_hours: number
+          labour_rate: number
+          markup_amount: number
+          markup_rate: number
           org_id: string
           property_id: string
+          source_channel: string
+          source_sms_text: string | null
+          staff_notes: string | null
+          subtotal: number
+          supplies_cost: number
           vendor_cost: number
           work_order_id: string | null
         }
@@ -419,9 +431,21 @@ export type Database = {
           created_by?: string | null
           description: string
           expense_date: string
+          hst_amount?: number
+          hst_rate?: number
           id?: string
+          labour_amount?: number
+          labour_hours?: number
+          labour_rate?: number
+          markup_amount?: number
+          markup_rate?: number
           org_id: string
           property_id: string
+          source_channel?: string
+          source_sms_text?: string | null
+          staff_notes?: string | null
+          subtotal?: number
+          supplies_cost?: number
           vendor_cost: number
           work_order_id?: string | null
         }
@@ -431,9 +455,21 @@ export type Database = {
           created_by?: string | null
           description?: string
           expense_date?: string
+          hst_amount?: number
+          hst_rate?: number
           id?: string
+          labour_amount?: number
+          labour_hours?: number
+          labour_rate?: number
+          markup_amount?: number
+          markup_rate?: number
           org_id?: string
           property_id?: string
+          source_channel?: string
+          source_sms_text?: string | null
+          staff_notes?: string | null
+          subtotal?: number
+          supplies_cost?: number
           vendor_cost?: number
           work_order_id?: string | null
         }
@@ -457,6 +493,58 @@ export type Database = {
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expense_receipts: {
+        Row: {
+          content_type: string | null
+          created_at: string
+          draft_id: string | null
+          expense_id: string | null
+          id: string
+          org_id: string
+          storage_path: string
+        }
+        Insert: {
+          content_type?: string | null
+          created_at?: string
+          draft_id?: string | null
+          expense_id?: string | null
+          id?: string
+          org_id: string
+          storage_path: string
+        }
+        Update: {
+          content_type?: string | null
+          created_at?: string
+          draft_id?: string | null
+          expense_id?: string | null
+          id?: string
+          org_id?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_receipts_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "sms_charge_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_receipts_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_receipts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -810,6 +898,7 @@ export type Database = {
           listing_description: string | null
           listing_title: string
           org_id: string
+          published_at: string | null
           slug: string | null
           status: Database["public"]["Enums"]["listing_status"]
           unit_id: string
@@ -824,6 +913,7 @@ export type Database = {
           listing_description?: string | null
           listing_title: string
           org_id: string
+          published_at?: string | null
           slug?: string | null
           status?: Database["public"]["Enums"]["listing_status"]
           unit_id: string
@@ -838,6 +928,7 @@ export type Database = {
           listing_description?: string | null
           listing_title?: string
           org_id?: string
+          published_at?: string | null
           slug?: string | null
           status?: Database["public"]["Enums"]["listing_status"]
           unit_id?: string
@@ -860,6 +951,133 @@ export type Database = {
           },
         ]
       }
+      listing_social_posts: {
+        Row: {
+          caption: string | null
+          caption_draft: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          listing_id: string | null
+          match_method: Database["public"]["Enums"]["social_match_method"] | null
+          media_paths: string[]
+          meta_object_id: string | null
+          org_id: string
+          permalink: string | null
+          platform: Database["public"]["Enums"]["social_platform"]
+          posted_at: string
+          source: Database["public"]["Enums"]["social_post_source"]
+          surface: Database["public"]["Enums"]["social_surface"]
+        }
+        Insert: {
+          caption?: string | null
+          caption_draft?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          listing_id?: string | null
+          match_method?: Database["public"]["Enums"]["social_match_method"] | null
+          media_paths?: string[]
+          meta_object_id?: string | null
+          org_id: string
+          permalink?: string | null
+          platform: Database["public"]["Enums"]["social_platform"]
+          posted_at?: string
+          source?: Database["public"]["Enums"]["social_post_source"]
+          surface: Database["public"]["Enums"]["social_surface"]
+        }
+        Update: {
+          caption?: string | null
+          caption_draft?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          listing_id?: string | null
+          match_method?: Database["public"]["Enums"]["social_match_method"] | null
+          media_paths?: string[]
+          meta_object_id?: string | null
+          org_id?: string
+          permalink?: string | null
+          platform?: Database["public"]["Enums"]["social_platform"]
+          posted_at?: string
+          source?: Database["public"]["Enums"]["social_post_source"]
+          surface?: Database["public"]["Enums"]["social_surface"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_social_posts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_social_posts_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_social_posts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listing_social_state: {
+        Row: {
+          changes_acked_at: string | null
+          facebook_feed_at: string | null
+          facebook_story_at: string | null
+          instagram_feed_at: string | null
+          instagram_story_at: string | null
+          listing_id: string
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          changes_acked_at?: string | null
+          facebook_feed_at?: string | null
+          facebook_story_at?: string | null
+          instagram_feed_at?: string | null
+          instagram_story_at?: string | null
+          listing_id: string
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          changes_acked_at?: string | null
+          facebook_feed_at?: string | null
+          facebook_story_at?: string | null
+          instagram_feed_at?: string | null
+          instagram_story_at?: string | null
+          listing_id?: string
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_social_state_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: true
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_social_state_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string | null
@@ -867,6 +1085,9 @@ export type Database = {
           drive_connected_at: string | null
           drive_refresh_token: string | null
           drive_token_expiry: number | null
+          expense_hst_rate: number
+          expense_labour_rate: number
+          expense_markup_rate: number
           gmail_access_token: string | null
           gmail_connected_at: string | null
           gmail_history_id: string | null
@@ -895,6 +1116,9 @@ export type Database = {
           drive_connected_at?: string | null
           drive_refresh_token?: string | null
           drive_token_expiry?: number | null
+          expense_hst_rate?: number
+          expense_labour_rate?: number
+          expense_markup_rate?: number
           gmail_access_token?: string | null
           gmail_connected_at?: string | null
           gmail_history_id?: string | null
@@ -923,6 +1147,9 @@ export type Database = {
           drive_connected_at?: string | null
           drive_refresh_token?: string | null
           drive_token_expiry?: number | null
+          expense_hst_rate?: number
+          expense_labour_rate?: number
+          expense_markup_rate?: number
           gmail_access_token?: string | null
           gmail_connected_at?: string | null
           gmail_history_id?: string | null
@@ -946,6 +1173,75 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      org_meta_connections: {
+        Row: {
+          connected_at: string | null
+          connected_by: string | null
+          facebook_page_id: string | null
+          facebook_page_name: string | null
+          graph_api_version: string
+          instagram_user_id: string | null
+          instagram_username: string | null
+          last_sync_error: string | null
+          last_synced_at: string | null
+          org_id: string
+          page_access_token: string | null
+          system_user_token: string | null
+          token_expires_at: string | null
+          updated_at: string
+          webhook_subscribed: boolean
+        }
+        Insert: {
+          connected_at?: string | null
+          connected_by?: string | null
+          facebook_page_id?: string | null
+          facebook_page_name?: string | null
+          graph_api_version?: string
+          instagram_user_id?: string | null
+          instagram_username?: string | null
+          last_sync_error?: string | null
+          last_synced_at?: string | null
+          org_id: string
+          page_access_token?: string | null
+          system_user_token?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          webhook_subscribed?: boolean
+        }
+        Update: {
+          connected_at?: string | null
+          connected_by?: string | null
+          facebook_page_id?: string | null
+          facebook_page_name?: string | null
+          graph_api_version?: string
+          instagram_user_id?: string | null
+          instagram_username?: string | null
+          last_sync_error?: string | null
+          last_synced_at?: string | null
+          org_id?: string
+          page_access_token?: string | null
+          system_user_token?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          webhook_subscribed?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_meta_connections_connected_by_fkey"
+            columns: ["connected_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_meta_connections_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       org_tasks: {
         Row: {
@@ -1206,6 +1502,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pingram_webhook_events: {
+        Row: {
+          event_type: string | null
+          pingram_id: string
+          received_at: string
+        }
+        Insert: {
+          event_type?: string | null
+          pingram_id: string
+          received_at?: string
+        }
+        Update: {
+          event_type?: string | null
+          pingram_id?: string
+          received_at?: string
+        }
+        Relationships: []
       }
       people: {
         Row: {
@@ -1686,6 +2000,126 @@ export type Database = {
         }
         Relationships: []
       }
+      sms_charge_drafts: {
+        Row: {
+          candidate_properties: Json
+          category: string | null
+          computed: Json | null
+          created_at: string
+          expires_at: string
+          from_phone: string
+          id: string
+          labour_hours: number | null
+          note: string | null
+          org_id: string
+          original_text: string
+          person_id: string
+          pingram_message_id: string | null
+          property_id: string | null
+          status: string
+          supplies_cost: number | null
+        }
+        Insert: {
+          candidate_properties?: Json
+          category?: string | null
+          computed?: Json | null
+          created_at?: string
+          expires_at?: string
+          from_phone: string
+          id?: string
+          labour_hours?: number | null
+          note?: string | null
+          org_id: string
+          original_text: string
+          person_id: string
+          pingram_message_id?: string | null
+          property_id?: string | null
+          status: string
+          supplies_cost?: number | null
+        }
+        Update: {
+          candidate_properties?: Json
+          category?: string | null
+          computed?: Json | null
+          created_at?: string
+          expires_at?: string
+          from_phone?: string
+          id?: string
+          labour_hours?: number | null
+          note?: string | null
+          org_id?: string
+          original_text?: string
+          person_id?: string
+          pingram_message_id?: string | null
+          property_id?: string | null
+          status?: string
+          supplies_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_charge_drafts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_charge_drafts_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_charge_drafts_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sms_charge_phrases: {
+        Row: {
+          category: string | null
+          hit_count: number
+          id: string
+          last_confirmed_at: string | null
+          normalized_phrase: string
+          org_id: string
+          typical_hours: number | null
+          typical_supplies_cost: number | null
+        }
+        Insert: {
+          category?: string | null
+          hit_count?: number
+          id?: string
+          last_confirmed_at?: string | null
+          normalized_phrase: string
+          org_id: string
+          typical_hours?: number | null
+          typical_supplies_cost?: number | null
+        }
+        Update: {
+          category?: string | null
+          hit_count?: number
+          id?: string
+          last_confirmed_at?: string | null
+          normalized_phrase?: string
+          org_id?: string
+          typical_hours?: number | null
+          typical_supplies_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_charge_phrases_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       units: {
         Row: {
           amenities: string[] | null
@@ -1955,6 +2389,10 @@ export type Database = {
         | "closed"
       inquiry_type: "inquiry" | "application"
       listing_status: "draft" | "published" | "unlisted" | "renewal_sent"
+      social_match_method: "url_in_caption" | "manual" | "published"
+      social_platform: "facebook" | "instagram"
+      social_post_source: "manual" | "synced" | "published"
+      social_surface: "feed" | "story" | "reel"
       property_type_enum:
         | "house"
         | "duplex"
@@ -2119,6 +2557,10 @@ export const Constants = {
       ],
       inquiry_type: ["inquiry", "application"],
       listing_status: ["draft", "published", "unlisted", "renewal_sent"],
+      social_match_method: ["url_in_caption", "manual", "published"],
+      social_platform: ["facebook", "instagram"],
+      social_post_source: ["manual", "synced", "published"],
+      social_surface: ["feed", "story", "reel"],
       property_type_enum: [
         "house",
         "duplex",

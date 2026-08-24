@@ -4,7 +4,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export type PeriodExpense = { id: string; description: string; billedAmount: number }
+export type PeriodExpense = { id: string; description: string; billedAmount: number; subtotal: number }
 
 export type PropertyPeriodSummary = {
   propertyId: string
@@ -108,19 +108,21 @@ export async function summarizePropertyPeriod(
     return sum + Number(p.amount ?? 0)
   }, 0)
 
+  // Owner-visible: subtotal (before HST) + billed_amount (after HST). Cost/markup/labour stay excluded (D-03, D-11).
   const { data: expenseData } = await supabase
     .from('expenses')
-    .select('id, description, billed_amount')
+    .select('id, description, billed_amount, subtotal')
     .eq('org_id', orgId)
     .eq('property_id', propertyId)
     .gte('expense_date', startDate)
     .lt('expense_date', endDate)
 
   const expenses: PeriodExpense[] = (expenseData ?? []).map(
-    (e: { id: string; description: string; billed_amount: number }) => ({
+    (e: { id: string; description: string; billed_amount: number; subtotal: number }) => ({
       id: e.id,
       description: e.description,
       billedAmount: Number(e.billed_amount ?? 0),
+      subtotal: Number(e.subtotal ?? e.billed_amount ?? 0),
     })
   )
   const totalExpenses = expenses.reduce((s, e) => s + e.billedAmount, 0)

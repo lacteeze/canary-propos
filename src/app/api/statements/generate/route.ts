@@ -118,6 +118,7 @@ export async function POST(request: NextRequest) {
     expenses: summary.expenses.map((e) => ({
       description: e.description,
       billedAmount: e.billedAmount,
+      subtotal: e.subtotal,
     })),
     managementFeeLabel: summary.managementFeeLabel,
     managementFee: summary.managementFee,

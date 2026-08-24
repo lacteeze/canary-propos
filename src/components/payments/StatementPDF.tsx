@@ -1,7 +1,8 @@
 // src/components/payments/StatementPDF.tsx
 // react-pdf/renderer Document component for owner monthly statements.
 // SERVER-SIDE ONLY — rendered via renderToBuffer(). Never imported in 'use client' files.
-// SECURITY: vendor_cost is never referenced or rendered here (T-04-17).
+// SECURITY: vendor_cost / supplies_cost / markup / labour / notes / SMS are never referenced here (T-04-17, D-03).
+// subtotal is owner-visible by design (amount before HST); billedAmount is the total after HST.
 
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 
@@ -16,7 +17,7 @@ export interface StatementData {
   periodYear: number
   periodMonth: number
   rentCollected: number
-  expenses: Array<{ description: string; billedAmount: number }>
+  expenses: Array<{ description: string; billedAmount: number; subtotal: number }>
   managementFeeLabel: string // e.g. "Management Fee (8%)" or "Management Fee (flat $250)"
   managementFee: number
   netToOwner: number
@@ -154,6 +155,7 @@ const styles = StyleSheet.create({
   },
   colDescription: { flex: 3 },
   colAmount: { flex: 1, textAlign: 'right' },
+  colSubtotal: { flex: 1, textAlign: 'right' },
   // Footer
   footer: {
     position: 'absolute',
@@ -238,19 +240,21 @@ export function StatementPDF({ statement }: { statement: StatementData }) {
           </View>
         </View>
 
-        {/* 4. Expense detail — billed_amount ONLY, vendor_cost intentionally excluded */}
+        {/* 4. Expense detail — owner-visible subtotal + total. Cost/markup/labour/notes/SMS never rendered (D-03, T-04-17). */}
         {expenses.length > 0 && (
           <View style={styles.expensesSection}>
             <Text style={styles.sectionTitle}>Expense Detail</Text>
 
             <View style={styles.tableHeader}>
               <Text style={[styles.tableHeaderCell, styles.colDescription]}>Description</Text>
-              <Text style={[styles.tableHeaderCell, styles.colAmount]}>Amount</Text>
+              <Text style={[styles.tableHeaderCell, styles.colSubtotal]}>Subtotal</Text>
+              <Text style={[styles.tableHeaderCell, styles.colAmount]}>Total</Text>
             </View>
 
             {expenses.map((expense, index) => (
               <View key={index} style={styles.tableRow}>
                 <Text style={[styles.tableCell, styles.colDescription]}>{expense.description}</Text>
+                <Text style={[styles.tableCell, styles.colSubtotal]}>{formatCAD(expense.subtotal)}</Text>
                 <Text style={[styles.tableCell, styles.colAmount]}>{formatCAD(expense.billedAmount)}</Text>
               </View>
             ))}

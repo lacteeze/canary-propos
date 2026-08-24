@@ -25,6 +25,7 @@ export interface DisbursementExpense {
   id: string
   description: string
   billedAmount: number
+  subtotal: number
 }
 
 export interface DisbursementSummary {
@@ -146,23 +147,29 @@ export async function calculateDisbursement(
     ? (paymentData as Array<{ amount: number }>).reduce((sum, p) => sum + (p.amount ?? 0), 0)
     : 0
 
-  // 5. Load expenses for this property — billed_amount ONLY, never vendor_cost (T-04-17)
+  // 5. Load expenses — owner-visible subtotal + billed_amount only.
+  // SECURITY: never vendor_cost, supplies_cost, markup_*, labour_*, staff_notes, source_sms (T-04-17, D-03).
+  // subtotal is owner-visible by design (before HST); cost/markup/labour remain excluded.
   const { data: expenseData } = await (supabase
     .from('expenses')
-    .select('id, description, billed_amount') as any)
+    .select('id, description, billed_amount, subtotal') as any)
     .eq('org_id', callerPerson.org_id)
     .eq('property_id', propertyId)
     .gte('expense_date', start.split('T')[0])
     .lt('expense_date', end.split('T')[0])
 
   const expenses: DisbursementExpense[] = expenseData
-    ? (expenseData as Array<{ id: string; description: string; billed_amount: number }>).map(
-        (e) => ({
-          id: e.id,
-          description: e.description,
-          billedAmount: e.billed_amount ?? 0,
-        })
-      )
+    ? (expenseData as Array<{
+        id: string
+        description: string
+        billed_amount: number
+        subtotal: number
+      }>).map((e) => ({
+        id: e.id,
+        description: e.description,
+        billedAmount: e.billed_amount ?? 0,
+        subtotal: e.subtotal ?? e.billed_amount ?? 0,
+      }))
     : []
 
   // 6. Load owner name

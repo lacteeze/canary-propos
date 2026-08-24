@@ -1,11 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { recordExpense } from '@/app/(manager)/payments/actions'
+import {
+  computeExpenseBilling,
+  DEFAULT_EXPENSE_RATES,
+} from '@/lib/billing/expense-breakdown'
 import {
   Dialog,
   DialogContent,
@@ -34,9 +38,10 @@ import {
 const formSchema = z.object({
   property_id: z.string().uuid('Please select a property'),
   description: z.string().min(1, 'Description is required'),
-  vendor_cost: z.coerce.number().min(0, 'Vendor cost must be 0 or more'),
-  billed_amount: z.coerce.number().min(0, 'Billed amount must be 0 or more'),
+  supplies_cost: z.coerce.number().min(0, 'Supplies cost must be 0 or more'),
+  labour_hours: z.coerce.number().min(0, 'Hours must be 0 or more'),
   expense_date: z.string().min(1, 'Expense date is required'),
+  staff_notes: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -51,6 +56,10 @@ interface RecordExpenseDialogProps {
   onSuccess?: () => void
 }
 
+function formatCAD(n: number): string {
+  return n.toLocaleString('en-CA', { style: 'currency', currency: 'CAD' })
+}
+
 export function RecordExpenseDialog({ properties, onSuccess }: RecordExpenseDialogProps) {
   const [open, setOpen] = useState(false)
   const today = new Date().toISOString().split('T')[0]
@@ -60,11 +69,24 @@ export function RecordExpenseDialog({ properties, onSuccess }: RecordExpenseDial
     defaultValues: {
       property_id: '',
       description: '',
-      vendor_cost: 0,
-      billed_amount: 0,
+      supplies_cost: 0,
+      labour_hours: 0,
       expense_date: today,
+      staff_notes: '',
     },
   })
+
+  const suppliesCost = form.watch('supplies_cost')
+  const labourHours = form.watch('labour_hours')
+  const preview = useMemo(
+    () =>
+      computeExpenseBilling({
+        suppliesCost: Number(suppliesCost) || 0,
+        labourHours: Number(labourHours) || 0,
+        rates: DEFAULT_EXPENSE_RATES,
+      }),
+    [suppliesCost, labourHours]
+  )
 
   async function onSubmit(values: FormValues) {
     const result = await recordExpense(values)
@@ -73,9 +95,10 @@ export function RecordExpenseDialog({ properties, onSuccess }: RecordExpenseDial
       form.reset({
         property_id: '',
         description: '',
-        vendor_cost: 0,
-        billed_amount: 0,
+        supplies_cost: 0,
+        labour_hours: 0,
         expense_date: today,
+        staff_notes: '',
       })
       setOpen(false)
       onSuccess?.()
@@ -95,7 +118,6 @@ export function RecordExpenseDialog({ properties, onSuccess }: RecordExpenseDial
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Property */}
             <FormField
               control={form.control}
               name="property_id"
@@ -121,7 +143,6 @@ export function RecordExpenseDialog({ properties, onSuccess }: RecordExpenseDial
               )}
             />
 
-            {/* Description */}
             <FormField
               control={form.control}
               name="description"
@@ -136,14 +157,13 @@ export function RecordExpenseDialog({ properties, onSuccess }: RecordExpenseDial
               )}
             />
 
-            {/* Vendor Cost + Billed Amount */}
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="vendor_cost"
+                name="supplies_cost"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Vendor Cost (internal)</FormLabel>
+                    <FormLabel>Supplies $</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" min="0" {...field} />
                     </FormControl>
@@ -153,23 +173,56 @@ export function RecordExpenseDialog({ properties, onSuccess }: RecordExpenseDial
               />
               <FormField
                 control={form.control}
-                name="billed_amount"
+                name="labour_hours"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Billed to Owner</FormLabel>
+                    <FormLabel>Hours</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" min="0" {...field} />
+                      <Input type="number" step="0.25" min="0" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
-            <p className="text-xs text-stone-500 -mt-2">
-              Vendor cost is for internal records only — owners see billed amount.
-            </p>
 
-            {/* Date */}
+            <div className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-600 space-y-1">
+              <div className="flex justify-between">
+                <span>Supplies × 1.30</span>
+                <span>{formatCAD(preview.suppliesMarkedUp)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Labour</span>
+                <span>{formatCAD(preview.labourAmount)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Subtotal (before HST)</span>
+                <span>{formatCAD(preview.subtotal)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>HST 15%</span>
+                <span>{formatCAD(preview.hstAmount)}</span>
+              </div>
+              <div className="flex justify-between font-medium text-stone-800">
+                <span>Total (after HST)</span>
+                <span>{formatCAD(preview.total)}</span>
+              </div>
+            </div>
+
+            <FormField
+              control={form.control}
+              name="staff_notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Staff notes (internal)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Optional — never shown to owners" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="expense_date"

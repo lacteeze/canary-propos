@@ -5,18 +5,7 @@
 // T-05-14: Pingram handles sender ID; carrier-level spoofing is outside app scope.
 
 import { Pingram } from 'pingram'
-
-/**
- * Normalize a phone number to E.164 format.
- * If the number doesn't start with '+', prepends '+1' (Canadian default).
- */
-function toE164(phone: string): string {
-  const stripped = phone.replace(/[\s\-().]/g, '')
-  if (stripped.startsWith('+')) return stripped
-  // Remove leading 1 if present before prepending +1
-  if (stripped.startsWith('1') && stripped.length === 11) return `+${stripped}`
-  return `+1${stripped}`
-}
+import { toE164 } from '@/lib/sms/e164'
 
 export interface SendVendorJobSMSParams {
   vendorPhone: string

@@ -1,6 +1,6 @@
 ---
 id: SEED-001
-status: dormant
+status: harvested
 planted: 2026-08-24
 planted_during: unknown
 trigger_when: when expense billing breakdown (supplies, labour, HST) exists

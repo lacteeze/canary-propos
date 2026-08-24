@@ -11,15 +11,15 @@ Treated as validated. Not re-planned here.
 
 ### Expenses
 
-- [ ] **EXP-01**: Expense stores supplies cost, markup, labour hours, subtotal, HST, and total; rates snapshotted from org defaults (30%, $50/hr, 15% HST)
-- [ ] **EXP-02**: Owners and tenants never see cost, markup, labour, photos, or notes — only subtotal before HST and total after HST
+- [x] **EXP-01**: Expense stores supplies cost, markup, labour hours, subtotal, HST, and total; rates snapshotted from org defaults (30%, $50/hr, 15% HST)
+- [x] **EXP-02**: Owners and tenants never see cost, markup, labour, photos, or notes — only subtotal before HST and total after HST
 
 ### SMS intake
 
-- [ ] **SMS-01**: Staff text one shared number; sender phone maps to a manager/employee/admin; unknown numbers ignored
-- [ ] **SMS-02**: App drafts property (fuzzy), date=today, category, supplies, hours, then texts breakdown; Y posts, N cancels
-- [ ] **SMS-03**: MMS receipts attach as staff-only files
-- [ ] **SMS-04**: Confirmed notes train later shorthand; inferred drafts still require Y
+- [x] **SMS-01**: Staff text one shared number; sender phone maps to a manager/employee/admin; unknown numbers ignored
+- [x] **SMS-02**: App drafts property (fuzzy), date=today, category, supplies, hours, then texts breakdown; Y posts, N cancels
+- [x] **SMS-03**: MMS receipts attach as staff-only files
+- [x] **SMS-04**: Confirmed notes train later shorthand; inferred drafts still require Y
 
 ## Out of Scope
 
@@ -33,13 +33,13 @@ Treated as validated. Not re-planned here.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EXP-01 | Phase 2 | Pending |
-| EXP-02 | Phase 2 | Pending |
-| SMS-01 | Phase 2 | Pending |
-| SMS-02 | Phase 2 | Pending |
-| SMS-03 | Phase 2 | Pending |
-| SMS-04 | Phase 2 | Pending |
+| EXP-01 | Phase 2 | Complete (260824-jzb) |
+| EXP-02 | Phase 2 | Complete (260824-jzb) |
+| SMS-01 | Phase 2 | Complete (260824-jzb) |
+| SMS-02 | Phase 2 | Complete (260824-jzb) |
+| SMS-03 | Phase 2 | Complete (260824-jzb) |
+| SMS-04 | Phase 2 | Complete (260824-jzb) |
 
 ---
 *Requirements defined: 2026-08-24*
-*Last updated: 2026-08-24 after brownfield GSD stub*
+*Last updated: 2026-08-24 after quick task 260824-jzb*

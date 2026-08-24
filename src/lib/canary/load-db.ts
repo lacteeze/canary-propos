@@ -281,7 +281,9 @@ export async function loadCanaryDb(
       supabase
         .from('expenses')
         .select(
-          `id, description, billed_amount, expense_date,
+          `id, description, billed_amount, expense_date, created_by, source_sms_text, source_channel,
+           supplies_cost, labour_hours, subtotal, hst_amount,
+           people!created_by(first_name, last_name),
            properties!property_id(street_address, city)`
         )
         .eq('org_id', orgId)
@@ -308,6 +310,21 @@ export async function loadCanaryDb(
   const mediaRows = (mediaRes.data ?? []) as any[]
   const orgSlug = (orgRes.data as { slug?: string } | null)?.slug ?? 'canary'
   /* eslint-enable @typescript-eslint/no-explicit-any */
+
+  const receiptCountByExpense = new Map<string, number>()
+  const expenseIds = expenseRows.map((e) => e.id as string).filter(Boolean)
+  if (expenseIds.length) {
+    const receiptsRes = await supabase
+      .from('expense_receipts')
+      .select('expense_id')
+      .eq('org_id', orgId)
+      .in('expense_id', expenseIds)
+    for (const r of receiptsRes.data ?? []) {
+      const eid = (r as { expense_id?: string | null }).expense_id
+      if (!eid) continue
+      receiptCountByExpense.set(eid, (receiptCountByExpense.get(eid) ?? 0) + 1)
+    }
+  }
 
   // Only fetch notes for the inquiries we already loaded (latest-per-inquiry in memory).
   const inquiryIds = inquiryRows.map((i) => i.id as string).filter(Boolean)
@@ -706,16 +723,26 @@ export async function loadCanaryDb(
       })),
     ...expenseRows
       .filter((e) => e.properties)
-      .map((e): CanaryPayment => ({
-        id: e.id,
-        date: e.expense_date ?? '',
-        property: fullAddress(e.properties.street_address, e.properties.city),
-        category: 'Maintenance',
-        description: e.description ?? '',
-        amount: String(Number(e.billed_amount)),
-        type: 'Debit',
-        persisted: true,
-      })),
+      .map((e): CanaryPayment => {
+        const poster = e.people
+        const postedBy = poster
+          ? `${poster.first_name ?? ''} ${poster.last_name ?? ''}`.trim() || null
+          : null
+        return {
+          id: e.id,
+          date: e.expense_date ?? '',
+          property: fullAddress(e.properties.street_address, e.properties.city),
+          category: 'Maintenance',
+          description: e.description ?? '',
+          amount: String(Number(e.billed_amount)),
+          type: 'Debit',
+          persisted: true,
+          postedBy,
+          sourceSms: e.source_sms_text ?? null,
+          sourceChannel: e.source_channel ?? null,
+          receiptCount: receiptCountByExpense.get(e.id) ?? 0,
+        }
+      }),
   ].sort((a, b) => (a.date < b.date ? 1 : -1))
 
   // Defense-in-depth for vendor portal: only assigned projects + their properties.

@@ -10,6 +10,7 @@ import { phonesEqual, toE164 } from '@/lib/sms/e164'
 import { matchProperties, type PropertyMatch } from '@/lib/sms/match-property'
 import { parseChargeNote, type LearnedPhrase } from '@/lib/sms/parse-charge-note'
 import { sendChargeCaptureSms } from '@/lib/sms/pingram-send'
+import { upsertPhrase } from '@/lib/sms/learn-phrase'
 import { isAiGatewayConfigured, gatewayGenerateText } from '@/lib/ai/gateway'
 
 const STAFF_ROLES = new Set(['manager', 'employee', 'admin'])
@@ -193,7 +194,7 @@ export async function handleInboundSms(input: InboundSmsInput): Promise<void> {
       .select('street_address')
       .eq('id', draft.property_id)
       .maybeSingle()
-    const { error: expError } = await supabase.from('expenses').insert({
+    const { data: inserted, error: expError } = await supabase.from('expenses').insert({
       org_id: orgId,
       property_id: draft.property_id,
       description: [draft.category || 'Maintenance', draft.note].filter(Boolean).join(' — '),
@@ -202,11 +203,26 @@ export async function handleInboundSms(input: InboundSmsInput): Promise<void> {
       staff_notes: draft.note,
       source_sms_text: draft.original_text,
       ...snapshot,
-    })
+    }).select('id').single()
     if (expError) {
       console.error('[charge-capture] expense insert', expError)
       return
     }
+    if (inserted?.id) {
+      await supabase.from('expense_receipts').update({ expense_id: inserted.id }).eq('draft_id', draft.id)
+    }
+    await attachDraftMedia(supabase, {
+      orgId,
+      draftId: draft.id,
+      media: input.media,
+    })
+    await upsertPhrase(supabase, {
+      orgId,
+      originalText: draft.original_text,
+      category: draft.category,
+      typicalHours: labourHours,
+      typicalSuppliesCost: suppliesCost,
+    })
     await supabase.from('sms_charge_drafts').update({ status: 'posted' }).eq('id', draft.id)
     const short = shortPropertyAddress(property?.street_address) || 'property'
     await sms(`Posted: ${short} total $${money(snapshot.billed_amount)}`)
@@ -231,6 +247,7 @@ export async function handleInboundSms(input: InboundSmsInput): Promise<void> {
       .from('sms_charge_drafts')
       .update({ property_id: chosen.id, status: 'pending_confirm' })
       .eq('id', draft.id)
+    await attachDraftMedia(supabase, { orgId, draftId: draft.id, media: input.media })
     const billing = computeExpenseBilling({
       suppliesCost: Number(draft.supplies_cost ?? 0),
       labourHours: Number(draft.labour_hours ?? 0),
@@ -325,11 +342,12 @@ export async function handleInboundSms(input: InboundSmsInput): Promise<void> {
   }
 
   if (matches.length > 1) {
-    await persistDraft({
+    const draftId = await persistDraft({
       status: 'pending_property',
       property_id: null,
       candidate_properties: matches,
     })
+    if (draftId) await attachDraftMedia(supabase, { orgId, draftId, media: input.media })
     const lines = matches.map((m, i) => `${i + 1}) ${shortPropertyAddress(m.street_address) || m.street_address}`)
     await sms(`Reply 1 or 2:\n${lines.join('\n')}`)
     return
@@ -337,12 +355,13 @@ export async function handleInboundSms(input: InboundSmsInput): Promise<void> {
 
   const property = matches[0]
   const billing = computeExpenseBilling({ suppliesCost, labourHours, rates })
-  await persistDraft({
+  const draftId = await persistDraft({
     status: 'pending_confirm',
     property_id: property.id,
     candidate_properties: matches,
     computed: billing,
   })
+  if (draftId) await attachDraftMedia(supabase, { orgId, draftId, media: input.media })
   await sms(
     formatDraftSms({
       shortAddress: shortPropertyAddress(property.street_address) || property.street_address,
@@ -354,4 +373,57 @@ export async function handleInboundSms(input: InboundSmsInput): Promise<void> {
       billing,
     })
   )
+}
+
+const RECEIPT_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'application/pdf': 'pdf',
+}
+const MAX_RECEIPT_BYTES = 1.5 * 1024 * 1024
+
+async function attachDraftMedia(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  input: {
+    orgId: string
+    draftId: string
+    media?: { url: string; contentType?: string }[]
+  }
+): Promise<void> {
+  if (!input.media?.length || !input.draftId) return
+  for (const item of input.media) {
+    try {
+      const contentType = (item.contentType || '').split(';')[0].trim().toLowerCase()
+      const ext = RECEIPT_EXT[contentType]
+      if (!ext || !item.url) continue
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 10_000)
+      const res = await fetch(item.url, { signal: controller.signal })
+      clearTimeout(timer)
+      if (!res.ok) continue
+      const buf = Buffer.from(await res.arrayBuffer())
+      if (buf.byteLength > MAX_RECEIPT_BYTES) continue
+      const filename = `${crypto.randomUUID()}.${ext}`
+      const storagePath = `${input.orgId}/expense-receipts/${input.draftId}/${filename}`
+      const { error: upErr } = await supabase.storage.from('org-assets').upload(storagePath, buf, {
+        contentType,
+        upsert: false,
+      })
+      if (upErr) {
+        console.warn('[charge-capture] receipt upload', upErr)
+        continue
+      }
+      await supabase.from('expense_receipts').insert({
+        org_id: input.orgId,
+        draft_id: input.draftId,
+        storage_path: storagePath,
+        content_type: contentType,
+      })
+    } catch (err) {
+      console.warn('[charge-capture] receipt skip', err)
+    }
+  }
 }

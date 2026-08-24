@@ -445,6 +445,10 @@ export interface CanaryPayment {
   type: 'Credit' | 'Debit'
   /** true when the row came from the database (read-only in the UI) */
   persisted?: boolean
+  postedBy?: string | null
+  sourceSms?: string | null
+  sourceChannel?: 'manual' | 'sms' | 'work_order' | null
+  receiptCount?: number
 }
 
 export interface CanaryDb {

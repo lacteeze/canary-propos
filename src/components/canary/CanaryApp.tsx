@@ -1548,7 +1548,20 @@ export default function CanaryApp({
       }),
       open: null,
       group: (p: CanaryPayment) => p.category || '—',
-      card: (p: CanaryPayment) => ({ title: short(p.property || '') || '—', sub: (p.date || '') + (p.description ? ' · ' + p.description : ''), right: (p.type === 'Debit' ? '−' : '') + money(Math.abs(parseFloat(p.amount) || 0)), rightColor: p.type === 'Debit' ? 'var(--red)' : 'var(--green)' }),
+      card: (p: CanaryPayment) => ({
+        title: short(p.property || '') || '—',
+        sub: (() => {
+          let sub = (p.date || '') + (p.description ? ' · ' + p.description : '')
+          if (p.type === 'Debit') {
+            if (p.postedBy) sub += ' · Posted by ' + p.postedBy
+            if (p.sourceSms) sub += ' · ' + p.sourceSms.slice(0, 120)
+            if ((p.receiptCount ?? 0) > 0) sub += ` · Receipt (${p.receiptCount})`
+          }
+          return sub
+        })(),
+        right: (p.type === 'Debit' ? '−' : '') + money(Math.abs(parseFloat(p.amount) || 0)),
+        rightColor: p.type === 'Debit' ? 'var(--red)' : 'var(--green)',
+      }),
       cols: [
         { key: 'date', label: 'Date', flex: '0 0 92px', mono: true, get: (p: CanaryPayment) => p.date || '—' },
         { key: 'property', label: 'Property', flex: '2', bold: true, get: (p: CanaryPayment) => short(p.property || '') || '—' },

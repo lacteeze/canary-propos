@@ -432,6 +432,9 @@ export async function savePaymentEntry(input: {
   if (!lease) {
     return { success: false, error: 'No active lease on that property — credits must attach to a lease.' }
   }
+  if (d.amount == null) {
+    return { success: false, error: 'Amount must be positive' }
+  }
 
   const { error } = await ctx.supabase.from('payments').insert({
     org_id: ctx.person.org_id,

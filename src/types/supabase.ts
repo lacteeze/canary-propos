@@ -674,6 +674,65 @@ export type Database = {
           },
         ]
       }
+      intake_submissions: {
+        Row: {
+          contact_email: string | null
+          contact_name: string | null
+          created_at: string
+          current_step: number
+          id: string
+          org_id: string
+          payload: Json
+          promoted_at: string | null
+          promoted_to_client_id: string | null
+          property_address: string | null
+          status: string
+          submitted_at: string | null
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_name?: string | null
+          created_at?: string
+          current_step?: number
+          id?: string
+          org_id: string
+          payload?: Json
+          promoted_at?: string | null
+          promoted_to_client_id?: string | null
+          property_address?: string | null
+          status?: string
+          submitted_at?: string | null
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          contact_email?: string | null
+          contact_name?: string | null
+          created_at?: string
+          current_step?: number
+          id?: string
+          org_id?: string
+          payload?: Json
+          promoted_at?: string | null
+          promoted_to_client_id?: string | null
+          property_address?: string | null
+          status?: string
+          submitted_at?: string | null
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_submissions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       listing_alert_subscribers: {
         Row: {
           created_at: string

@@ -146,6 +146,28 @@ export async function loadPropertyForListingId(
   return loadPropertyByUnitId(client, orgId, listing?.unit_id)
 }
 
+/** Active lease end for a unit — used on published listing details. No tenant PII. */
+export async function loadUnitActiveLeaseEnd(
+  unitId: string | null | undefined,
+): Promise<string | null> {
+  if (!unitId) return null
+  const client = publicPropertyLookupClient()
+  const { data, error } = await client
+    .from('leases')
+    .select('end_date')
+    .eq('unit_id', unitId)
+    .eq('status', 'active')
+    .not('end_date', 'is', null)
+    .order('end_date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) {
+    console.error('[loadUnitActiveLeaseEnd]', error.message)
+    return null
+  }
+  return data?.end_date ?? null
+}
+
 export async function publicPropertyIsLeased(propertyId: string): Promise<boolean> {
   const client = publicPropertyLookupClient()
   const { data: units, error: unitsError } = await client

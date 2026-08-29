@@ -20,6 +20,7 @@ function formatCAD(n: number) {
 export type ListingDetailListing = {
   id: string
   org_id: string
+  unit_id?: string | null
   listing_title: string
   listing_description: string | null
   highlights: string[] | null
@@ -51,6 +52,8 @@ export type ListingDetailViewProps = {
   listingPhotos: string[]
   /** Full-res URLs for hero + lightbox (index-aligned with listingPhotos). */
   listingPhotosFull?: string[]
+  /** Active lease end for this listing's unit, already formatted. */
+  leaseEndLabel?: string | null
   carouselGroups: CityGroup[]
   orgSlug: string
   /** Org-level Hospitable Direct site UUID when widget should render */
@@ -68,6 +71,7 @@ export type ListingDetailViewProps = {
 export const LISTING_DETAIL_SELECT = `
   id,
   org_id,
+  unit_id,
   slug,
   listing_title,
   listing_description,
@@ -98,6 +102,7 @@ export function ListingDetailView({
   listing,
   listingPhotos,
   listingPhotosFull,
+  leaseEndLabel,
   carouselGroups,
   orgSlug,
   hospitableSiteUuid,
@@ -224,6 +229,12 @@ export function ListingDetailView({
             <div className="cpub-listing-hero-stat">
               <span>Available</span>
               {availableLabel}
+            </div>
+          )}
+          {leaseEndLabel && (
+            <div className="cpub-listing-hero-stat">
+              <span>Lease ends</span>
+              {leaseEndLabel}
             </div>
           )}
           {rent != null && (
@@ -388,6 +399,11 @@ export function ListingDetailView({
                 {availableLabel && (
                   <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--dim)' }}>
                     Available {availableLabel}
+                  </p>
+                )}
+                {leaseEndLabel && (
+                  <p style={{ margin: availableLabel ? '4px 0 0' : '8px 0 0', fontSize: 13.5, color: 'var(--dim)' }}>
+                    Lease ends {leaseEndLabel}
                   </p>
                 )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20 }}>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  formatListingLeaseEnd,
   propertyAvailabilityLabel,
   publishedListingIsListed,
   unitLooksLeased,
@@ -23,6 +24,20 @@ describe('propertyAvailabilityLabel', () => {
     expect(propertyAvailabilityLabel(true)).toBe('Currently leased')
     expect(propertyAvailabilityLabel(false)).toBe('Not currently available')
     expect(propertyAvailabilityLabel(true)).not.toMatch(/\d{4}/)
+  })
+})
+
+describe('formatListingLeaseEnd', () => {
+  it('formats a date-only ISO string with the year', () => {
+    expect(formatListingLeaseEnd('2026-09-30')).toMatch(/Sep/)
+    expect(formatListingLeaseEnd('2026-09-30')).toMatch(/30/)
+    expect(formatListingLeaseEnd('2026-09-30')).toMatch(/2026/)
+  })
+
+  it('returns null for missing or invalid dates', () => {
+    expect(formatListingLeaseEnd(null)).toBeNull()
+    expect(formatListingLeaseEnd('')).toBeNull()
+    expect(formatListingLeaseEnd('not-a-date')).toBeNull()
   })
 })
 

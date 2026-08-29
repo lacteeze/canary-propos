@@ -1,0 +1,332 @@
+.cint-page {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 96px clamp(20px, 4vw, 32px) 64px;
+}
+
+.cint-form-wrap {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+
+.cint-form-wrap > .cpub-form-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.cint-hero {
+  margin-bottom: 28px;
+  text-align: center;
+}
+
+.cint-eyebrow {
+  margin: 0 0 10px;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  font-weight: 600;
+}
+
+.cint-title {
+  margin: 0;
+  font-weight: 600;
+  font-size: clamp(28px, 5vw, 36px);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.cint-lede {
+  margin: 12px auto 0;
+  max-width: 420px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--dim);
+}
+
+.cint-inline-link {
+  color: #1a2f5c;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.cint-progress {
+  width: 100%;
+  margin: 0 0 20px;
+}
+
+.cint-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cint-progress-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.cint-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.cint-progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.cint-progress-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--yellow);
+  border-radius: inherit;
+  transition: width 180ms ease;
+}
+
+.cint-step-arrow {
+  box-sizing: border-box;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1.5px solid var(--border2, var(--border));
+  border-radius: 999px;
+  background: var(--elev);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cint-step-arrow:hover:not(:disabled) {
+  background: var(--hover, color-mix(in srgb, var(--elev) 80%, var(--text)));
+}
+
+.cint-step-arrow:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.cint-step-panel[hidden] {
+  display: none !important;
+}
+
+.cint-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.cint-nav--end {
+  grid-template-columns: 1fr;
+}
+
+.cint-radio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cint-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.cint-radio:has(input:checked) {
+  border-color: var(--yellow);
+  box-shadow: 0 0 0 3px rgba(240, 196, 69, 0.35);
+}
+
+.cint-radio input {
+  accent-color: #1a2f5c;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.cint-error {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #b42318;
+}
+
+.cint-note {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--yellow) 18%, var(--panel));
+  border: 1px solid var(--border);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.cint-unit {
+  margin: 0 0 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--elev);
+}
+
+.cint-unit h3 {
+  margin: 0 0 14px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.cint-summary-block {
+  margin: 0 0 16px;
+}
+
+.cint-summary-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.cint-summary-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.cint-summary-head a,
+.cint-summary-head button {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a2f5c;
+}
+
+.cint-dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.cint-dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.cint-dl dt {
+  color: var(--dim);
+  font-weight: 600;
+}
+
+.cint-dl dd {
+  margin: 0;
+  text-align: right;
+}
+
+.cint-photos {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.cint-photos img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.cint-file {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border2, var(--border));
+  border-radius: 14px;
+  background: var(--panel);
+  font-size: 14px;
+  color: var(--text);
+  font-family: inherit;
+}
+
+.cint-file:focus {
+  outline: none;
+  border-color: var(--yellow);
+  box-shadow: 0 0 0 3px rgba(240, 196, 69, 0.35);
+}
+
+.cint-complete {
+  text-align: center;
+}
+
+.cint-complete-mark {
+  width: 48px;
+  height: 48px;
+  margin: 8px auto 16px;
+  border-radius: 50%;
+  background: rgba(109, 152, 102, 0.15);
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  color: var(--green);
+}
+
+.cint-page .cpub-form-card h2 {
+  font-family: var(--font-display), Optima, 'Segoe UI', Candara, sans-serif;
+  font-weight: 600;
+}
+
+.cint-page .cpub-field input,
+.cint-page .cpub-field textarea,
+.cint-page .cpub-field select {
+  min-height: 44px;
+  font-size: 16px;
+}
+
+@media (max-width: 479px) {
+  .cint-page {
+    padding: 88px 16px 48px;
+  }
+
+  .cint-nav {
+    grid-template-columns: 1fr;
+  }
+}

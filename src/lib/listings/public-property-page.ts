@@ -9,6 +9,20 @@ export function propertyAvailabilityLabel(leased: boolean): string {
   return leased ? 'Currently leased' : 'Not currently available'
 }
 
+/** Calendar date for published listing details (keeps the year; no timezone shift). */
+export function formatListingLeaseEnd(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
+    ? new Date(`${dateStr}T12:00:00`)
+    : new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-CA', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
 /**
  * Published listings (long-term and mid-term) stay listed on the details page
  * even when the unit is occupied or has an active lease — e.g. available now

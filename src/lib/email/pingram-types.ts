@@ -10,6 +10,9 @@ export const PINGRAM_EMAIL_TYPES = {
   teamInvite: 'team_invite',
   workOrderOwnerApproval: 'work_order_owner_approval',
   workOrderVendorAssignment: 'work_order_vendor_assignment',
+  intakeResume: 'intake_resume',
+  intakeConfirmation: 'intake_confirmation',
+  intakeStaffNotify: 'intake_staff_notify',
 } as const
 
 export type PingramEmailType =

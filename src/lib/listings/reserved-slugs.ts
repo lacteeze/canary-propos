@@ -26,6 +26,7 @@ export const RESERVED_LISTING_SLUGS: ReadonlySet<string> = new Set([
   '_next',
   'property',
   'rent',
+  'onboard',
 ])
 
 export function isReservedListingSlug(slug: string): boolean {

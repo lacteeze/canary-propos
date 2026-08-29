@@ -1,0 +1,170 @@
+.sint-page {
+  min-height: 100vh;
+  background: #f7f4ee;
+  color: #1a1814;
+  font-family: var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif;
+}
+
+.sint-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e6dfd2;
+  background: #fffdf8;
+}
+
+.sint-bar a {
+  color: #1a2f5c;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.sint-bar h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.sint-main {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.sint-empty,
+.sint-error {
+  padding: 28px 20px;
+  border: 1px solid #e6dfd2;
+  border-radius: 16px;
+  background: #fffdf8;
+  color: #6b6256;
+}
+
+.sint-error {
+  color: #b42318;
+}
+
+.sint-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fffdf8;
+  border: 1px solid #e6dfd2;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.sint-table th,
+.sint-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid #eee7da;
+  font-size: 14px;
+  vertical-align: top;
+}
+
+.sint-table th {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a7f70;
+  font-weight: 600;
+  background: #f3eee4;
+}
+
+.sint-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.sint-table a {
+  color: #1a2f5c;
+  font-weight: 600;
+}
+
+.sint-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: #eee7da;
+  color: #4a4338;
+}
+
+.sint-pill--submitted {
+  background: #e4edd8;
+  color: #3d5a2c;
+}
+
+.sint-pill--draft {
+  background: #f8e9b8;
+  color: #5a470f;
+}
+
+.sint-card {
+  margin: 0 0 16px;
+  padding: 18px 18px 8px;
+  border: 1px solid #e6dfd2;
+  border-radius: 16px;
+  background: #fffdf8;
+}
+
+.sint-card h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.sint-dl {
+  margin: 0;
+}
+
+.sint-dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee7da;
+  font-size: 14px;
+}
+
+.sint-dl div:last-child {
+  border-bottom: 0;
+}
+
+.sint-dl dt {
+  color: #6b6256;
+  font-weight: 600;
+}
+
+.sint-dl dd {
+  margin: 0;
+  text-align: right;
+}
+
+.sint-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.sint-photos img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid #e6dfd2;
+}
+
+@media (max-width: 720px) {
+  .sint-desktop-only {
+    display: none;
+  }
+}

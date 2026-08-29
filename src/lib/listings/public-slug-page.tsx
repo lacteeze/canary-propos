@@ -13,6 +13,7 @@ import { getLandingCopy } from '@/lib/landing/content'
 import { getPublishedListings } from '@/lib/landing/get-published-listings'
 import { getDetailPageCarouselGroups } from '@/lib/listings/browse-utils'
 import {
+  formatListingLeaseEnd,
   propertyAvailabilityLabel,
   publishedListingIsListed,
   unitLooksLeased,
@@ -20,6 +21,7 @@ import {
 import {
   loadPropertyById,
   loadPropertyForListingId,
+  loadUnitActiveLeaseEnd,
   publicPropertyIsLeased,
   publicPropertyLookupClient,
 } from '@/lib/listings/public-property-lookup'
@@ -75,10 +77,12 @@ export async function renderPublishedListingPage(opts: {
     ).filter((p: string) => !!p && !/^https?:\/\//i.test(p))
     return resolveListingGalleryPhotos(photoPaths)
   })()
-  const [{ all: listingPhotos, full: listingPhotosFull }, allPublished] = await Promise.all([
+  const [{ all: listingPhotos, full: listingPhotosFull }, allPublished, leaseEnd] = await Promise.all([
     galleryPromise,
     getPublishedListings(orgSlug),
+    loadUnitActiveLeaseEnd(listing.unit_id),
   ])
+  const leaseEndLabel = formatListingLeaseEnd(leaseEnd)
 
   if (listingPhotos[0]) {
     preload(listingPhotos[0], { as: 'image', fetchPriority: 'high' })
@@ -93,6 +97,7 @@ export async function renderPublishedListingPage(opts: {
       listing={listing}
       listingPhotos={listingPhotos}
       listingPhotosFull={listingPhotosFull}
+      leaseEndLabel={leaseEndLabel}
       carouselGroups={carouselGroups}
       orgSlug={orgSlug}
       hospitableSiteUuid={hospitableSiteUuid}

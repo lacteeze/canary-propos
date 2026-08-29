@@ -323,6 +323,7 @@ export async function handleInboundSms(input: InboundSmsInput): Promise<void> {
       labour_hours: labourHours,
       pingram_message_id: input.pingramId,
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      status: 'pending_property',
       ...fields,
     }
     if (draft) {

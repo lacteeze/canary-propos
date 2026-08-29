@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const sendChargeCaptureSms = vi.fn(async () => undefined)
+const sendChargeCaptureSms = vi.fn(async (_input: { to: string; message: string }) => undefined)
 
 vi.mock('./pingram-send', () => ({
-  sendChargeCaptureSms: (...args: unknown[]) => sendChargeCaptureSms(...args),
+  sendChargeCaptureSms: (input: { to: string; message: string }) => sendChargeCaptureSms(input),
 }))
 
 vi.mock('@/lib/supabase/admin', () => ({

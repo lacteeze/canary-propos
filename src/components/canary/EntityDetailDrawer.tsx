@@ -56,6 +56,8 @@ interface EntityDetailDrawerProps {
   onOpenMessages?: (threadId: string) => void
   /** Open the existing draft/listing composer for a listing row */
   onOpenListing?: (draft: CanaryDraft) => void
+  /** Dedicated route: full page instead of overlay */
+  presentation?: 'overlay' | 'page'
 }
 
 const PROPERTY_STATUSES = ['Vacant', 'Leased', 'STR', 'Maintenance', 'Office']
@@ -958,6 +960,7 @@ export default function EntityDetailDrawer({
   money,
   onOpenMessages,
   onOpenListing,
+  presentation = 'overlay',
 }: EntityDetailDrawerProps) {
   const router = useRouter()
   const [auditKey, setAuditKey] = useState(0)
@@ -1526,6 +1529,7 @@ export default function EntityDetailDrawer({
 
   const leaseForDelete = drawer.kind === 'lease' ? db.leases.find((x) => x.id === drawer.id) : undefined
   const isPropertyModal = drawer.kind === 'property'
+  const isPage = presentation === 'page'
 
   const primaryPropertyAction = actions.find((a) => a.label.includes('Draft lease')) ?? actions[actions.length - 1]
   const secondaryPropertyActions = primaryPropertyAction
@@ -1535,16 +1539,16 @@ export default function EntityDetailDrawer({
   if (isPropertyModal) {
     return (
       <>
-        <div className="cy-property-modal-backdrop" aria-hidden="true" />
+        {!isPage && <div className="cy-property-modal-backdrop" aria-hidden="true" />}
         <div
-          className="cy-property-modal"
-          role="dialog"
-          aria-modal="true"
+          className={`cy-property-modal${isPage ? ' cy-property-modal--page' : ''}`}
+          role={isPage ? undefined : 'dialog'}
+          aria-modal={isPage ? undefined : 'true'}
           aria-labelledby="property-modal-title"
         >
           <header className="cy-property-modal-header">
-            <button type="button" className="cy-property-modal-back-btn" onClick={onClose} aria-label="Close property details">
-              ← Close
+            <button type="button" className="cy-property-modal-back-btn" onClick={onClose} aria-label={isPage ? 'Back' : 'Close property details'}>
+              ← {isPage ? 'Back' : 'Close'}
             </button>
             <div className="cy-property-modal-title-block">
               <div className="cy-property-modal-title-row">
@@ -1608,6 +1612,55 @@ export default function EntityDetailDrawer({
               </div>
             )}
           </div>
+        </div>
+        {editingProperty && propertyForEdit && canEdit && (
+          <PropertyEditForm
+            property={propertyForEdit}
+            priv={priv}
+            portfolios={db.portfolios.map((pf) => ({ id: pf.id, name: pf.name }))}
+            owners={db.people.filter((pe) => pe.role === 'Client').map((pe) => ({ id: pe.id, name: pe.name }))}
+            onClose={() => setEditingProperty(false)}
+            onSaved={refresh}
+          />
+        )}
+      </>
+    )
+  }
+
+  if (isPage) {
+    return (
+      <>
+        <div className="cy-entity-page-head">
+          <button type="button" className="cy-property-modal-back-btn" onClick={onClose} aria-label="Back">
+            ← Back
+          </button>
+          <div className="cy-entity-page-title-block">
+            <div className="cy-eyebrow" style={{ marginBottom: 3 }}>{kindLabel}</div>
+            <div style={{ fontWeight: 700, fontSize: 17, letterSpacing: '-.01em' }}>{title}</div>
+            <div style={{ color: 'var(--dim)', fontSize: 13 }}>{sub}</div>
+          </div>
+        </div>
+        <div className="cy-entity-page-body">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 0 }}>
+            {propertyForEdit && canEdit && (
+              <button type="button" className="cy-property-modal-secondary-btn" onClick={() => setEditingProperty(true)}>✎ Edit property</button>
+            )}
+            {actions.map((da) => (
+              <button key={da.label} type="button" className="cy-btn-primary cy-accent-btn" onClick={da.onClick} style={{ margin: '4px 6px 4px 0', alignSelf: 'flex-start' }}>{da.label}</button>
+            ))}
+            {leaseForDelete && canEdit && (
+              <button
+                type="button"
+                disabled={deletingLease}
+                onClick={() => handleDeleteLease(leaseForDelete)}
+                style={{ border: '1px solid var(--border)', background: 'none', color: 'var(--red)', borderRadius: 9, padding: '9px 14px', fontWeight: 600, cursor: deletingLease ? 'wait' : 'pointer', margin: '6px 8px 6px 0', alignSelf: 'flex-start', fontSize: 13 }}
+              >
+                {deletingLease ? 'Deleting…' : 'Delete lease'}
+              </button>
+            )}
+          </div>
+          <div>{sections}</div>
+          {auditTable && <AuditLogPanel key={auditKey} tableName={auditTable} recordId={auditId} canEdit={canEdit} />}
         </div>
         {editingProperty && propertyForEdit && canEdit && (
           <PropertyEditForm

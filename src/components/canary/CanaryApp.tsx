@@ -40,9 +40,9 @@ import {
   CARD_LAYOUT_PRESET,
   KPI_LAYOUT_PRESET,
   LayoutGrid,
-  SECTION_LAYOUT_PRESET,
   useViewLayout,
 } from './layout'
+import { listingHref, personHref, propertyHref } from '@/lib/canary/entity-href'
 import GmailInboxView from './GmailInboxView'
 import { LeasingPipelineView } from './LeasingPipelineView'
 import MessagesView from './MessagesView'
@@ -188,6 +188,7 @@ type ChatMsg = { role: 'user' | 'assistant'; text: string }
 type AskNavTarget =
   | { kind: 'view'; view: string }
   | { kind: 'drawer'; drawer: DrawerState }
+  | { kind: 'href'; href: string }
 type SearchHit = { key: string; label: string; meta: string; target: AskNavTarget }
 type Drawer = DrawerState
 
@@ -673,11 +674,8 @@ export default function CanaryApp({
   }, [db.leases])
 
   const openDraft = useCallback((d: CanaryDraft) => {
-    setDraftError('')
-    setDraftEndDirty(Boolean((d.end || '').trim()))
-    setDraft({ ...d, tenantId: '', termType: 'fixed_term' })
-    setDraftOpen(true)
-  }, [])
+    router.push(listingHref(d.id))
+  }, [router])
 
   const openPropertyCalendar = useCallback((propId: string, address: string) => {
     setCalView({ propId, address })
@@ -1492,7 +1490,7 @@ export default function CanaryApp({
       rows: qsort(filteredProps, {
         address: (p: CanaryProperty) => short(p.address).toLowerCase(), city: (p: CanaryProperty) => ((p.city || '') + ' ' + (p.area || '')).toLowerCase(), status: (p: CanaryProperty) => p.status || '', beds: (p: CanaryProperty) => parseFloat(p.beds) || 0, baths: (p: CanaryProperty) => parseFloat(p.baths) || 0, parking: (p: CanaryProperty) => parseFloat(p.parking) || 0, rate: (p: CanaryProperty) => p.rate || 0,
       }),
-      open: (p: CanaryProperty) => () => setDrawer({ kind: 'property', id: p.id }),
+      open: (p: CanaryProperty) => () => router.push(propertyHref(p.id)),
       group: (p: CanaryProperty) => propertyStatusGroupKey(p.status),
       groupOrder: ['Vacant', 'STR', 'Leased', 'Maintenance', 'Office', 'Archived'],
       card: (p: CanaryProperty) => ({ title: short(p.address), sub: [[p.beds, 'bd'].join(' '), [p.baths, 'ba'].join(' '), [p.city, p.area].filter(Boolean).join(' ')].join(' · '), right: p.rate ? money(p.rate) : '', rightColor: 'var(--text)' }),
@@ -1511,7 +1509,7 @@ export default function CanaryApp({
       rows: qsort(filteredPeople, {
         name: (p: CanaryPerson) => (p.name || '').toLowerCase(), email: (p: CanaryPerson) => (p.email || '').toLowerCase(), phone: (p: CanaryPerson) => p.phone || '', company: (p: CanaryPerson) => (p.company || '').toLowerCase(), role: (p: CanaryPerson) => p.role || '', status: (p: CanaryPerson) => p.status || '',
       }),
-      open: (p: CanaryPerson) => () => setDrawer({ kind: 'person', id: p.id }),
+      open: (p: CanaryPerson) => () => router.push(personHref(p.id)),
       group: (p: CanaryPerson) => p.role || '—',
       card: (p: CanaryPerson) => ({ title: p.name || '—', sub: p.email || p.phone || '', right: '', rightColor: 'var(--text)' }),
       cols: [
@@ -2020,23 +2018,31 @@ export default function CanaryApp({
   }, [q, props, scoped.leases, scoped.people, scoped.portfolios, scoped.projects, scopedHospitableTasks, priv, role])
 
   const goAskTarget = useCallback((target: AskNavTarget) => {
-    if (target.kind === 'view') {
+    if (target.kind === 'href') {
+      router.push(target.href)
+    } else if (target.kind === 'view') {
       setView(target.view)
       setDrawer(null)
     } else if (target.drawer) {
-      const kindToView: Record<string, string> = {
-        lease: 'leases',
-        property: 'properties',
-        person: 'people',
-        portfolio: 'portfolios',
-        project: 'projects',
+      if (target.drawer.kind === 'property') {
+        router.push(propertyHref(target.drawer.id))
+      } else if (target.drawer.kind === 'person') {
+        router.push(personHref(target.drawer.id))
+      } else {
+        const kindToView: Record<string, string> = {
+          lease: 'leases',
+          property: 'properties',
+          person: 'people',
+          portfolio: 'portfolios',
+          project: 'projects',
+        }
+        setView(kindToView[target.drawer.kind] || view)
+        setDrawer(target.drawer)
       }
-      setView(kindToView[target.drawer.kind] || view)
-      setDrawer(target.drawer)
     }
     setSearchExpanded(false)
     setSearch('')
-  }, [view])
+  }, [view, router])
 
   const askLinkIndex = useMemo(() => {
     const items: { label: string; target: AskNavTarget }[] = []
@@ -2707,250 +2713,62 @@ export default function CanaryApp({
 
           {/* ============ DASHBOARD ============ */}
           {view === 'dashboard' && (
-            <section>
-              {topProject && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', background: 'var(--panel)', border: '1px solid var(--red)', borderRadius: 14, padding: '14px 16px', marginBottom: 16 }}>
-                  <button
-                    type="button"
-                    className="cy-hov"
-                    onClick={() => setDrawer({ kind: 'project', id: topProject.id })}
-                    aria-label={`Open project ${topProject.name}`}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 14,
-                      minWidth: 0,
-                      flex: 1,
-                      margin: 0,
-                      padding: 0,
-                      border: 'none',
-                      background: 'transparent',
-                      color: 'inherit',
-                      font: 'inherit',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      borderRadius: 9,
-                    }}
-                  >
-                    <span style={{ flex: 'none', fontSize: 11, fontWeight: 700, letterSpacing: '.08em', padding: '4px 10px', borderRadius: 7, background: 'var(--red)', color: 'var(--red-text)' }}>TOP PRIORITY</span>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{topProject.name}</div>
-                      <div style={{ color: 'var(--dim)', fontSize: '12.5px' }}>{[short(topProject.property), topProject.status, topProject.priority].filter(Boolean).join(' · ')}</div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    className="cy-hov"
-                    onClick={(e) => { e.stopPropagation(); setView('projects') }}
-                    style={{ flex: 'none', border: '1px solid var(--border)', background: 'var(--elev)', color: 'var(--text)', borderRadius: 9, padding: '8px 13px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
-                  >
-                    View projects →
-                  </button>
+            <section className="cy-home-dest">
+              <div className="cy-home-panel">
+                <div className="cy-home-panel-head">
+                  <div>
+                    <div className="cy-home-panel-title">Published listings</div>
+                  </div>
+                  <span style={{ color: 'var(--dim)', fontFamily: MONO, fontSize: 12 }}>
+                    {leasingListingsLive.length}
+                  </span>
                 </div>
-              )}
-              <LayoutGrid
-                preset={KPI_LAYOUT_PRESET}
-                orderedIds={kpiLayout.orderedIds}
-                sizes={kpiLayout.sizes}
-                onReorder={kpiLayout.reorder}
-                onSizeChange={kpiLayout.setSize}
-                columns={12}
-                gapPx={10}
-                style={{ marginBottom: 14 }}
-                items={kpis.map((k) => ({
-                  id: k.label,
-                  className: `cy-kpi${k.view ? ' cy-hov' : ''}`,
-                  role: k.view ? 'button' : undefined,
-                  tabIndex: k.view ? 0 : undefined,
-                  onActivate: k.onActivate ?? (k.view ? () => { setView(k.view!); setDrawer(null) } : undefined),
-                  children: (
-                    <>
-                      <div className="cy-mono-label" style={{ marginBottom: 4 }}>{k.label}</div>
-                      <div className="cy-kpi-value" style={{ color: k.color }}>{k.value}</div>
-                    </>
-                  ),
-                }))}
-              />
-              <LayoutGrid
-                preset={SECTION_LAYOUT_PRESET}
-                orderedIds={dashSectionLayout.orderedIds}
-                sizes={dashSectionLayout.sizes}
-                onReorder={dashSectionLayout.reorder}
-                onSizeChange={dashSectionLayout.setSize}
-                columns={12}
-                gapPx={10}
-                items={[
-                  {
-                    id: 'expiring',
-                    className: 'cy-section-card',
-                    children: (
-                      <>
-                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <div className="cy-section-title">Expiring soon · no renewal</div>
-                          <button className="cy-btn-ghost" data-no-layout-dnd onClick={() => setView('leases')}>Timeline →</button>
-                        </div>
-                        {dashExpiring.map((l) => (
-                          <div key={l.id} className="cy-hov" onClick={() => setDrawer({ kind: 'lease', id: l.id })} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
-                            <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--red)', flex: 'none' }} />
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.short}</div>
-                              <div style={{ color: 'var(--dim)', fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.tenants}</div>
-                            </div>
-                            <div style={{ textAlign: 'right', flex: 'none' }}>
-                              <div style={{ fontWeight: 600, fontSize: 13 }}>{l.endLabel}</div>
-                              <div style={{ color: 'var(--red)', fontSize: 12, fontWeight: 600 }}>{l.daysLeft}</div>
-                            </div>
-                          </div>
-                        ))}
-                        {!dashExpiring.length && <div style={{ color: 'var(--dim)', padding: 8 }}>Nothing expiring without a renewal. 🎉</div>}
-                      </>
-                    ),
-                  },
-                  {
-                    id: 'vacant',
-                    className: 'cy-section-card',
-                    children: (
-                      <>
-                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-                          <div style={{ fontWeight: 700, fontSize: 15 }}>Vacant properties</div>
-                          <button className="cy-btn-ghost" data-no-layout-dnd onClick={() => setView('properties')}>All properties →</button>
-                        </div>
-                        {dashVacant.map((p) => (
-                          <div key={p.id} className="cy-hov" onClick={() => setDrawer({ kind: 'property', id: p.id })} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
-                            <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--amber)', flex: 'none' }} />
-                            <div style={{ minWidth: 0, flex: 1, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.short}</div>
-                            <div style={{ color: 'var(--dim)', fontSize: '12.5px', flex: 'none' }}>{p.meta}</div>
-                          </div>
-                        ))}
-                        {!dashVacant.length && <div style={{ color: 'var(--dim)', padding: 8 }}>No vacancies right now.</div>}
-                      </>
-                    ),
-                  },
-                  {
-                    id: 'projects',
-                    className: 'cy-section-card',
-                    children: (
-                      <>
-                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-                          <div style={{ fontWeight: 700, fontSize: 15 }}>Open projects</div>
-                          <button className="cy-btn-ghost" data-no-layout-dnd onClick={() => setView('projects')}>All projects →</button>
-                        </div>
-                        {dashProjects.map((pr) => (
-                          <div key={pr.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9 }}>
-                            <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--blue)', flex: 'none' }} />
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pr.name}</div>
-                              <div style={{ color: 'var(--dim)', fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(pr.property)}</div>
-                            </div>
-                            <span style={{ flex: 'none', fontSize: '11.5px', fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: 'var(--elev)', border: '1px solid var(--border)', color: 'var(--dim)', whiteSpace: 'nowrap' }}>{pr.status}</span>
-                          </div>
-                        ))}
-                      </>
-                    ),
-                  },
-                  {
-                    id: 'drafts',
-                    className: 'cy-section-card',
-                    children: (
-                      <>
-                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-                          <div style={{ fontWeight: 700, fontSize: 15 }}>Draft listings</div>
-                        </div>
-                        {dashDrafts.map((d) => {
-                          const badge = draftStatusBadge(d.status)
-                          return (
-                            <div key={d.id} className="cy-hov" onClick={() => openDraft(d)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
-                              <span style={{ width: 8, height: 8, borderRadius: 3, border: d.status === 'renewal_sent' ? 'none' : '2px solid var(--accent)', background: d.status === 'renewal_sent' ? 'var(--purple)' : 'transparent', flex: 'none' }} />
-                              <div style={{ minWidth: 0, flex: 1 }}>
-                                <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(d.address)}</div>
-                                <div style={{ color: 'var(--dim)', fontSize: '12.5px' }}>{(d.rent ? '$' + d.rent + '/mo · ' : '') + (d.start || 'no date')}</div>
-                              </div>
-                              <span style={{ flex: 'none', fontSize: '11.5px', fontWeight: 700, padding: '3px 8px', borderRadius: 6, color: badge.color, border: '1px solid var(--border)', background: 'var(--elev)' }}>{badge.label}</span>
-                            </div>
-                          )
-                        })}
-                        {!dashDrafts.length && (
-                          <div style={{ color: 'var(--dim)', padding: 8, fontSize: '13.5px' }}>No draft leases yet. Use the <b>+</b> button below to start one — published drafts appear on the public site.</div>
-                        )}
-                      </>
-                    ),
-                  },
-                  {
-                    id: 'renewals',
-                    className: 'cy-section-card',
-                    children: (
-                      <>
-                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-                          <div style={{ fontWeight: 700, fontSize: 15 }}>Renewals &amp; offers sent</div>
-                          <button className="cy-btn-ghost" data-no-layout-dnd onClick={openRenewalsTimeline}>Timeline →</button>
-                        </div>
-                        {dashRenewals.map((d) => (
-                          <div key={d.id} className="cy-hov" onClick={() => openDraft(d)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}>
-                            <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--purple)', flex: 'none' }} />
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(d.address)}</div>
-                              <div style={{ color: 'var(--dim)', fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tenantForAddress(d.address)}</div>
-                            </div>
-                            <div style={{ textAlign: 'right', flex: 'none' }}>
-                              <div style={{ fontWeight: 600, fontSize: 13 }}>{d.rent ? '$' + d.rent + '/mo' : '—'}</div>
-                              <div style={{ color: 'var(--dim)', fontSize: 12 }}>{d.sentAt ? fmtD(parseDate(d.sentAt)) : '—'}</div>
-                            </div>
-                          </div>
-                        ))}
-                        {!dashRenewals.length && <div style={{ color: 'var(--dim)', padding: 8 }}>No renewals or offers awaiting tenant response.</div>}
-                      </>
-                    ),
-                  },
-                  ...(priv
-                    ? [{
-                        id: 'applications',
-                        className: 'cy-section-card',
-                        children: (
-                          <>
-                            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-                              <div style={{ fontWeight: 700, fontSize: 15 }}>Applications sent</div>
-                              <button
-                                data-no-layout-dnd
-                                onClick={() => {
-                                  setView('leases')
-                                  setPageViews((pv) => ({ ...pv, leases: 'pipeline' }))
-                                }}
-                                style={{ border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
-                              >
-                                Open pipeline →
-                              </button>
-                            </div>
-                            {dashApplications.map((i) => {
-                              const badge = inquiryStatusBadge(i.status)
-                              return (
-                                <div
-                                  key={i.id}
-                                  className="cy-hov"
-                                  onClick={() => {
-                                    setView('leases')
-                                    setPageViews((pv) => ({ ...pv, leases: 'pipeline' }))
-                                  }}
-                                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer' }}
-                                >
-                                  <span style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--amber)', flex: 'none' }} />
-                                  <div style={{ minWidth: 0, flex: 1 }}>
-                                    <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{i.name}</div>
-                                    <div style={{ color: 'var(--dim)', fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(i.property)}</div>
-                                  </div>
-                                  <div style={{ textAlign: 'right', flex: 'none' }}>
-                                    <div style={{ color: 'var(--dim)', fontSize: 12 }}>{fmtD(parseDate(i.submittedAt))}</div>
-                                    <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 8px', borderRadius: 6, color: badge.color, border: '1px solid var(--border)', background: 'var(--elev)' }}>{badge.label}</span>
-                                  </div>
-                                </div>
-                              )
-                            })}
-                            {!dashApplications.length && <div style={{ color: 'var(--dim)', padding: 8 }}>No applications awaiting review.</div>}
-                          </>
-                        ),
-                      }]
-                    : []),
-                ]}
-              />
+                {leasingListingsLive.map((d) => {
+                  const badge = draftStatusBadge(d.status)
+                  return (
+                    <button
+                      key={d.id}
+                      type="button"
+                      className="cy-home-row cy-hov"
+                      onClick={() => router.push(listingHref(d.id))}
+                    >
+                      <span className="cy-home-row-dot" aria-hidden />
+                      <span className="cy-home-row-addr">{short(d.address) || d.title || 'Listing'}</span>
+                      <span className="cy-home-row-meta">
+                        {(d.rent ? money(parseFloat(d.rent) || 0) + '/mo' : 'No rent')}
+                        {d.start ? ` · ${d.start}` : ''}
+                      </span>
+                      <span className="cy-home-row-badge" style={{ color: badge.color }}>
+                        {badge.label === 'PUBLIC' ? 'Published' : badge.label}
+                      </span>
+                    </button>
+                  )
+                })}
+                {!leasingListingsLive.length && (
+                  <div style={{ color: 'var(--dim)', padding: 8, fontSize: '13.5px' }}>
+                    No published listings yet. Use + to create one — they appear here and on the public site.
+                  </div>
+                )}
+              </div>
+              <div className="cy-home-panel">
+                <div className="cy-home-panel-head">
+                  <div>
+                    <div className="cy-home-panel-title">Leasing timeline</div>
+                    <div className="cy-home-panel-sub">Calendar of leases, listings, and stays</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="cy-home-timeline-btn cy-hov"
+                  onClick={() => { setView('leases'); setDrawer(null) }}
+                >
+                  <span>
+                    <span style={{ fontWeight: 650, display: 'block' }}>Open calendar</span>
+                    <span style={{ color: 'var(--dim)', fontSize: 12.5 }}>Leases, published listings, and renewals on one timeline</span>
+                  </span>
+                  <span style={{ color: 'var(--accent)', fontWeight: 650, flex: 'none' }}>Timeline →</span>
+                </button>
+              </div>
             </section>
           )}
 
@@ -2980,7 +2798,7 @@ export default function CanaryApp({
                           street.startsWith(short(p.address)))),
                   )
                 if (byAddress) {
-                  setDrawer({ kind: 'property', id: byAddress.id })
+                  router.push(propertyHref(byAddress.id))
                   return
                 }
                 toast.error('Property not found')
@@ -3040,7 +2858,7 @@ export default function CanaryApp({
                     <div className="cy-timeline-scroll">
                       {tlRows.map((r) => (
                         <div key={r.id} style={{ display: 'grid', gridTemplateColumns: 'clamp(150px,20vw,250px) 1fr', borderBottom: '1px solid var(--border)', minHeight: r.rowHeight }}>
-                          <div className="cy-hov" onClick={() => { if (!r.strOnly) setDrawer({ kind: 'property', id: r.id }) }} style={{ padding: '6px 14px', cursor: r.strOnly ? 'default' : 'pointer', borderRight: '1px solid var(--border)', minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div className="cy-hov" onClick={() => { if (!r.strOnly) router.push(propertyHref(r.id)) }} style={{ padding: '6px 14px', cursor: r.strOnly ? 'default' : 'pointer', borderRight: '1px solid var(--border)', minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div style={{ minWidth: 0, flex: 1 }}>
                               <div style={{ fontWeight: 650, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.short}</span>
@@ -3228,11 +3046,11 @@ export default function CanaryApp({
                               className="cy-hov-card cy-card"
                               role="button"
                               tabIndex={0}
-                              onClick={() => setDrawer({ kind: 'property', id: p.id })}
+                              onClick={() => router.push(propertyHref(p.id))}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault()
-                                  setDrawer({ kind: 'property', id: p.id })
+                                  router.push(propertyHref(p.id))
                                 }
                               }}
                               style={{
@@ -3274,7 +3092,7 @@ export default function CanaryApp({
               {showPhotos && (
                 <PropertyPhotosView
                   properties={genRows as CanaryProperty[]}
-                  onOpen={(id) => setDrawer({ kind: 'property', id })}
+                  onOpen={(id) => router.push(propertyHref(id))}
                 />
               )}
             </section>
@@ -3294,7 +3112,7 @@ export default function CanaryApp({
               {showDefault && (
                 <div className="cy-card" style={{ overflow: 'hidden' }}>
                   {(genRows as CanaryPerson[]).slice(0, 120).map((pe) => (
-                    <div key={pe.id} className="cy-hov" onClick={() => setDrawer({ kind: 'person', id: pe.id })} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer', minWidth: 0 }}>
+                    <div key={pe.id} className="cy-hov" onClick={() => router.push(personHref(pe.id))} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer', minWidth: 0 }}>
                       <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--elev)', border: '1px solid var(--border)', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 12, color: 'var(--dim)', flex: 'none' }}>{(pe.name || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}</div>
                       <div style={{ minWidth: 0, flex: 2 }}>
                         <div style={{ fontWeight: 650, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pe.name || '—'}</div>
@@ -3788,7 +3606,19 @@ export default function CanaryApp({
         canEdit={priv}
         priv={priv}
         peopleById={peopleById}
-        onNavigate={(d) => setDrawer(d)}
+        onNavigate={(d) => {
+          if (d.kind === 'property') {
+            setDrawer(null)
+            router.push(propertyHref(d.id))
+            return
+          }
+          if (d.kind === 'person') {
+            setDrawer(null)
+            router.push(personHref(d.id))
+            return
+          }
+          setDrawer(d)
+        }}
         actions={drawerActions}
         tenantNames={tenantNames}
         short={short}
@@ -3800,7 +3630,7 @@ export default function CanaryApp({
         }}
         onOpenListing={(d) => {
           setDrawer(null)
-          openDraft(d)
+          router.push(listingHref(d.id))
         }}
       />
 
@@ -3812,7 +3642,7 @@ export default function CanaryApp({
           const prop = db.properties.find((p) => p.address === address)
           if (prop) {
             setTaskDetailId(null)
-            setDrawer({ kind: 'property', id: prop.id })
+            router.push(propertyHref(prop.id))
           }
         }}
       />
@@ -3825,7 +3655,7 @@ export default function CanaryApp({
           const prop = db.properties.find((p) => p.address === address)
           if (prop) {
             setBookingDetailId(null)
-            setDrawer({ kind: 'property', id: prop.id })
+            router.push(propertyHref(prop.id))
           }
         }}
       />
@@ -3837,7 +3667,7 @@ export default function CanaryApp({
         onDeleteLocal={handleDeleteLocalOwnerBlock}
         onOpenProperty={(propertyId) => {
           setOwnerOccupiedDetailId(null)
-          setDrawer({ kind: 'property', id: propertyId })
+          router.push(propertyHref(propertyId))
         }}
       />
 
@@ -3879,7 +3709,7 @@ export default function CanaryApp({
             }}
             onOpenProperty={(id) => {
               setCalView(null)
-              setDrawer({ kind: 'property', id })
+              router.push(propertyHref(id))
             }}
           />
         )

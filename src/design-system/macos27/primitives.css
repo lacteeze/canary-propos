@@ -123,11 +123,25 @@
 }
 
 /* ---------- Shell chrome ---------- */
-.cnry[data-ui='macos27'] .cy-header {
+.cnry[data-ui='macos27'] .cy-header,
+.cnry[data-ui='macos27'] .cy-mobile-topbar,
+.cnry[data-ui='macos27'] .cy-tabbar,
+.cnry[data-ui='macos27'] .cy-more-sheet {
   background: var(--mac-panel-solid) !important;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  border-bottom-color: var(--mac-border);
+  border-color: var(--mac-border);
+}
+
+.cnry[data-ui='macos27'] .cy-sidebar {
+  background: var(--mac-elev) !important;
+  border-right-color: var(--mac-border);
+}
+
+.cnry[data-ui='macos27'] .cy-sidebar-item--active,
+.cnry[data-ui='macos27'] .cy-sidebar-search,
+.cnry[data-ui='macos27'] .cy-sidebar-profile {
+  background: var(--mac-panel-solid);
 }
 
 .cnry[data-ui='macos27'] .cy-topnav-item {

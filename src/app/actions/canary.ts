@@ -7,7 +7,6 @@ import { createClient } from '@/lib/supabase/server'
 import { normalizeLeaseTermType, validateLeaseDates } from '@/lib/canary/lease-term'
 import type { LeaseTermType } from '@/lib/canary/lease-term'
 import { allocateListingSlugPreferProperty } from '@/lib/listings/slugify'
-import { auditListingFieldChanges } from '@/app/actions/listing-social'
 import type { Database } from '@/types/supabase'
 import {
   DEFAULT_EXPENSE_RATES,
@@ -169,16 +168,6 @@ export async function saveDraftListing(input: {
         ? 'Could not save — run database migration 0030_listing_status_renewal_sent (renewal_sent status).'
         : error.message || 'Failed to save the draft listing.'
       return { success: false, error: msg }
-    }
-    if (existing) {
-      await auditListingFieldChanges(
-        ctx.supabase,
-        ctx.person.org_id,
-        d.id,
-        ctx.person.id,
-        existing,
-        record,
-      )
     }
     revalidatePath('/app')
     return { success: true, id: d.id }

@@ -176,7 +176,19 @@ export interface CanaryPerson {
 }
 
 /** Timeline / composer status for draft listings (maps to listings.status). */
-export type DraftListingStatus = 'draft' | 'renewal_sent' | 'published'
+export type DraftListingStatus = 'draft' | 'renewal_sent' | 'published' | 'declined'
+
+export function toDraftListingStatus(status: string | null | undefined): DraftListingStatus {
+  if (status === 'renewal_sent' || status === 'published' || status === 'declined') return status
+  return 'draft'
+}
+
+/** Current Listings Renewal column: Sent / Declined / blank. */
+export function listingRenewalColumnLabel(status: DraftListingStatus | string): string {
+  if (status === 'renewal_sent') return 'Sent'
+  if (status === 'declined') return 'Declined'
+  return ''
+}
 
 export function draftTimelineMeta(d: CanaryDraft) {
   const rent = d.rent ? `$${d.rent}/mo` : ''
@@ -186,12 +198,16 @@ export function draftTimelineMeta(d: CanaryDraft) {
   if (d.status === 'renewal_sent') {
     return { label: 'Renewal sent', title: ['Renewal sent', rent].filter(Boolean).join(' · '), bg: 'transparent', color: 'var(--purple)', borderStyle: '2px dashed var(--purple)' as const }
   }
+  if (d.status === 'declined') {
+    return { label: 'Declined', title: ['Declined', rent].filter(Boolean).join(' · '), bg: 'transparent', color: 'var(--red)', borderStyle: '2px dashed var(--red)' as const }
+  }
   return { label: 'Draft lease', title: ['Draft', rent].filter(Boolean).join(' · '), bg: 'transparent', color: 'var(--accent)', borderStyle: '2px dashed var(--accent)' as const }
 }
 
 export function draftStatusBadge(status: DraftListingStatus): { label: string; color: string } {
   if (status === 'published') return { label: 'PUBLIC', color: 'var(--green)' }
   if (status === 'renewal_sent') return { label: 'RENEWAL SENT', color: 'var(--purple)' }
+  if (status === 'declined') return { label: 'DECLINED', color: 'var(--red)' }
   return { label: 'DRAFT', color: 'var(--dim)' }
 }
 
@@ -207,6 +223,10 @@ export interface CanaryDraft {
   /** Unit number label for multi-unit buildings (e.g. "2B"); empty for single-unit */
   unitLabel: string
   rent: string
+  /** Dollar credit against listed monthly rent; empty = none */
+  rentalCredit: string
+  /** Inclusive YYYY-MM-DD the credit applies through; empty = no end date */
+  rentalCreditExpiry: string
   start: string
   end: string
   beds: string
@@ -218,6 +238,8 @@ export interface CanaryDraft {
   status: DraftListingStatus
   /** When status last changed — used for renewal-sent follow-up dates */
   sentAt: string
+  /** When the listing first became public (listings.published_at) */
+  publishedAt: string | null
 }
 
 export type InquiryType = 'inquiry' | 'application'

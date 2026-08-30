@@ -20,6 +20,12 @@ import {
   type CanaryInquiryNote,
   type InquiryStatus,
 } from '@/lib/canary/types'
+import {
+  cleanPropertyDisplay,
+  groupInquiriesByProperty,
+  inquiryMatchesListingGroup,
+  type InquiryGroup,
+} from '@/lib/canary/pipeline-groups'
 import { MatchingHomesPanel } from './MatchingHomesPanel'
 import { UnitFilledLeadsModal } from './UnitFilledLeadsModal'
 
@@ -77,26 +83,6 @@ function initials(name: string): string {
     .join('')
 }
 
-function shortProperty(address: string): string {
-  const street = address.split(',')[0]?.trim() || address
-  return street.length > 42 ? `${street.slice(0, 40)}…` : street
-}
-
-/** Drop a trailing city segment when it already appears earlier in the address. */
-function cleanPropertyDisplay(address: string): string {
-  const parts = address
-    .split(',')
-    .map((p) => p.trim())
-    .filter(Boolean)
-  if (parts.length < 2) return address
-  const last = parts[parts.length - 1]!
-  const earlier = parts.slice(0, -1)
-  if (earlier.some((p) => p.toLowerCase() === last.toLowerCase())) {
-    return earlier.join(', ')
-  }
-  return address
-}
-
 type SaveTone = 'idle' | 'saving' | 'saved' | 'error'
 
 type PipelineCardProps = {
@@ -147,9 +133,6 @@ function PipelineCard({
         <div className="cy-pipeline-card-top">
           <div className="cy-pipeline-card-name">
             {inquiry.name}
-          </div>
-          <div className="cy-pipeline-card-prop">
-            {shortProperty(inquiry.property)}
           </div>
           <span className="cy-pipeline-movein" title="Desired move-in">
             {formatMoveInBadge(inquiry.moveIn)}
@@ -204,9 +187,20 @@ type Props = {
   onChanged?: () => void
   /** Open Canary property detail (EntityDetailDrawer). */
   onOpenProperty?: (args: { propertyId: string | null; address: string }) => void
+  /** When set, only that listing/property's cards stay on the board. */
+  focusPropertyId?: string | null
+  focusListingId?: string | null
+  onClearFocus?: () => void
 }
 
-export function LeasingPipelineView({ inquiries: initial, onChanged, onOpenProperty }: Props) {
+export function LeasingPipelineView({
+  inquiries: initial,
+  onChanged,
+  onOpenProperty,
+  focusPropertyId = null,
+  focusListingId = null,
+  onClearFocus,
+}: Props) {
   const [items, setItems] = useState(initial)
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -308,10 +302,23 @@ export function LeasingPipelineView({ inquiries: initial, onChanged, onOpenPrope
     }
   }, [selectedId])
 
+  const focused = Boolean(focusPropertyId || focusListingId)
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return items.filter((i) => {
       if (i.status === 'closed') return false
+      if (focusPropertyId || focusListingId) {
+        if (
+          !inquiryMatchesListingGroup(i, {
+            listingId: focusListingId ?? '',
+            propertyId: focusPropertyId,
+            address: '',
+          })
+        ) {
+          return false
+        }
+      }
       if (!q) return true
       return (
         i.name.toLowerCase().includes(q) ||
@@ -320,7 +327,7 @@ export function LeasingPipelineView({ inquiries: initial, onChanged, onOpenPrope
         i.phone.toLowerCase().includes(q)
       )
     })
-  }, [items, query])
+  }, [items, query, focusPropertyId, focusListingId])
 
   const byStage = useMemo(() => {
     const map = Object.fromEntries(
@@ -331,6 +338,12 @@ export function LeasingPipelineView({ inquiries: initial, onChanged, onOpenPrope
     }
     return map
   }, [filtered])
+
+  const groupsByStage = useMemo(() => {
+    return Object.fromEntries(
+      INQUIRY_PIPELINE_STAGES.map((s) => [s, groupInquiriesByProperty(byStage[s])]),
+    ) as Record<InquiryStatus, InquiryGroup[]>
+  }, [byStage])
 
   const flushStatus = useCallback(
     async (id: string) => {
@@ -631,6 +644,11 @@ export function LeasingPipelineView({ inquiries: initial, onChanged, onOpenPrope
               {saveMessage}
             </span>
           )}
+          {focused && onClearFocus ? (
+            <button type="button" className="cy-btn" onClick={onClearFocus}>
+              Show all
+            </button>
+          ) : null}
           <label className="cy-pipeline-search">
             <span aria-hidden>⌕</span>
             <input
@@ -680,21 +698,34 @@ export function LeasingPipelineView({ inquiries: initial, onChanged, onOpenPrope
               <span className="cy-pipeline-col-count">{byStage[stage].length}</span>
             </div>
             <div className="cy-pipeline-col-body">
-              {byStage[stage].map((inquiry) => (
-                <PipelineCard
-                  key={inquiry.id}
-                  inquiry={inquiry}
-                  selected={selectedId === inquiry.id}
-                  dragging={dragId === inquiry.id}
-                  onSelect={() => setSelectedId(inquiry.id)}
-                  onDragStart={(e) => {
-                    setDragId(inquiry.id)
-                    e.dataTransfer.setData('text/inquiry-id', inquiry.id)
-                    e.dataTransfer.effectAllowed = 'move'
-                  }}
-                  onDragEnd={() => setDragId(null)}
-                  onAdvance={() => advance(inquiry)}
-                />
+              {groupsByStage[stage].map((group) => (
+                <div
+                  key={group.key}
+                  className="cy-pipeline-group"
+                  role="group"
+                  aria-label={`${group.label}, ${group.inquiries.length}`}
+                >
+                  <div className="cy-pipeline-group-head">
+                    <span className="cy-pipeline-group-label">{group.label}</span>
+                    <span className="cy-pipeline-group-count">{group.inquiries.length}</span>
+                  </div>
+                  {group.inquiries.map((inquiry) => (
+                    <PipelineCard
+                      key={inquiry.id}
+                      inquiry={inquiry}
+                      selected={selectedId === inquiry.id}
+                      dragging={dragId === inquiry.id}
+                      onSelect={() => setSelectedId(inquiry.id)}
+                      onDragStart={(e) => {
+                        setDragId(inquiry.id)
+                        e.dataTransfer.setData('text/inquiry-id', inquiry.id)
+                        e.dataTransfer.effectAllowed = 'move'
+                      }}
+                      onDragEnd={() => setDragId(null)}
+                      onAdvance={() => advance(inquiry)}
+                    />
+                  ))}
+                </div>
               ))}
               {!byStage[stage].length && (
                 <div className="cy-pipeline-empty">No prospects</div>

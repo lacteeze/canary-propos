@@ -6,6 +6,18 @@ export function listingHref(id: string): string {
   return `/app/listings/${id}`
 }
 
+/** Staff leasing pipeline, optionally filtered to a property or listing. */
+export function leasingPipelineHref(opts?: {
+  propertyId?: string | null
+  listingId?: string | null
+}): string {
+  const params = new URLSearchParams()
+  params.set('view', 'leases')
+  if (opts?.propertyId) params.set('property', opts.propertyId)
+  if (opts?.listingId) params.set('listing', opts.listingId)
+  return `/app?${params.toString()}`
+}
+
 export function personHref(id: string): string {
   return `/app/people/${id}`
 }

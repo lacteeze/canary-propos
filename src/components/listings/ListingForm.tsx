@@ -38,6 +38,7 @@ interface ListingFormProps {
 const STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
   { value: 'renewal_sent', label: 'Renewal sent' },
+  { value: 'declined', label: 'Renewal Declined' },
   { value: 'published', label: 'Published' },
   { value: 'unlisted', label: 'Unlisted' },
 ]

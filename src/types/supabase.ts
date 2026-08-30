@@ -958,6 +958,8 @@ export type Database = {
           listing_title: string
           org_id: string
           published_at: string | null
+          rental_credit: number | null
+          rental_credit_expiry: string | null
           slug: string | null
           status: Database["public"]["Enums"]["listing_status"]
           unit_id: string
@@ -973,6 +975,8 @@ export type Database = {
           listing_title: string
           org_id: string
           published_at?: string | null
+          rental_credit?: number | null
+          rental_credit_expiry?: string | null
           slug?: string | null
           status?: Database["public"]["Enums"]["listing_status"]
           unit_id: string
@@ -988,6 +992,8 @@ export type Database = {
           listing_title?: string
           org_id?: string
           published_at?: string | null
+          rental_credit?: number | null
+          rental_credit_expiry?: string | null
           slug?: string | null
           status?: Database["public"]["Enums"]["listing_status"]
           unit_id?: string
@@ -2447,7 +2453,7 @@ export type Database = {
         | "signed"
         | "closed"
       inquiry_type: "inquiry" | "application"
-      listing_status: "draft" | "published" | "unlisted" | "renewal_sent"
+      listing_status: "draft" | "published" | "unlisted" | "renewal_sent" | "declined"
       social_match_method: "url_in_caption" | "manual" | "published"
       social_platform: "facebook" | "instagram"
       social_post_source: "manual" | "synced" | "published"
@@ -2615,7 +2621,7 @@ export const Constants = {
         "closed",
       ],
       inquiry_type: ["inquiry", "application"],
-      listing_status: ["draft", "published", "unlisted", "renewal_sent"],
+      listing_status: ["draft", "published", "unlisted", "renewal_sent", "declined"],
       social_match_method: ["url_in_caption", "manual", "published"],
       social_platform: ["facebook", "instagram"],
       social_post_source: ["manual", "synced", "published"],

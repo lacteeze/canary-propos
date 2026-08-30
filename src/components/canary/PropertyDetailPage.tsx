@@ -7,18 +7,20 @@ import { archiveProperties, unarchiveProperties } from '@/app/actions/entity-upd
 import { listingHref, moneyCad, personHref, propertyHref, shortAddress, tenantNamesFromInfo } from '@/lib/canary/entity-href'
 import type { CanaryDb, CanaryPerson } from '@/lib/canary/types'
 import EntityDetailDrawer, { type DrawerState } from './EntityDetailDrawer'
-import { EntityPageShell, useEntityBack } from './EntityPageShell'
+import { EntityPageShell, useEntityBack, type EntityChrome } from './EntityPageShell'
 
 export default function PropertyDetailPage({
   id,
   db,
   canEdit,
   priv,
+  chrome,
 }: {
   id: string
   db: CanaryDb
   canEdit: boolean
   priv: boolean
+  chrome: EntityChrome
 }) {
   const router = useRouter()
   const goBack = useEntityBack('/app?view=properties')
@@ -85,7 +87,7 @@ export default function PropertyDetailPage({
 
   if (!property) {
     return (
-      <EntityPageShell>
+      <EntityPageShell chrome={chrome} activeView="properties" pageTitle="Property">
         <div className="cy-entity-page-head">
           <button type="button" className="cy-property-modal-back-btn" onClick={goBack} aria-label="Back">
             ← Back
@@ -99,7 +101,7 @@ export default function PropertyDetailPage({
   }
 
   return (
-    <EntityPageShell>
+    <EntityPageShell chrome={chrome} activeView="properties" pageTitle={shortAddress(property.address) || 'Property'}>
       <EntityDetailDrawer
         drawer={{ kind: 'property', id }}
         presentation="page"

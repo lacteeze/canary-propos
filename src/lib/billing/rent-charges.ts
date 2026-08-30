@@ -2,6 +2,7 @@
  * Auto-generate monthly rent charges for active (incl. UI "expiring") leases.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { effectiveMonthlyRent } from './effective-rent'
 
 export type RentChargeGenerateResult = {
   created: number
@@ -44,7 +45,7 @@ export async function generateRentChargesForOrg(
   const { data: leases, error } = await supabase
     .from('leases')
     .select(
-      'id, monthly_rent, rent_due_day, status, start_date, end_date, unit_id, units!unit_id(property_id, properties!property_id(portfolio_id))'
+      'id, monthly_rent, rental_credit, rental_credit_expiry, rent_due_day, status, start_date, end_date, unit_id, units!unit_id(property_id, properties!property_id(portfolio_id))'
     )
     .eq('org_id', orgId)
     .in('status', ['active'])
@@ -59,7 +60,13 @@ export async function generateRentChargesForOrg(
       result.skipped++
       continue
     }
-    const amount = Number(lease.monthly_rent)
+    const dueDate = dueDateForPeriod(year, month, lease.rent_due_day ?? 1)
+    const amount = effectiveMonthlyRent({
+      monthlyRent: lease.monthly_rent,
+      rentalCredit: lease.rental_credit,
+      rentalCreditExpiry: lease.rental_credit_expiry,
+      onDate: dueDate,
+    })
     if (!amount || amount <= 0) {
       result.skipped++
       continue
@@ -73,8 +80,6 @@ export async function generateRentChargesForOrg(
       result.skipped++
       continue
     }
-
-    const dueDate = dueDateForPeriod(year, month, lease.rent_due_day ?? 1)
 
     const { error: insertError } = await supabase.from('charges').insert({
       org_id: orgId,

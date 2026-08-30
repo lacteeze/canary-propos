@@ -17,6 +17,13 @@ export default async function ListingPage({
       id={id}
       db={ctx.db}
       canEdit={ctx.canEdit}
+      chrome={{
+        role: ctx.role,
+        priv: ctx.priv,
+        userName: ctx.userName,
+        userEmail: ctx.userEmail,
+        userAvatarUrl: ctx.userAvatarUrl,
+      }}
     />
   )
 }

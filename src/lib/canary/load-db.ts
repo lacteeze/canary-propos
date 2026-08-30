@@ -15,11 +15,10 @@ import type {
   CanaryPortfolio,
   CanaryProject,
   CanaryProperty,
-  DraftListingStatus,
   InquiryStatus,
   InquiryType,
 } from './types'
-import { isGeneralInterestNote } from './types'
+import { isGeneralInterestNote, toDraftListingStatus } from './types'
 import { formatPropertyFullLabel } from './property-ops'
 
 const EXPIRY_WINDOW_DAYS = 90
@@ -29,6 +28,7 @@ type Caller = {
   orgId: string
   roles: string[]
   name: string
+  email: string
   avatarPath: string | null
 }
 
@@ -177,6 +177,7 @@ export async function getCaller(): Promise<Caller | 'no-user' | 'no-person'> {
     name:
       [resolved.first_name, resolved.last_name].filter(Boolean).join(' ') ||
       resolved.email,
+    email: resolved.email ?? '',
     avatarPath: resolved.avatar_path ?? null,
   }
 }
@@ -247,7 +248,7 @@ export async function loadCanaryDb(
       supabase
         .from('listings')
         .select(
-          `id, listing_title, listing_description, display_rent, status, available_from, updated_at, slug,
+          `id, listing_title, listing_description, display_rent, status, available_from, updated_at, published_at, slug,
            units!unit_id(id, unit_number, bedrooms, bathrooms, amenities,
              properties!property_id(id, street_address, city, listing_brief))`
         )
@@ -303,7 +304,37 @@ export async function loadCanaryDb(
   const portfolioRows = (portfoliosRes.data ?? []) as any[]
   const workOrderRows = (workOrdersRes.data ?? []) as any[]
   const peopleRows = (peopleRes.data ?? []) as any[]
-  const listingRows = (listingsRes.data ?? []) as any[]
+  let listingRows = (listingsRes.data ?? []) as any[]
+  const declinedListings = await supabase
+    .from('listings')
+    .select(
+      `id, listing_title, listing_description, display_rent, status, available_from, updated_at, published_at, slug,
+       units!unit_id(id, unit_number, bedrooms, bathrooms, amenities,
+         properties!property_id(id, street_address, city, listing_brief))`
+    )
+    .eq('org_id', orgId)
+    .eq('status', 'declined')
+    .limit(200)
+  if (!declinedListings.error && declinedListings.data?.length) {
+    listingRows = listingRows.concat(declinedListings.data)
+  }
+  const listingCreditById = new Map<string, { rental_credit: number | null; rental_credit_expiry: string | null }>()
+  const listingIds = listingRows.map((d) => d.id as string).filter(Boolean)
+  if (listingIds.length) {
+    const creditsRes = await supabase
+      .from('listings')
+      .select('id, rental_credit, rental_credit_expiry')
+      .eq('org_id', orgId)
+      .in('id', listingIds)
+    if (!creditsRes.error) {
+      for (const row of creditsRes.data ?? []) {
+        listingCreditById.set(row.id, {
+          rental_credit: row.rental_credit,
+          rental_credit_expiry: row.rental_credit_expiry,
+        })
+      }
+    }
+  }
   const inquiryRows = (inquiriesRes.data ?? []) as any[]
   const paymentRows = (paymentsRes.data ?? []) as any[]
   const expenseRows = (expensesRes.data ?? []) as any[]
@@ -655,6 +686,10 @@ export async function loadCanaryDb(
       slug: (d.slug as string | null) ?? null,
       unitLabel,
       rent: d.display_rent != null ? String(Number(d.display_rent)) : '',
+      rentalCredit: listingCreditById.get(d.id)?.rental_credit != null
+        ? String(Number(listingCreditById.get(d.id)!.rental_credit))
+        : '',
+      rentalCreditExpiry: listingCreditById.get(d.id)?.rental_credit_expiry ?? '',
       start: d.available_from ?? '',
       end: '',
       beds: d.units.bedrooms != null ? String(d.units.bedrooms) : '',
@@ -669,8 +704,9 @@ export async function loadCanaryDb(
       pets: petsLabel(d.units.amenities, d.listing_description),
       utilities: utilitiesLabel(d.listing_description),
       description: d.listing_description ?? '',
-      status: (d.status === 'renewal_sent' ? 'renewal_sent' : d.status === 'published' ? 'published' : 'draft') as DraftListingStatus,
+      status: toDraftListingStatus(d.status),
       sentAt: d.updated_at ? String(d.updated_at).slice(0, 10) : '',
+      publishedAt: d.published_at ? String(d.published_at) : null,
     }))
 
   const inquiries: CanaryInquiry[] = inquiryRows

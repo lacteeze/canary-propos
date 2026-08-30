@@ -673,6 +673,7 @@ export default function PropertyOccupancyCalendar({
     })
 
     drafts.forEach((d) => {
+      if (d.status === 'declined') return
       const range = draftBarRange(d.start, d.end, 365 * DAY_MS)
       if (!range) return
       const kind: StayKind = d.status === 'renewal_sent' ? 'renewal' : 'draft'

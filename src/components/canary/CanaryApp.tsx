@@ -4,7 +4,7 @@
 // Faithful React port of the CanaryApp.dc design prototype, wired to live
 // Supabase data (loaded server-side in src/app/(canary)/app/page.tsx).
 import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
-import { Bell, CalendarIcon, ChevronDown, ImageOff, Mail, Menu, MessageSquare, Repeat2, Search, Settings, UserRound, X } from 'lucide-react'
+import { Bell, CalendarIcon, ChevronDown, ImageOff, Repeat2, Search, Settings, UserRound, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -42,7 +42,10 @@ import {
   LayoutGrid,
   useViewLayout,
 } from './layout'
-import { listingHref, personHref, propertyHref } from '@/lib/canary/entity-href'
+import { leasingPipelineHref, listingHref, personHref, propertyHref } from '@/lib/canary/entity-href'
+import { groupCurrentListings } from '@/lib/canary/current-listings-groups'
+import { countInquiriesForListing } from '@/lib/canary/pipeline-groups'
+import { AppSidebar, MobileAppChrome, pageLabelForView } from './AppSidebar'
 import GmailInboxView from './GmailInboxView'
 import { LeasingPipelineView } from './LeasingPipelineView'
 import MessagesView from './MessagesView'
@@ -52,7 +55,7 @@ import { BillingDashboard } from '@/components/billing/BillingDashboard'
 import type { CanaryDb, CanaryDraft, CanaryHospitableTask, CanaryInquiry, CanaryLease, CanaryOwnerOccupiedBlock, CanaryPayment, CanaryPerson, CanaryPortfolio, CanaryProject, CanaryProperty, CanaryRole, CanaryStrBooking, DraftListingStatus, HospitableCalendarData, HospitableTasksData, OrgTasksData } from '@/lib/canary/types'
 import { deleteLocalOwnerOccupiedBlock, loadLocalOwnerOccupiedBlocks } from '@/lib/canary/owner-occupied-storage'
 import { isOpenHospitableTask } from '@/lib/hospitable/map-tasks'
-import { draftStatusBadge, draftTimelineMeta, inquiryStatusBadge } from '@/lib/canary/types'
+import { draftStatusBadge, draftTimelineMeta, inquiryStatusBadge, listingRenewalColumnLabel } from '@/lib/canary/types'
 import { addMonthsToIsoDate, isMonthToMonthLease, validateLeaseDates } from '@/lib/canary/lease-term'
 import type { LeaseTermType } from '@/lib/canary/lease-term'
 import { draftBarRange, leaseBarRangeForLease, ownerOccupiedBarRange, strBarRange, taskBarRange, tlRangesOverlap } from '@/lib/canary/timeline-times'
@@ -119,6 +122,25 @@ function tenantNames(info: string | null | undefined): string {
 }
 function fmtD(d: Date | null): string {
   return d ? d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
+}
+const HOME_LISTING_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+function homeListingDateOrdinal(day: number): string {
+  const teens = day % 100
+  if (teens >= 11 && teens <= 13) return `${day}th`
+  if (day % 10 === 1) return `${day}st`
+  if (day % 10 === 2) return `${day}nd`
+  if (day % 10 === 3) return `${day}rd`
+  return `${day}th`
+}
+/** Current Listings Date Available only: "Aug 1st, 2026". Parses YYYY-MM-DD as a calendar day. */
+function homeListingDateLabel(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec((iso ?? '').trim())
+  if (!m) return ''
+  const year = Number(m[1])
+  const month = Number(m[2])
+  const day = Number(m[3])
+  if (month < 1 || month > 12 || day < 1 || day > 31) return ''
+  return `${HOME_LISTING_MONTHS[month - 1]} ${homeListingDateOrdinal(day)}, ${year}`
 }
 function isoDate(d: Date | null): string {
   return d ? d.toISOString().slice(0, 10) : ''
@@ -260,6 +282,18 @@ function userInitials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false)
+  useEffect(() => {
+    const media = window.matchMedia(query)
+    const onChange = () => setMatches(media.matches)
+    onChange()
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [query])
+  return matches
+}
+
 export default function CanaryApp({
   db,
   hospitableCalendar,
@@ -286,8 +320,11 @@ export default function CanaryApp({
   const [chatBusy, setChatBusy] = useState(false)
   const [search, setSearch] = useState('')
   const [searchExpanded, setSearchExpanded] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const searchWrapRef = useRef<HTMLDivElement>(null)
+  const isNarrowSearch = useMediaQuery('(max-width: 768px)')
   const chatScrollRef = useRef<HTMLDivElement>(null)
   const [tlAnchor, setTlAnchor] = useState<number | null>(null)
   // Default zoom: 1mo (index of { d: 30, label: '1mo' } in TL_ZOOM_PRESETS)
@@ -344,10 +381,15 @@ export default function CanaryApp({
     try {
       const t = localStorage.getItem('canary_theme')
       if (t === 'light' || t === 'dark') setTheme(t)
+      if (localStorage.getItem('canary_sidebar_collapsed') === '1') setSidebarCollapsed(true)
     } catch { /* ignore */ }
   }, [])
 
-  const openSearch = useCallback(() => setSearchExpanded(true), [])
+  const openSearch = useCallback(() => {
+    setMoreOpen(false)
+    if (sidebarCollapsed) setSidebarCollapsed(false)
+    setSearchExpanded(true)
+  }, [sidebarCollapsed])
   const closeSearch = useCallback(() => {
     setSearchExpanded(false)
     setSearch('')
@@ -378,12 +420,28 @@ export default function CanaryApp({
   }, [searchExpanded, chat.length, chatBusy])
 
   React.useEffect(() => {
+    if (!moreOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [moreOpen])
+
+  React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName
       const inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement | null)?.isContentEditable
       if (e.key === '/' && !inField) {
         e.preventDefault()
         openSearch()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        openSearch()
+      }
+      if (e.key === 'Escape' && moreOpen) {
+        e.preventDefault()
+        setMoreOpen(false)
+        return
       }
       if (e.key === 'Escape' && searchExpanded) {
         e.preventDefault()
@@ -392,7 +450,7 @@ export default function CanaryApp({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [searchExpanded, openSearch, closeSearch])
+  }, [searchExpanded, moreOpen, openSearch, closeSearch])
 
   React.useEffect(() => {
     if (!chatScrollRef.current) return
@@ -861,18 +919,50 @@ export default function CanaryApp({
     [avatarUploading, router, userOrgId, userPersonId],
   )
 
-  // ---------- nav ----------
-  const allNav: { key: string; label: string; privOnly?: boolean; hideFor?: CanaryRole[] }[] = [
-    { key: 'dashboard', label: 'Dashboard', hideFor: ['Vendor'] },
-    { key: 'leases', label: 'Leasing', hideFor: ['Vendor'] },
-    { key: 'properties', label: 'Properties', hideFor: ['Vendor'] },
-    { key: 'projects', label: 'Projects' },
-    { key: 'tasks', label: 'Tasks', hideFor: ['Tenant'] },
-    { key: 'billing', label: 'Billing', privOnly: true, hideFor: ['Vendor', 'Tenant'] },
-  ]
-  const navItems = allNav
-    .filter((n) => !(n.privOnly && !priv))
-    .filter((n) => !(n.hideFor && n.hideFor.includes(role)))
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev
+      try { localStorage.setItem('canary_sidebar_collapsed', next ? '1' : '0') } catch { /* ignore */ }
+      return next
+    })
+  }, [])
+
+  const [pipelinePropertyId, setPipelinePropertyId] = useState<string | null>(null)
+  const [pipelineListingId, setPipelineListingId] = useState<string | null>(null)
+
+  const navigateView = useCallback((key: string) => {
+    setView(key)
+    setDrawer(null)
+    setMoreOpen(false)
+    setPipelinePropertyId(null)
+    setPipelineListingId(null)
+  }, [])
+
+  const openListingPipeline = useCallback(
+    (opts: { propertyId: string | null; listingId: string }) => {
+      setView('leases')
+      setPageViews((pv) => ({ ...pv, leases: 'pipeline' }))
+      setDrawer(null)
+      setPipelinePropertyId(opts.propertyId)
+      setPipelineListingId(opts.listingId)
+      router.push(leasingPipelineHref(opts))
+    },
+    [router],
+  )
+
+  const clearPipelineFocus = useCallback(() => {
+    setPipelinePropertyId(null)
+    setPipelineListingId(null)
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (!params.has('property') && !params.has('listing')) return
+    params.delete('property')
+    params.delete('listing')
+    const next = params.toString()
+    window.history.replaceState({}, '', next ? `${window.location.pathname}?${next}` : window.location.pathname)
+  }, [])
+
+  const userEmail = db.people.find((p) => p.id === userPersonId)?.email || role
 
   // ---------- search matchers ----------
   // If q contains "garage", require hasGarage; remaining text matches address substring.
@@ -961,6 +1051,32 @@ export default function CanaryApp({
         .sort((a, b) => (parseDate(b.sentAt)?.getTime() ?? 0) - (parseDate(a.sentAt)?.getTime() ?? 0)),
     [scoped.drafts],
   )
+  const homeCurrentListingGroups = useMemo(() => {
+    const rows = scoped.drafts.filter(
+      (d) => d.status === 'published' || d.status === 'draft' || d.status === 'renewal_sent' || d.status === 'declined',
+    )
+    return groupCurrentListings(rows)
+  }, [scoped.drafts])
+  const homeCurrentListings = useMemo(
+    () => homeCurrentListingGroups.flatMap((group) => group.items),
+    [homeCurrentListingGroups],
+  )
+  const homeListingsHasRenewals = homeCurrentListingGroups.some((group) => group.id === 'renewals')
+  const listingInquiryCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const d of homeCurrentListings) {
+      const prop = scoped.properties.find((p) => p.id === d.propId || p.unitId === d.unitId)
+      counts.set(
+        d.id,
+        countInquiriesForListing(scoped.inquiries, {
+          listingId: d.id,
+          propertyId: prop?.propertyDbId ?? null,
+          address: d.address,
+        }),
+      )
+    }
+    return counts
+  }, [homeCurrentListings, scoped.inquiries, scoped.properties])
   const leasingKpis: { id: NonNullable<typeof leasingListOpen>; label: string; value: string; color: string }[] = [
     { id: 'new_inquiry', label: 'New', value: String(leasingNewInquiries.length), color: 'var(--green)' },
     { id: 'viewings', label: 'Viewing', value: String(leasingViewings.length), color: 'var(--blue)' },
@@ -1211,6 +1327,7 @@ export default function CanaryApp({
       })
     })
     const showDrafts = (d: CanaryDraft) => {
+      if (d.status === 'declined') return false
       if (d.status === 'renewal_sent') return filt.renewal_sent
       if (d.status === 'published') return filt.published
       return filt.draft
@@ -2177,8 +2294,15 @@ export default function CanaryApp({
       'messages',
       'notifications',
     ])
+    const propertyParam = params.get('property')
+    const listingParam = params.get('listing')
+    if (propertyParam) setPipelinePropertyId(propertyParam)
+    if (listingParam) setPipelineListingId(listingParam)
     if (viewParam && allowedViews.has(viewParam)) {
       setView(viewParam)
+      if (viewParam === 'leases' && (propertyParam || listingParam)) {
+        setPageViews((pv) => ({ ...pv, leases: 'pipeline' }))
+      }
       params.delete('view')
       const next = params.toString()
       window.history.replaceState({}, '', next ? `${window.location.pathname}?${next}` : window.location.pathname)
@@ -2192,23 +2316,94 @@ export default function CanaryApp({
     }
   }, [])
 
-  // ============================================================ render
-  return (
-    <div className="cnry cy-shell" data-ui="macos27" data-theme={theme}>
+  const renderAccountMenu = (side: 'top' | 'right' = 'top') => (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="cy-sidebar-profile" aria-label="Account menu">
+        <span className="cy-profile-avatar" aria-hidden>
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={avatarUrl} alt="" />
+          ) : (
+            userInitials(userName || role)
+          )}
+        </span>
+        <span className="cy-sidebar-profile-copy">
+          <span className="cy-sidebar-profile-name">{userName || role}</span>
+          <span className="cy-sidebar-profile-meta">{userEmail}</span>
+        </span>
+        <ChevronDown size={14} className="cy-sidebar-profile-chevron" aria-hidden />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        side={side}
+        sideOffset={8}
+        data-theme={theme}
+        className="cnry cy-menu cy-profile-menu min-w-56"
+      >
+        {canSwitchRoles && (
+          <>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Portal view</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={role}
+                onValueChange={(v) => onRoleChange(v as CanaryRole)}
+              >
+                {ROLE_OPTIONS.map((opt) => (
+                  <DropdownMenuRadioItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            disabled={avatarUploading || !userOrgId}
+            onClick={() => avatarInputRef.current?.click()}
+          >
+            <UserRound size={15} aria-hidden />
+            {avatarUploading ? 'Uploading photo…' : avatarUrl ? 'Change photo' : 'Upload photo'}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => { window.location.href = '/settings' }}>
+            <Settings size={15} aria-hidden />
+            Settings
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => window.open('https://canary-propos.vercel.app', '_blank', 'noopener,noreferrer')}
+          >
+            Public site
+            <span className="cy-profile-menu-hint" aria-hidden>↗</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigateView('notifications')}>
+            <Bell size={15} aria-hidden />
+            Notifications
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => {
+              const t = theme === 'dark' ? 'light' : 'dark'
+              setTheme(t)
+              try { localStorage.setItem('canary_theme', t) } catch { /* ignore */ }
+            }}
+          >
+            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            <span className="cy-profile-menu-hint" aria-hidden>
+              {theme === 'dark' ? '☀' : '☾'}
+            </span>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem variant="destructive" onClick={signOut}>
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 
-      <div className="cy-main-wrap">
-        {/* ============ TOP BAR ============ */}
-        <header className="cy-header">
-          <div className="cy-header-left">
-            <button className="cy-header-brand cy-hov" onClick={() => { setView('dashboard'); setDrawer(null) }} title="Dashboard">
-              <span className="cy-header-brand-logo">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/landing/logo-white.png" alt="" style={{ position: 'absolute', inset: 0, width: 28, height: 28, objectFit: 'contain', display: theme === 'dark' ? 'block' : 'none' }} />
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/landing/logo-black.png" alt="" style={{ position: 'absolute', inset: 0, width: 28, height: 28, objectFit: 'contain', display: theme === 'dark' ? 'none' : 'block' }} />
-              </span>
-              <span className="cy-header-brand-title">Canary <span className="cy-header-brand-sub">PM</span></span>
-            </button>
+  const searchUi = (
             <div className={`cy-search${searchPanelOpen ? ' cy-search--open' : ''}${showAskAnswer && searchPanelOpen ? ' cy-search--ask' : ''}`} ref={searchWrapRef}>
               {searchExpanded ? (
                 <div className="cy-search-expanded">
@@ -2340,165 +2535,55 @@ export default function CanaryApp({
                 </div>
               )}
             </div>
-          </div>
-          <nav id="cy-topnav" className="cy-topnav" aria-label="Main">
-            {navItems.map((n) => (
-              <button
-                key={n.key}
-                type="button"
-                className={`cy-topnav-item${view === n.key ? ' cy-topnav-item--active' : ''}`}
-                title={n.label}
-                onClick={() => { setView(n.key); setDrawer(null) }}
-              >
-                {n.label}
-              </button>
-            ))}
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className="cy-topnav-burger"
-                aria-label="Open navigation menu"
-              >
-                <Menu size={16} strokeWidth={2} aria-hidden />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="center"
-                sideOffset={8}
-                data-theme={theme}
-                className="cnry cy-menu cy-topnav-menu min-w-48"
-              >
-                <DropdownMenuRadioGroup
-                  value={view}
-                  onValueChange={(v) => { setView(v); setDrawer(null) }}
-                >
-                  {navItems.map((n) => (
-                    <DropdownMenuRadioItem key={n.key} value={n.key}>
-                      {n.label}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </nav>
-          <div className="cy-header-tools">
-            {priv && (
-              <>
-                <button
-                  type="button"
-                  className={`cy-messages-toggle${view === 'inbox' ? ' cy-messages-toggle--active' : ''}`}
-                  onClick={() => { setView('inbox'); setDrawer(null) }}
-                  aria-label="Email inbox"
-                  title="Email"
-                >
-                  <Mail size={16} strokeWidth={2} aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  className={`cy-messages-toggle${view === 'messages' ? ' cy-messages-toggle--active' : ''}`}
-                  onClick={() => { setView('messages'); setDrawer(null) }}
-                  aria-label="Messages"
-                  title="Messages"
-                >
-                  <MessageSquare size={16} strokeWidth={2} aria-hidden />
-                </button>
-              </>
-            )}
-            <div className="cy-header-actions">
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  className="cy-profile-trigger"
-                  aria-label="Account menu"
-                >
-                  <span className="cy-profile-avatar" aria-hidden>
-                    {avatarUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={avatarUrl} alt="" />
-                    ) : (
-                      userInitials(userName || role)
-                    )}
-                  </span>
-                </DropdownMenuTrigger>
-                <input
-                  ref={avatarInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="sr-only"
-                  aria-label="Upload profile photo"
-                  onChange={(e) => void uploadAvatar(e.target.files?.[0])}
-                />
-                <DropdownMenuContent
-                  align="end"
-                  sideOffset={8}
-                  data-theme={theme}
-                  className="cnry cy-menu cy-profile-menu min-w-56"
-                >
-                  {canSwitchRoles && (
-                    <>
-                      <DropdownMenuGroup>
-                        <DropdownMenuLabel>Portal view</DropdownMenuLabel>
-                        <DropdownMenuRadioGroup
-                          value={role}
-                          onValueChange={(v) => onRoleChange(v as CanaryRole)}
-                        >
-                          {ROLE_OPTIONS.map((opt) => (
-                            <DropdownMenuRadioItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </DropdownMenuRadioItem>
-                          ))}
-                        </DropdownMenuRadioGroup>
-                      </DropdownMenuGroup>
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem
-                      disabled={avatarUploading || !userOrgId}
-                      onClick={() => avatarInputRef.current?.click()}
-                    >
-                      <UserRound size={15} aria-hidden />
-                      {avatarUploading ? 'Uploading photo…' : avatarUrl ? 'Change photo' : 'Upload photo'}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => { window.location.href = '/settings' }}
-                    >
-                      <Settings size={15} aria-hidden />
-                      Settings
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => window.open('https://canary-propos.vercel.app', '_blank', 'noopener,noreferrer')}
-                    >
-                      Public site
-                      <span className="cy-profile-menu-hint" aria-hidden>↗</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => { setView('notifications'); setDrawer(null) }}
-                    >
-                      <Bell size={15} aria-hidden />
-                      Notifications
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        const t = theme === 'dark' ? 'light' : 'dark'
-                        setTheme(t)
-                        try { localStorage.setItem('canary_theme', t) } catch { /* ignore */ }
-                      }}
-                    >
-                      {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-                      <span className="cy-profile-menu-hint" aria-hidden>
-                        {theme === 'dark' ? '☀' : '☾'}
-                      </span>
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem variant="destructive" onClick={signOut}>
-                      Sign out
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </header>
+  )
+
+  // ============================================================ render
+  return (
+    <div
+      className="cnry cy-shell"
+      data-ui="macos27"
+      data-theme={theme}
+      data-sidebar={sidebarCollapsed ? 'collapsed' : 'expanded'}
+    >
+      <input
+        ref={avatarInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="sr-only"
+        aria-label="Upload profile photo"
+        onChange={(e) => void uploadAvatar(e.target.files?.[0])}
+      />
+      <AppSidebar
+        theme={theme}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={toggleSidebar}
+        view={view}
+        onNavigate={navigateView}
+        priv={priv}
+        role={role}
+        searchQuery={search}
+        onOpenSearch={openSearch}
+        searchSlot={isNarrowSearch ? undefined : searchUi}
+        footer={renderAccountMenu('top')}
+      />
+
+      <div className="cy-main-wrap">
+        {isNarrowSearch ? (
+          <MobileAppChrome
+            theme={theme}
+            view={view}
+            title={pageLabelForView(view, priv, role)}
+            moreOpen={moreOpen}
+            onMoreChange={setMoreOpen}
+            onNavigate={navigateView}
+            onOpenSearch={openSearch}
+            searchQuery={search}
+            priv={priv}
+            role={role}
+            footer={renderAccountMenu('top')}
+          />
+        ) : null}
+        {isNarrowSearch && searchExpanded ? searchUi : null}
 
         {/* ============ ROLE BANNER ============ */}
         {!priv && (
@@ -2716,37 +2801,102 @@ export default function CanaryApp({
             <section className="cy-home-dest">
               <div className="cy-home-panel">
                 <div className="cy-home-panel-head">
-                  <div>
-                    <div className="cy-home-panel-title">Published listings</div>
+                  <div className="cy-home-panel-title-row">
+                    <div className="cy-home-panel-title">Current Listings</div>
+                    <span className="cy-home-panel-count">{homeCurrentListings.length}</span>
                   </div>
-                  <span style={{ color: 'var(--dim)', fontFamily: MONO, fontSize: 12 }}>
-                    {leasingListingsLive.length}
-                  </span>
                 </div>
-                {leasingListingsLive.map((d) => {
-                  const badge = draftStatusBadge(d.status)
-                  return (
-                    <button
-                      key={d.id}
-                      type="button"
-                      className="cy-home-row cy-hov"
-                      onClick={() => router.push(listingHref(d.id))}
-                    >
-                      <span className="cy-home-row-dot" aria-hidden />
-                      <span className="cy-home-row-addr">{short(d.address) || d.title || 'Listing'}</span>
-                      <span className="cy-home-row-meta">
-                        {(d.rent ? money(parseFloat(d.rent) || 0) + '/mo' : 'No rent')}
-                        {d.start ? ` · ${d.start}` : ''}
-                      </span>
-                      <span className="cy-home-row-badge" style={{ color: badge.color }}>
-                        {badge.label === 'PUBLIC' ? 'Published' : badge.label}
-                      </span>
-                    </button>
-                  )
-                })}
-                {!leasingListingsLive.length && (
+                {homeCurrentListings.length > 0 && (
+                  <div className={`cy-home-listings${homeListingsHasRenewals ? ' has-renewals' : ''}`}>
+                    {homeCurrentListingGroups.map((group, groupIndex) => (
+                      <div
+                        key={group.id}
+                        className="cy-home-listings-group"
+                        role="group"
+                        aria-label={`${group.label}, ${group.items.length}`}
+                      >
+                        <div className="cy-home-listings-group-head">
+                          <span className="cy-home-listings-group-label">{group.label}</span>
+                          <span className="cy-home-listings-group-count">{group.items.length}</span>
+                        </div>
+                        {groupIndex === 0 && (
+                          <div className="cy-home-row cy-home-row-head">
+                            <span className="cy-home-row-open" aria-hidden />
+                            <span className="cy-home-row-status">Occupancy</span>
+                            <span className="cy-home-row-rent">Rent</span>
+                            <span className="cy-home-row-date">Start Date</span>
+                            <span className="cy-home-row-inq">Inquiries</span>
+                            {homeListingsHasRenewals && <span className="cy-home-row-renewal">Renewal</span>}
+                          </div>
+                        )}
+                        {group.items.map((d) => {
+                          const prop = scoped.properties.find((p) => p.id === d.propId || p.unitId === d.unitId)
+                          const propertyDbId = prop?.propertyDbId ?? null
+                          const inquiryCount = listingInquiryCounts.get(d.id) ?? 0
+                          const statusLabel = propertyStatusGroupKey(prop?.status)
+                          const isPublished = d.status === 'published'
+                          const isRenewalSent = d.status === 'renewal_sent'
+                          const pipelineHref = leasingPipelineHref({
+                            propertyId: propertyDbId,
+                            listingId: d.id,
+                          })
+                          return (
+                            <div key={d.id} className="cy-home-row cy-hov">
+                              <a href={listingHref(d.id)} className="cy-home-row-open">
+                                <span
+                                  className={
+                                    isRenewalSent
+                                      ? 'cy-home-row-dot cy-home-row-dot-sent'
+                                      : isPublished
+                                        ? 'cy-home-row-dot'
+                                        : 'cy-home-row-dot cy-home-row-dot-draft'
+                                  }
+                                  aria-label={isRenewalSent ? 'Renewal sent' : isPublished ? 'Published' : 'Draft'}
+                                />
+                                <span className="cy-home-row-addr">{short(d.address) || d.title || 'Listing'}</span>
+                              </a>
+                              <a href={listingHref(d.id)} className="cy-home-row-status">
+                                {statusLabel}
+                              </a>
+                              <a href={listingHref(d.id)} className="cy-home-row-rent">
+                                {d.rent ? money(parseFloat(d.rent) || 0) : 'No rent'}
+                              </a>
+                              <a href={listingHref(d.id)} className="cy-home-row-date">
+                                {homeListingDateLabel(d.start)}
+                              </a>
+                              {inquiryCount > 0 ? (
+                                <a
+                                  href={pipelineHref}
+                                  className="cy-home-row-inq"
+                                  aria-label={`${inquiryCount} ${inquiryCount === 1 ? 'inquiry' : 'inquiries'}`}
+                                  onClick={(e) => {
+                                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
+                                    e.preventDefault()
+                                    openListingPipeline({ propertyId: propertyDbId, listingId: d.id })
+                                  }}
+                                >
+                                  {inquiryCount}
+                                </a>
+                              ) : (
+                                <span className="cy-home-row-inq" aria-hidden />
+                              )}
+                              {group.id === 'renewals' ? (
+                                <a href={listingHref(d.id)} className="cy-home-row-renewal">
+                                  {listingRenewalColumnLabel(d.status)}
+                                </a>
+                              ) : homeListingsHasRenewals ? (
+                                <span className="cy-home-row-renewal" aria-hidden />
+                              ) : null}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {!homeCurrentListings.length && (
                   <div style={{ color: 'var(--dim)', padding: 8, fontSize: '13.5px' }}>
-                    No published listings yet. Use + to create one — they appear here and on the public site.
+                    No current listings yet. Use + to create one — published listings also appear on the public site.
                   </div>
                 )}
               </div>
@@ -2776,6 +2926,9 @@ export default function CanaryApp({
           {showPipeline && (
             <LeasingPipelineView
               inquiries={scoped.inquiries}
+              focusPropertyId={pipelinePropertyId}
+              focusListingId={pipelineListingId}
+              onClearFocus={clearPipelineFocus}
               onChanged={() => router.refresh()}
               onOpenProperty={({ propertyId, address }) => {
                 // Inquiry.propertyId is properties.id (propertyDbId). Drawer expects
@@ -4060,6 +4213,7 @@ export default function CanaryApp({
                 >
                   <option value="draft">Draft lease</option>
                   <option value="renewal_sent">Renewal sent</option>
+                  <option value="declined">Renewal Declined</option>
                   <option value="published">Published to public site</option>
                 </select>
               </label>
@@ -4068,7 +4222,9 @@ export default function CanaryApp({
                   ? 'Published drafts appear on the public listings page with only tenant-safe fields.'
                   : curDraft.status === 'renewal_sent'
                     ? 'Shows on the timeline as a purple bar — renewal sent to tenant, awaiting signature.'
-                    : 'Shows on the timeline as a dashed yellow bar while the lease is still being prepared.'}
+                    : curDraft.status === 'declined'
+                      ? 'Renewal was declined. Current Listings shows Declined; the listing stays off the public site.'
+                      : 'Shows on the timeline as a dashed yellow bar while the lease is still being prepared.'}
               </span>
               {!!curDraft.id && <button onClick={removeDraft} disabled={draftSaving} style={{ border: '1px solid var(--border)', background: 'none', color: 'var(--red)', borderRadius: 9, padding: '9px 14px', fontWeight: 600, cursor: 'pointer' }}>Delete</button>}
               <button

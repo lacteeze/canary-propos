@@ -33,14 +33,13 @@ export type AppNavItem = {
 
 export type AppNavSection = {
   id: string
-  label: string
+  label?: string
   items: AppNavItem[]
 }
 
 export const APP_NAV_SECTIONS: AppNavSection[] = [
   {
     id: 'main',
-    label: 'Main',
     items: [
       { key: 'dashboard', label: 'Dashboard', icon: LayoutGrid, hideFor: ['Vendor'] },
       { key: 'leases', label: 'Leasing', icon: KeyRound, hideFor: ['Vendor'] },
@@ -51,7 +50,6 @@ export const APP_NAV_SECTIONS: AppNavSection[] = [
   },
   {
     id: 'work',
-    label: 'Work',
     items: [
       { key: 'projects', label: 'Projects', icon: FolderKanban },
       { key: 'tasks', label: 'Tasks', icon: CheckSquare, hideFor: ['Tenant'] },
@@ -205,7 +203,7 @@ export function AppSidebar({
       <nav className="cy-sidebar-nav" aria-label="Main">
         {sections.map((section) => (
           <div key={section.id} className="cy-sidebar-section">
-            <div className="cy-sidebar-section-label">{section.label}</div>
+            {section.label ? <div className="cy-sidebar-section-label">{section.label}</div> : null}
             {section.items.map((item) => {
               const Icon = item.icon
               const active = !item.href && view === item.key
@@ -311,7 +309,7 @@ export function MobileAppChrome({
             <nav className="cy-more-nav" aria-label="All pages">
               {sections.map((section) => (
                 <div key={section.id} className="cy-sidebar-section">
-                  <div className="cy-sidebar-section-label">{section.label}</div>
+                  {section.label ? <div className="cy-sidebar-section-label">{section.label}</div> : null}
                   {section.items.map((item) => {
                     const Icon = item.icon
                     const active = !item.href && view === item.key

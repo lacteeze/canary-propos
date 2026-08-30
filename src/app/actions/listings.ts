@@ -94,7 +94,7 @@ async function getCallerContext() {
 
   const { data: person } = await supabase
     .from('people')
-    .select('org_id, role')
+    .select('id, org_id, role')
     .eq('user_id', user.id)
     .eq('active', true)
     .single()
@@ -104,7 +104,7 @@ async function getCallerContext() {
 }
 
 // --- Schema ---
-const listingStatusEnum = z.enum(['draft', 'published', 'unlisted', 'renewal_sent'])
+const listingStatusEnum = z.enum(['draft', 'published', 'unlisted', 'renewal_sent', 'declined'])
 
 const listingSchema = z.object({
   unit_id: z.string().uuid('Unit is required'),
@@ -211,7 +211,7 @@ export async function updateListing(
   // T-03-08: org_id guard on update
   const { data: existing, error: fetchError } = await ctx.supabase
     .from('listings')
-    .select('id, slug, unit_id')
+    .select('id, slug, unit_id, listing_title, listing_description, display_rent, available_from, highlights, status, published_at')
     .eq('id', id)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -242,6 +242,9 @@ export async function updateListing(
     available_from: parsed.data.available_from ?? null,
     status: parsed.data.status,
     updated_at: new Date().toISOString(),
+  }
+  if (parsed.data.status === 'published') {
+    updatePayload.published_at = existing.published_at ?? new Date().toISOString()
   }
 
   if (parsed.data.status === 'published') {
@@ -291,7 +294,7 @@ export async function toggleListingStatus(
 
   const { data: existing, error: fetchError } = await ctx.supabase
     .from('listings')
-    .select('id, slug, unit_id')
+    .select('id, slug, unit_id, status, published_at')
     .eq('id', id)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -303,6 +306,9 @@ export async function toggleListingStatus(
   const updatePayload: ListingUpdate = {
     status: parsedStatus.data,
     updated_at: new Date().toISOString(),
+  }
+  if (parsedStatus.data === 'published') {
+    updatePayload.published_at = existing.published_at ?? new Date().toISOString()
   }
 
   if (parsedStatus.data === 'published' && !existing.slug) {

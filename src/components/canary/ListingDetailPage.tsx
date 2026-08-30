@@ -15,7 +15,7 @@ import { draftStatusBadge } from '@/lib/canary/types'
 import { listingPublicHref } from '@/lib/listings/listing-href'
 import DatePickerField from './DatePickerField'
 import { CopyPublicLinkButton } from './CopyPublicLinkButton'
-import { EntityBackButton, EntityPageShell, useEntityBack } from './EntityPageShell'
+import { EntityBackButton, EntityPageShell, useEntityBack, type EntityChrome } from './EntityPageShell'
 
 const DRAFT_RENT_STEP = 25
 
@@ -28,10 +28,12 @@ export default function ListingDetailPage({
   id,
   db,
   canEdit,
+  chrome,
 }: {
   id: string
   db: CanaryDb
   canEdit: boolean
+  chrome: EntityChrome
 }) {
   const router = useRouter()
   const goBack = useEntityBack('/app')
@@ -73,6 +75,8 @@ export default function ListingDetailPage({
       id: form.id,
       unitId: form.propId,
       rent: form.rent === '' ? null : rentNum(form.rent),
+      rentalCredit: form.rentalCredit === '' ? null : rentNum(form.rentalCredit),
+      rentalCreditExpiry: form.rentalCreditExpiry || null,
       start: form.start || null,
       description: form.description || null,
       pets: form.pets,
@@ -84,7 +88,7 @@ export default function ListingDetailPage({
       setError(res.error ?? 'Could not save listing.')
       return
     }
-    router.refresh()
+    goBack()
   }
 
   const remove = async () => {
@@ -97,7 +101,7 @@ export default function ListingDetailPage({
       setError(res.error ?? 'Could not delete listing.')
       return
     }
-    router.push('/app')
+    goBack()
   }
 
   const activate = async () => {
@@ -125,6 +129,8 @@ export default function ListingDetailPage({
       startDate: form.start,
       endDate: form.end || null,
       monthlyRent: rent,
+      rentalCredit: form.rentalCredit === '' ? null : rentNum(form.rentalCredit),
+      rentalCreditExpiry: form.rentalCreditExpiry || null,
       termType: form.termType,
     })
     setSaving(false)
@@ -132,12 +138,12 @@ export default function ListingDetailPage({
       setError(res.error ?? 'Could not activate listing.')
       return
     }
-    router.push('/app?view=leases')
+    goBack()
   }
 
   if (!listing) {
     return (
-      <EntityPageShell>
+      <EntityPageShell chrome={chrome} activeView="leases" pageTitle="Listing">
         <div className="cy-entity-page-head">
           <EntityBackButton onClick={goBack} />
           <div className="cy-entity-page-title-block">
@@ -153,7 +159,7 @@ export default function ListingDetailPage({
     : shortAddress(listing.address) || 'Listing'
 
   return (
-    <EntityPageShell>
+    <EntityPageShell chrome={chrome} activeView="leases" pageTitle={title}>
       <div className="cy-entity-page-head">
         <EntityBackButton onClick={goBack} />
         <div className="cy-entity-page-title-block">
@@ -203,13 +209,7 @@ export default function ListingDetailPage({
           ) : null}
         </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: 12,
-          }}
-        >
+        <div className="cy-entity-form-grid">
           <label>
             <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Monthly rent</span>
             <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
@@ -237,6 +237,41 @@ export default function ListingDetailPage({
               >
                 +
               </button>
+            </div>
+          </label>
+          <label>
+            <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Rental credit</span>
+            <input
+              value={form.rentalCredit}
+              disabled={!canEdit}
+              onChange={setField('rentalCredit')}
+              inputMode="decimal"
+              placeholder="0"
+              style={{ ...fieldStyle, marginTop: 4 }}
+            />
+          </label>
+          <label>
+            <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Credit expires</span>
+            <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <DatePickerField
+                  value={form.rentalCreditExpiry}
+                  onChange={(v) => {
+                    if (!canEdit) return
+                    setForm((prev) => ({ ...prev, rentalCreditExpiry: v }))
+                  }}
+                  placeholder="Optional expiry"
+                />
+              </div>
+              {canEdit && form.rentalCreditExpiry ? (
+                <button
+                  type="button"
+                  className="cy-btn-ghost"
+                  onClick={() => setForm((prev) => ({ ...prev, rentalCreditExpiry: '' }))}
+                >
+                  Clear
+                </button>
+              ) : null}
             </div>
           </label>
           <label>
@@ -373,6 +408,7 @@ export default function ListingDetailPage({
             >
               <option value="draft">Draft lease</option>
               <option value="renewal_sent">Renewal sent</option>
+              <option value="declined">Renewal Declined</option>
               <option value="published">Published to public site</option>
             </select>
           </label>
@@ -381,7 +417,7 @@ export default function ListingDetailPage({
         {error ? <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 12 }}>{error}</div> : null}
 
         {canEdit ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
+          <div className="cy-entity-page-actions">
             <button
               type="button"
               onClick={remove}
@@ -430,6 +466,8 @@ function listingToForm(listing: CanaryDraft | undefined) {
     tenantId: '',
     termType: 'fixed_term' as LeaseTermType,
     rent: listing?.rent ?? '',
+    rentalCredit: listing?.rentalCredit ?? '',
+    rentalCreditExpiry: listing?.rentalCreditExpiry ?? '',
     start: listing?.start ?? '',
     end: listing?.end ?? '',
     beds: listing?.beds ?? '',

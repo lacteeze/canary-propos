@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import { getCaller, loadCanaryDb } from '@/lib/canary/load-db'
+import { createClient } from '@/lib/supabase/server'
 import type { CanaryDb, CanaryRole } from '@/lib/canary/types'
 
 export function toCanaryRole(roles: string[]): CanaryRole {
@@ -21,6 +22,9 @@ export type CanaryEntityContext = {
   personId: string
   canEdit: boolean
   priv: boolean
+  userName: string
+  userEmail: string
+  userAvatarUrl: string | null
 }
 
 function scopeDb(db: CanaryDb, role: CanaryRole, personId: string): CanaryDb {
@@ -85,12 +89,24 @@ export async function loadCanaryEntityContext(): Promise<CanaryEntityContext> {
   const scoped = scopeDb(db, role, caller.personId)
   const priv = role === 'Admin' || role === 'Manager'
 
+  let userAvatarUrl: string | null = null
+  if (caller.avatarPath) {
+    const supabase = await createClient()
+    const { data } = await supabase.storage
+      .from('org-assets')
+      .createSignedUrl(caller.avatarPath, 3600)
+    userAvatarUrl = data?.signedUrl ?? null
+  }
+
   return {
     db: scoped,
     role,
     personId: caller.personId,
     canEdit: priv,
     priv,
+    userName: caller.name,
+    userEmail: caller.email,
+    userAvatarUrl,
   }
 }
 

@@ -39,12 +39,17 @@ async function getStaffContext() {
 
 // ---------- Draft lease / listing ----------
 
-const draftListingStatusSchema = z.enum(['draft', 'renewal_sent', 'published'])
+const draftListingStatusSchema = z.enum(['draft', 'renewal_sent', 'published', 'declined'])
 
 const draftSchema = z.object({
   id: z.string().optional().nullable(),
   unitId: z.string().uuid('Property is required'),
   rent: z.coerce.number().positive().optional().nullable(),
+  rentalCredit: z.coerce.number().min(0).optional().nullable(),
+  rentalCreditExpiry: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(''), z.null()])
+    .optional()
+    .nullable(),
   start: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   pets: z.string().optional().nullable(),
@@ -56,11 +61,13 @@ export async function saveDraftListing(input: {
   id?: string | null
   unitId: string
   rent?: number | string | null
+  rentalCredit?: number | string | null
+  rentalCreditExpiry?: string | null
   start?: string | null
   description?: string | null
   pets?: string | null
   utilities?: string | null
-  status: 'draft' | 'renewal_sent' | 'published'
+  status: 'draft' | 'renewal_sent' | 'published' | 'declined'
 }): Promise<ActionResult> {
   const ctx = await getStaffContext()
   if (!ctx) return { success: false, error: 'Only managers can save draft listings.' }
@@ -68,6 +75,8 @@ export async function saveDraftListing(input: {
   const parsed = draftSchema.safeParse({
     ...input,
     rent: input.rent === '' || input.rent == null ? null : input.rent,
+    rentalCredit: input.rentalCredit === '' || input.rentalCredit == null ? null : input.rentalCredit,
+    rentalCreditExpiry: input.rentalCreditExpiry?.trim() || null,
   })
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
@@ -125,6 +134,10 @@ export async function saveDraftListing(input: {
     status: d.status,
     updated_at: new Date().toISOString(),
   }
+  if (Object.prototype.hasOwnProperty.call(input, 'rentalCredit')) {
+    record.rental_credit = d.rentalCredit && d.rentalCredit > 0 ? d.rentalCredit : null
+    record.rental_credit_expiry = d.rentalCreditExpiry || null
+  }
   if (d.status === 'published') {
     record.published_at = existing?.published_at ?? new Date().toISOString()
   }
@@ -165,11 +178,14 @@ export async function saveDraftListing(input: {
     if (error) {
       console.error('[saveDraftListing:update]', error)
       const msg = error.message?.includes('listing_status')
-        ? 'Could not save — run database migration 0030_listing_status_renewal_sent (renewal_sent status).'
+        ? 'Could not save — run database migrations 0030_listing_status_renewal_sent and 0060_listing_status_declined.'
+        : error.message?.includes('rental_credit')
+          ? 'Could not save — run database migration 0059_listings_rental_credit.'
         : error.message || 'Failed to save the draft listing.'
       return { success: false, error: msg }
     }
     revalidatePath('/app')
+    revalidatePath(`/app/listings/${d.id}`)
     return { success: true, id: d.id }
   }
 
@@ -182,11 +198,14 @@ export async function saveDraftListing(input: {
   if (error) {
     console.error('[saveDraftListing:insert]', error)
     const msg = error.message?.includes('listing_status')
-      ? 'Could not save — run database migration 0030_listing_status_renewal_sent (renewal_sent status).'
+      ? 'Could not save — run database migrations 0030_listing_status_renewal_sent and 0060_listing_status_declined.'
+      : error.message?.includes('rental_credit')
+        ? 'Could not save — run database migration 0059_listings_rental_credit.'
       : error.message || 'Failed to save the draft listing.'
     return { success: false, error: msg }
   }
   revalidatePath('/app')
+  if (inserted?.id) revalidatePath(`/app/listings/${inserted.id}`)
   return { success: true, id: inserted?.id }
 }
 
@@ -200,6 +219,11 @@ const activateDraftSchema = z.object({
     .optional()
     .nullable(),
   monthlyRent: z.coerce.number().positive('Monthly rent is required'),
+  rentalCredit: z.coerce.number().min(0).optional().nullable(),
+  rentalCreditExpiry: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(''), z.null()])
+    .optional()
+    .nullable(),
   termType: z.enum(['fixed_term', 'month_to_month']).default('fixed_term'),
 })
 
@@ -211,6 +235,8 @@ export async function activateDraftListing(input: {
   startDate: string
   endDate?: string | null
   monthlyRent: number | string
+  rentalCredit?: number | string | null
+  rentalCreditExpiry?: string | null
   termType?: LeaseTermType
 }): Promise<ActionResult> {
   const ctx = await getStaffContext()
@@ -220,6 +246,8 @@ export async function activateDraftListing(input: {
     ...input,
     tenantId: input.tenantId || null,
     monthlyRent: input.monthlyRent,
+    rentalCredit: input.rentalCredit === '' || input.rentalCredit == null ? null : input.rentalCredit,
+    rentalCreditExpiry: input.rentalCreditExpiry?.trim() || null,
     endDate: input.endDate?.trim() || null,
     termType: normalizeLeaseTermType(input.termType),
   })
@@ -249,16 +277,25 @@ export async function activateDraftListing(input: {
     if (!tenant) return { success: false, error: 'Tenant not found in your organization.' }
   }
 
+  let rentalCredit = d.rentalCredit && d.rentalCredit > 0 ? d.rentalCredit : null
+  let rentalCreditExpiry = d.rentalCreditExpiry || null
+
   if (d.listingId) {
     const { data: listing } = await ctx.supabase
       .from('listings')
-      .select('id, unit_id')
+      .select('id, unit_id, rental_credit, rental_credit_expiry')
       .eq('id', d.listingId)
       .eq('org_id', ctx.person.org_id)
       .single()
     if (!listing) return { success: false, error: 'Draft listing not found.' }
     if (listing.unit_id !== d.unitId) {
       return { success: false, error: 'Draft listing does not match the selected property.' }
+    }
+    if (rentalCredit == null && listing.rental_credit != null) {
+      rentalCredit = Number(listing.rental_credit)
+    }
+    if (!rentalCreditExpiry && listing.rental_credit_expiry) {
+      rentalCreditExpiry = listing.rental_credit_expiry
     }
   }
 
@@ -272,6 +309,8 @@ export async function activateDraftListing(input: {
       end_date: d.endDate || null,
       lease_term_type: d.termType,
       monthly_rent: d.monthlyRent,
+      rental_credit: rentalCredit,
+      rental_credit_expiry: rentalCreditExpiry,
       deposit_amount: 0,
       rent_due_day: 1,
       status: 'active',

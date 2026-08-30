@@ -18,6 +18,13 @@ export default async function PersonPage({
       db={ctx.db}
       canEdit={ctx.canEdit}
       priv={ctx.priv}
+      chrome={{
+        role: ctx.role,
+        priv: ctx.priv,
+        userName: ctx.userName,
+        userEmail: ctx.userEmail,
+        userAvatarUrl: ctx.userAvatarUrl,
+      }}
     />
   )
 }

@@ -9,6 +9,8 @@
 import { createPublicClient } from '@/lib/supabase/public'
 
 const SIGNED_TTL_SECONDS = 60 * 60 // 1 hour
+/** Longer TTL for images embedded in outbound emails (recipients open later). */
+const EMAIL_SIGNED_TTL_SECONDS = 60 * 60 * 24 * 7 // 7 days
 
 // Reuse signed URLs for a window shorter than their TTL. These are listing
 // photos (no per-user data), so caching is safe. Two wins:
@@ -345,6 +347,45 @@ export async function signListingPhotoPaths(
   variant: ListingPhotoVariant = 'full'
 ): Promise<string[]> {
   return signOrgAssetPaths(paths, createPublicClient(), 'signListingPhotoPaths', variant)
+}
+
+/**
+ * Sign cover photos for outbound emails with a longer TTL than browse cards.
+ * Does not use the short-lived process cache (email URLs must outlive a session).
+ */
+export async function signListingPhotoPathsForEmail(
+  paths: Array<string | null | undefined>
+): Promise<string[]> {
+  const normalized = paths.map((p) => (p ?? '').trim())
+  if (!normalized.some(Boolean)) return normalized.map(() => '')
+
+  const supabase = createPublicClient()
+  const uniquePaths = [
+    ...new Set(normalized.filter((p) => p.length > 0 && !isHttpUrl(p))),
+  ]
+  const byPath = new Map<string, string>()
+  const CHUNK = 100
+
+  for (let i = 0; i < uniquePaths.length; i += CHUNK) {
+    const chunk = uniquePaths.slice(i, i + CHUNK)
+    const { data, error } = await supabase.storage
+      .from('org-assets')
+      .createSignedUrls(chunk, EMAIL_SIGNED_TTL_SECONDS)
+
+    if (error || !data) {
+      console.error('[signListingPhotoPathsForEmail]', error?.message)
+      continue
+    }
+    for (const row of data) {
+      if (!row.path || !row.signedUrl) continue
+      byPath.set(row.path, row.signedUrl)
+    }
+  }
+
+  return normalized.map((path) => {
+    if (!path || isHttpUrl(path)) return ''
+    return byPath.get(path) ?? ''
+  })
 }
 
 export async function resolveListingCoverPhoto(

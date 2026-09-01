@@ -4735,6 +4735,31 @@
   font-family: var(--font-mono, ui-monospace, monospace);
   margin-bottom: 10px;
 }
+.cnry .cy-match-homes-email {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.cnry .cy-match-homes-email .cy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cnry .cy-match-homes-email-help {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--dim);
+  max-width: 42ch;
+}
+.cnry .cy-match-homes-sent {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent, #2f6b52);
+}
 .cnry .cy-match-homes-list {
   list-style: none;
   margin: 0;

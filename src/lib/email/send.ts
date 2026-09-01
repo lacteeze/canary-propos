@@ -14,6 +14,8 @@ export interface SendEmailOptions {
   from?: string
   /** Reply-To — bare email or "Name <email>"; forwarded to Pingram. */
   replyTo?: string | string[]
+  /** BCC — bare email or "Name <email>"; forwarded to Pingram. */
+  bcc?: string | string[]
 }
 
 /**

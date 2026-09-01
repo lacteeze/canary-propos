@@ -757,6 +757,7 @@ export default function CanaryApp({
       unitId: draft.propId,
       rent: draft.rent === '' ? null : rentNum(draft.rent),
       start: draft.start || null,
+      end: draft.end || null,
       description: draft.description || null,
       pets: draft.pets,
       utilities: draft.utilities,

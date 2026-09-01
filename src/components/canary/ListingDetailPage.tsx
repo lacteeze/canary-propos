@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppRouter } from './useAppRouter'
 import {
@@ -46,6 +46,11 @@ export default function ListingDetailPage({
   const [form, setForm] = useState(() => listingToForm(listing))
   const [endDirty, setEndDirty] = useState(Boolean((listing?.end || '').trim()))
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setForm(listingToForm(listing))
+    setEndDirty(Boolean((listing?.end || '').trim()))
+  }, [listing?.id, listing?.end])
   const [error, setError] = useState('')
   const [descGenerating, setDescGenerating] = useState(false)
 
@@ -79,6 +84,7 @@ export default function ListingDetailPage({
       rentalCredit: form.rentalCredit === '' ? null : rentNum(form.rentalCredit),
       rentalCreditExpiry: form.rentalCreditExpiry || null,
       start: form.start || null,
+      end: form.end || null,
       description: form.description || null,
       pets: form.pets,
       utilities: form.utilities,

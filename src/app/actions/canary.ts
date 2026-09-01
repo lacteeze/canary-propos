@@ -51,6 +51,10 @@ const draftSchema = z.object({
     .optional()
     .nullable(),
   start: z.string().optional().nullable(),
+  end: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(''), z.null()])
+    .optional()
+    .nullable(),
   description: z.string().optional().nullable(),
   pets: z.string().optional().nullable(),
   utilities: z.string().optional().nullable(),
@@ -64,6 +68,7 @@ export async function saveDraftListing(input: {
   rentalCredit?: number | string | null
   rentalCreditExpiry?: string | null
   start?: string | null
+  end?: string | null
   description?: string | null
   pets?: string | null
   utilities?: string | null
@@ -77,6 +82,7 @@ export async function saveDraftListing(input: {
     rent: input.rent === '' || input.rent == null ? null : input.rent,
     rentalCredit: input.rentalCredit === '' || input.rentalCredit == null ? null : input.rentalCredit,
     rentalCreditExpiry: input.rentalCreditExpiry?.trim() || null,
+    end: input.end?.trim() || null,
   })
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
@@ -108,6 +114,7 @@ export async function saveDraftListing(input: {
     listing_description: string | null
     display_rent: number | null
     available_from: string | null
+    available_until: string | null
     highlights: string[] | null
     status: string
     published_at: string | null
@@ -117,7 +124,7 @@ export async function saveDraftListing(input: {
   if (d.id) {
     const { data } = await ctx.supabase
       .from('listings')
-      .select('listing_title, listing_description, display_rent, available_from, highlights, status, published_at, slug, unit_id')
+      .select('listing_title, listing_description, display_rent, available_from, available_until, highlights, status, published_at, slug, unit_id')
       .eq('id', d.id)
       .eq('org_id', ctx.person.org_id)
       .maybeSingle()
@@ -137,6 +144,9 @@ export async function saveDraftListing(input: {
   if (Object.prototype.hasOwnProperty.call(input, 'rentalCredit')) {
     record.rental_credit = d.rentalCredit && d.rentalCredit > 0 ? d.rentalCredit : null
     record.rental_credit_expiry = d.rentalCreditExpiry || null
+  }
+  if (input.end !== undefined) {
+    record.available_until = d.end || null
   }
   if (d.status === 'published') {
     record.published_at = existing?.published_at ?? new Date().toISOString()

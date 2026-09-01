@@ -14,6 +14,12 @@ function parseIsoDate(s: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
+/** First YYYY-MM-DD in a date or timestamptz string. */
+export function toListingIsoDate(value: string | null | undefined): string {
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec((value ?? '').trim())
+  return m?.[1] ?? ''
+}
+
 function formatIsoDate(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')

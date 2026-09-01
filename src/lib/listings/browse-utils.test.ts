@@ -8,6 +8,7 @@ import {
   isPetFriendly,
   mapListingRow,
   parseBrowseFilters,
+  publicListingAmenityTags,
   resolveParkingDisplay,
   resolvePetLabel,
   resolveUtilitiesLabel,
@@ -245,6 +246,26 @@ describe('resolvePetLabel', () => {
 
   it('keeps Cats OK exact label from brief', () => {
     expect(resolvePetLabel({ briefPets: 'Cats OK' })).toBe('Cats OK')
+  })
+})
+
+describe('publicListingAmenityTags', () => {
+  it('uses card labels instead of a bare By approval amenity', () => {
+    expect(
+      publicListingAmenityTags({
+        listingBrief: { pets: 'By approval', utilities: 'POU' },
+        amenities: ['By approval', 'Hardwood floors'],
+      }),
+    ).toEqual(['POU', 'Pets by approval', 'Hardwood floors'])
+  })
+
+  it('does not invent a pets chip when staff set No pets', () => {
+    expect(
+      publicListingAmenityTags({
+        listingBrief: { pets: 'No pets', utilities: 'Utilities included' },
+        amenities: ['Pet friendly'],
+      }),
+    ).toEqual(['Utilities included'])
   })
 })
 

@@ -7,7 +7,7 @@ import { SimilarListingsSection } from '@/components/landing/SimilarListingsCaro
 import { PublicHeader } from '@/components/public/PublicHeader'
 import { fontDisplay } from '@/lib/landing/typography'
 import type { CityGroup } from '@/lib/listings/browse-types'
-import { resolveParkingDisplay } from '@/lib/listings/browse-utils'
+import { publicListingAmenityTags, resolveParkingDisplay } from '@/lib/listings/browse-utils'
 
 function formatCAD(n: number) {
   return new Intl.NumberFormat('en-CA', {
@@ -26,6 +26,7 @@ export type ListingDetailListing = {
   highlights: string[] | null
   display_rent: number | null
   available_from: string | null
+  available_until?: string | null
   status: string
   slug?: string | null
   units: {
@@ -78,6 +79,7 @@ export const LISTING_DETAIL_SELECT = `
   highlights,
   display_rent,
   available_from,
+  available_until,
   status,
   units (
     bedrooms,
@@ -164,6 +166,12 @@ export function ListingDetailView({
     amenities: (unit?.amenities as string[] | null) ?? null,
   })
   const parkingLabel = parkingResolved === '—' ? null : parkingResolved
+  const amenityTags = publicListingAmenityTags({
+    listingBrief: property?.listing_brief,
+    amenities: (unit?.amenities as string[] | null) ?? null,
+    description: listing.listing_description,
+    highlights: listing.highlights,
+  })
 
   const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
   const mapsQuery = encodeURIComponent(fullAddress)
@@ -344,13 +352,13 @@ export function ListingDetailView({
                 </section>
               )}
 
-              {unit?.amenities && unit.amenities.length > 0 && (
+              {amenityTags.length > 0 && (
                 <section style={{ marginBottom: 36 }}>
                   <h2 style={{ margin: '0 0 14px', fontSize: 18, fontWeight: 700 }}>Amenities</h2>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {unit.amenities.map((a: string, i: number) => (
-                      <span key={i} className="cpub-amenity">
-                        {a}
+                    {amenityTags.map((tag) => (
+                      <span key={tag} className="cpub-amenity">
+                        {tag}
                       </span>
                     ))}
                   </div>

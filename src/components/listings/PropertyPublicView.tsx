@@ -6,7 +6,7 @@ import { SimilarListingsSection } from '@/components/landing/SimilarListingsCaro
 import { PublicHeader } from '@/components/public/PublicHeader'
 import { fontDisplay } from '@/lib/landing/typography'
 import type { CityGroup } from '@/lib/listings/browse-types'
-import { resolveParkingDisplay } from '@/lib/listings/browse-utils'
+import { publicListingAmenityTags, resolveParkingDisplay } from '@/lib/listings/browse-utils'
 
 export type PropertyPublicUnit = {
   bedrooms: number | null
@@ -96,6 +96,10 @@ export function PropertyPublicView({
   const fullAddress = heroAddress || streetLine || 'Property'
   const homesHref = orgSlug && orgSlug !== 'canary' ? `/?org=${orgSlug}#homes` : '/#homes'
   const amenityList = Array.isArray(unit?.amenities) ? unit.amenities : []
+  const amenityTags = publicListingAmenityTags({
+    listingBrief: property.listing_brief,
+    amenities: amenityList,
+  })
 
   const briefParking =
     property.listing_brief &&
@@ -230,13 +234,13 @@ export function PropertyPublicView({
             />
           ) : null}
 
-          {amenityList.length > 0 && (
+          {amenityTags.length > 0 && (
             <section style={{ minWidth: 0, maxWidth: '100%' }}>
               <h2 style={{ margin: '0 0 14px', fontSize: 18, fontWeight: 700 }}>Amenities</h2>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {amenityList.map((a, i) => (
-                  <span key={i} className="cpub-amenity">
-                    {a}
+                {amenityTags.map((tag) => (
+                  <span key={tag} className="cpub-amenity">
+                    {tag}
                   </span>
                 ))}
               </div>

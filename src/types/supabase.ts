@@ -950,6 +950,7 @@ export type Database = {
       listings: {
         Row: {
           available_from: string | null
+          available_until: string | null
           created_at: string
           display_rent: number | null
           highlights: string[] | null
@@ -967,6 +968,7 @@ export type Database = {
         }
         Insert: {
           available_from?: string | null
+          available_until?: string | null
           created_at?: string
           display_rent?: number | null
           highlights?: string[] | null
@@ -984,6 +986,7 @@ export type Database = {
         }
         Update: {
           available_from?: string | null
+          available_until?: string | null
           created_at?: string
           display_rent?: number | null
           highlights?: string[] | null

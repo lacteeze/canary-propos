@@ -1,5 +1,6 @@
 import { deriveTermTypeFromHighlights } from '@/lib/landing/listing-term'
 import { listingPublicHref } from '@/lib/listings/listing-href'
+import { parseListingBrief } from '@/lib/listings/listing-brief'
 import { listingMatchesAddressQuery } from '@/lib/listings/slug-aliases'
 import type {
   BrowseFilters,
@@ -265,6 +266,59 @@ export function resolvePetLabel(opts: {
     return 'Pets by approval'
   }
   return 'Pets OK'
+}
+
+/** Pet/utility values synced into unit.amenities — cards already label these. */
+function isBriefSyncedAmenity(value: string): boolean {
+  return /pet|cat|dog|approval|utilit|\bPOU\b|hydro|pay own|tenant pays|heat included|electricity included/i.test(
+    value,
+  )
+}
+
+/**
+ * Detail-page chips: same public labels as browse cards (POU, Pets by approval),
+ * plus remaining real amenities. Never shows a bare "By approval" pet value.
+ */
+export function publicListingAmenityTags(opts: {
+  listingBrief?: unknown
+  amenities?: string[] | null
+  description?: string | null
+  highlights?: string[] | null
+}): string[] {
+  const brief = parseListingBrief(opts.listingBrief)
+  const amenities = opts.amenities ?? []
+  const utilitiesLabel = resolveUtilitiesLabel({
+    briefUtilities: brief.utilities,
+    description: opts.description,
+    highlights: opts.highlights,
+    amenities,
+  })
+  const petLabel = resolvePetLabel({
+    briefPets: brief.pets,
+    description: opts.description,
+    highlights: opts.highlights,
+    amenities,
+  })
+  const extras = amenities
+    .map((a) => a.trim())
+    .filter((a) => a && !isBriefSyncedAmenity(a))
+  const garage =
+    hasGarage(amenities, opts.description, opts.highlights) &&
+    !extras.some((a) => /\bgarage\b/i.test(a))
+
+  const tags: string[] = []
+  const push = (value: string | null | undefined) => {
+    const v = value?.trim()
+    if (!v) return
+    if (tags.some((t) => t.toLowerCase() === v.toLowerCase())) return
+    tags.push(v)
+  }
+  push(utilitiesLabel)
+  if (garage) push('Garage')
+  push(petLabel)
+  for (const feature of brief.features) push(feature)
+  for (const extra of extras) push(extra)
+  return tags
 }
 
 function termDot(termType: BrowseListing['termType']): string {

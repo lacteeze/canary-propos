@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addMonthsToIsoDate, maxMonthToMonthEndDate, validateLeaseDates } from './lease-term'
+import { addMonthsToIsoDate, maxMonthToMonthEndDate, toListingIsoDate, validateLeaseDates } from './lease-term'
 
 describe('addMonthsToIsoDate', () => {
   it('adds 12 months for a typical lease start', () => {
@@ -18,6 +18,21 @@ describe('addMonthsToIsoDate', () => {
 describe('maxMonthToMonthEndDate', () => {
   it('is start + 12 months', () => {
     expect(maxMonthToMonthEndDate('2026-03-15')).toBe('2027-03-15')
+  })
+})
+
+describe('toListingIsoDate', () => {
+  it('keeps a date-only string', () => {
+    expect(toListingIsoDate('2027-09-01')).toBe('2027-09-01')
+  })
+
+  it('strips a timestamptz suffix so the date picker can show it', () => {
+    expect(toListingIsoDate('2027-09-01T00:00:00+00:00')).toBe('2027-09-01')
+  })
+
+  it('returns empty for missing values', () => {
+    expect(toListingIsoDate(null)).toBe('')
+    expect(toListingIsoDate('')).toBe('')
   })
 })
 

@@ -77,12 +77,13 @@ export async function renderPublishedListingPage(opts: {
     ).filter((p: string) => !!p && !/^https?:\/\//i.test(p))
     return resolveListingGalleryPhotos(photoPaths)
   })()
-  const [{ all: listingPhotos, full: listingPhotosFull }, allPublished, leaseEnd] = await Promise.all([
+  const [{ all: listingPhotos, full: listingPhotosFull }, allPublished, occupancyEnd] = await Promise.all([
     galleryPromise,
     getPublishedListings(orgSlug),
     loadUnitActiveLeaseEnd(listing.unit_id),
   ])
-  const leaseEndLabel = formatListingLeaseEnd(leaseEnd)
+  const leaseEndLabel =
+    formatListingLeaseEnd(listing.available_until) ?? formatListingLeaseEnd(occupancyEnd)
 
   if (listingPhotos[0]) {
     preload(listingPhotos[0], { as: 'image', fetchPriority: 'high' })

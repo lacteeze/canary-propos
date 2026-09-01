@@ -2,6 +2,7 @@
 
 import React, { useCallback, useState } from 'react'
 import DatePickerField from './DatePickerField'
+import SearchableSelect from './SearchableSelect'
 import { createLocalOwnerOccupiedBlock } from '@/lib/canary/owner-occupied-storage'
 import type { CanaryOwnerOccupiedBlock, CanaryProperty } from '@/lib/canary/types'
 
@@ -98,15 +99,18 @@ export default function AddOwnerOccupiedModal({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
           <label>
             <span style={labelStyle}>Property</span>
-            <select
-              className="cy-select cy-select--field"
+            <SearchableSelect
               value={propertyId}
-              onChange={(e) => setPropertyId(e.target.value)}
-            >
-              {selectable.map((p) => (
-                <option key={p.id} value={p.id}>{short(p.address)} — {p.address}</option>
-              ))}
-            </select>
+              onChange={setPropertyId}
+              placeholder="Select a property"
+              searchPlaceholder="Search properties…"
+              aria-label="Property"
+              options={selectable.map((p) => ({
+                value: p.id,
+                label: `${short(p.address)} — ${p.address}`,
+                searchText: p.address,
+              }))}
+            />
           </label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <label>

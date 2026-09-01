@@ -24,6 +24,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import SearchableSelect from '@/components/canary/SearchableSelect'
 import {
   Select,
   SelectContent,
@@ -108,23 +109,19 @@ export function RecordPaymentDialog({ leases, onSuccess }: RecordPaymentDialogPr
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Lease</FormLabel>
-                  <Select
-                    onValueChange={(val) => { if (val) handleLeaseChange(val) }}
-                    value={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a lease" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {leases.map((lease) => (
-                        <SelectItem key={lease.id} value={lease.id}>
-                          {lease.tenant_name} — {lease.property_address}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <SearchableSelect
+                      value={field.value}
+                      onChange={(val) => { if (val) handleLeaseChange(val) }}
+                      placeholder="Select a lease"
+                      searchPlaceholder="Search tenant or address…"
+                      aria-label="Lease"
+                      options={leases.map((lease) => ({
+                        value: lease.id,
+                        label: `${lease.tenant_name} — ${lease.property_address}`,
+                      }))}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

@@ -128,6 +128,7 @@ export async function createUnit(data: {
   }
 
   revalidatePath('/properties/' + parsed.data.property_id)
+  revalidatePath('/app')
   return { success: true }
 }
 
@@ -192,5 +193,6 @@ export async function updateUnit(
   }
 
   revalidatePath('/properties/' + (existing.property_id ?? parsed.data.property_id))
+  revalidatePath('/app')
   return { success: true }
 }

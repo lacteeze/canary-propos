@@ -16,6 +16,7 @@ import type {
   OrgTaskPriority,
   OrgTaskStatus,
 } from '@/lib/canary/types'
+import SearchableSelect from './SearchableSelect'
 
 const MONO = "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif"
 
@@ -621,40 +622,41 @@ export default function TeamTasksBoard({
                 <label className="cy-label" htmlFor="org-task-assignee">
                   Assignee
                 </label>
-                <select
+                <SearchableSelect
                   id="org-task-assignee"
-                  className="cy-input"
                   value={form.assigneePersonId}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, assigneePersonId: e.target.value }))
-                  }
-                  style={{ width: '100%', marginBottom: 10 }}
-                >
-                  <option value="">Unassigned</option>
-                  {assignablePeople.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                      {p.id === userPersonId ? ' (me)' : ''}
-                    </option>
-                  ))}
-                </select>
-                <label className="cy-label" htmlFor="org-task-property">
+                  onChange={(next) => setForm((f) => ({ ...f, assigneePersonId: next }))}
+                  placeholder="Unassigned"
+                  searchPlaceholder="Search people…"
+                  aria-label="Assignee"
+                  options={[
+                    { value: '', label: 'Unassigned' },
+                    ...assignablePeople.map((p) => ({
+                      value: p.id,
+                      label: p.id === userPersonId ? `${p.name} (me)` : p.name,
+                      searchText: p.name,
+                    })),
+                  ]}
+                />
+                <label className="cy-label" htmlFor="org-task-property" style={{ marginTop: 10, display: 'block' }}>
                   Property (optional)
                 </label>
-                <select
+                <SearchableSelect
                   id="org-task-property"
-                  className="cy-input"
                   value={form.propertyId}
-                  onChange={(e) => setForm((f) => ({ ...f, propertyId: e.target.value }))}
-                  style={{ width: '100%', marginBottom: 10 }}
-                >
-                  <option value="">None</option>
-                  {properties.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {shortAddr(p.address)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(next) => setForm((f) => ({ ...f, propertyId: next }))}
+                  placeholder="None"
+                  searchPlaceholder="Search properties…"
+                  aria-label="Property"
+                  options={[
+                    { value: '', label: 'None' },
+                    ...properties.map((p) => ({
+                      value: p.id,
+                      label: shortAddr(p.address),
+                      searchText: p.address,
+                    })),
+                  ]}
+                />
               </>
             )}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>

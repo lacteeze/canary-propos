@@ -78,6 +78,13 @@ describe('groupCurrentListings', () => {
     expect(groups).toHaveLength(1)
     expect(groups[0]!.items.map((i) => i.id)).toEqual(['sooner', 'later'])
   })
+
+  it('pins incomplete vacant onboarding drafts above other drafts', () => {
+    const older = { id: 'older', address: '12 Water St', start: '2026-08-01', status: 'draft' }
+    const setup = { id: 'setup', address: '92 Barnes Rd', start: '2026-12-01', status: 'draft' }
+    const groups = groupCurrentListings([older, setup], new Set(['setup']))
+    expect(groups[0]!.items.map((i) => i.id)).toEqual(['setup', 'older'])
+  })
 })
 
 describe('compareCurrentListingsByDate', () => {

@@ -17,6 +17,7 @@ import {
 import { getOrCreatePropertyThread, getThreadMessages, sendChatMessage, type ChatMessage } from '@/app/actions/chat'
 import { LEASE_TERM_LABELS } from '@/lib/canary/lease-term'
 import type { CanaryDb, CanaryDraft, CanaryLease, CanaryPerson, CanaryProperty } from '@/lib/canary/types'
+import SearchableSelect from './SearchableSelect'
 import { draftStatusBadge, leaseDbStatusFromDisplay } from '@/lib/canary/types'
 import { listingPublicHref, propertyPublicHref } from '@/lib/listings/listing-href'
 import AuditLogPanel from './AuditLogPanel'
@@ -170,21 +171,23 @@ function LeaseTenantSection({
       label: linked ? 'Change tenant' : 'Link tenant',
       value: (
         <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <select
-            className="cy-select cy-select--field"
+          <SearchableSelect
             value={lease.tenantIds || ''}
             disabled={saving}
-            onChange={(e) => handleSelect(e.target.value)}
             aria-label="Select tenant"
-          >
-            <option value="">— No tenant linked —</option>
-            {sortedTenants.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}{t.email ? ` · ${t.email}` : ''}
-              </option>
-            ))}
-            <option value={LEASE_TENANT_ADD}>+ Add new tenant…</option>
-          </select>
+            placeholder="— No tenant linked —"
+            searchPlaceholder="Search tenants…"
+            onChange={handleSelect}
+            options={[
+              { value: '', label: '— No tenant linked —' },
+              ...sortedTenants.map((t) => ({
+                value: t.id,
+                label: t.email ? `${t.name} · ${t.email}` : t.name,
+                searchText: `${t.name} ${t.email ?? ''}`,
+              })),
+              { value: LEASE_TENANT_ADD, label: '+ Add new tenant…' },
+            ]}
+          />
           {err && <span style={{ color: 'var(--red)', fontSize: 11 }}>{err}</span>}
         </span>
       ),
@@ -662,16 +665,30 @@ function PropertyEditForm({
             <div style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 8, borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>🔒 Private — staff only</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <label>{formLabel('Portfolio')}
-                <select className="cy-select cy-select--field" value={portfolioId} onChange={(e) => setPortfolioId(e.target.value)}>
-                  <option value="">— None —</option>
-                  {portfolios.map((pf) => <option key={pf.id} value={pf.id}>{pf.name}</option>)}
-                </select>
+                <SearchableSelect
+                  value={portfolioId}
+                  onChange={setPortfolioId}
+                  placeholder="— None —"
+                  searchPlaceholder="Search portfolios…"
+                  aria-label="Portfolio"
+                  options={[
+                    { value: '', label: '— None —' },
+                    ...portfolios.map((pf) => ({ value: pf.id, label: pf.name })),
+                  ]}
+                />
               </label>
               <label>{formLabel('Owner')}
-                <select className="cy-select cy-select--field" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
-                  <option value="">— None —</option>
-                  {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-                </select>
+                <SearchableSelect
+                  value={ownerId}
+                  onChange={setOwnerId}
+                  placeholder="— None —"
+                  searchPlaceholder="Search owners…"
+                  aria-label="Owner"
+                  options={[
+                    { value: '', label: '— None —' },
+                    ...owners.map((o) => ({ value: o.id, label: o.name })),
+                  ]}
+                />
               </label>
               <label>{formLabel('Fee type')}
                 <select className="cy-select cy-select--field" value={feeType} onChange={(e) => setFeeType(e.target.value)}>

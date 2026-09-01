@@ -15,11 +15,13 @@ import type {
   CanaryPortfolio,
   CanaryProject,
   CanaryProperty,
+  CanaryOnboarding,
+  CanarySocialBoard,
   InquiryStatus,
   InquiryType,
 } from './types'
 import { isGeneralInterestNote, toDraftListingStatus } from './types'
-import { formatPropertyFullLabel } from './property-ops'
+import { formatPropertyFullLabel, sortPropertiesNewestFirst } from './property-ops'
 
 const EXPIRY_WINDOW_DAYS = 90
 
@@ -192,14 +194,14 @@ export async function loadCanaryDb(
 
   // Safety caps keep a single Canary shell load from unbounded egress.
   // Portfolio tables (units/leases/people) stay generous so the app remains complete for ~150+ units.
-  const [orgRes, unitsRes, leasesRes, portfoliosRes, workOrdersRes, peopleRes, listingsRes, inquiriesRes, paymentsRes, expensesRes, mediaRes] =
+  const [orgRes, unitsRes, leasesRes, portfoliosRes, workOrdersRes, peopleRes, listingsRes, inquiriesRes, paymentsRes, expensesRes, mediaRes, socialStateRes, unmatchedPostsRes, auditRes] =
     await Promise.all([
       supabase.from('organizations').select('slug').eq('id', orgId).maybeSingle(),
       supabase
         .from('units')
         .select(
-          `id, unit_number, bedrooms, bathrooms, status, asking_rent, amenities, hospitable_property_id, hospitable_widget_property_id, archived_at,
-           properties!property_id(id, slug, street_address, city, province, property_type, portfolio_id, owner_id, management_fee_type, management_fee_value, listing_brief)`
+          `id, unit_number, bedrooms, bathrooms, status, asking_rent, amenities, hospitable_property_id, hospitable_widget_property_id, archived_at, created_at,
+           properties!property_id(id, slug, street_address, city, province, property_type, portfolio_id, owner_id, management_fee_type, management_fee_value, listing_brief, created_at)`
         )
         .eq('org_id', orgId)
         .limit(2000),
@@ -296,6 +298,37 @@ export async function loadCanaryDb(
         .eq('org_id', orgId)
         .order('sort_order', { ascending: true })
         .limit(3000),
+      supabase
+        .from('listing_social_state')
+        .select(
+          'listing_id, facebook_feed_at, facebook_story_at, instagram_feed_at, instagram_story_at, changes_acked_at',
+        )
+        .eq('org_id', orgId)
+        .limit(500),
+      supabase
+        .from('listing_social_posts')
+        .select('id, platform, caption, permalink, posted_at')
+        .eq('org_id', orgId)
+        .is('listing_id', null)
+        .order('posted_at', { ascending: false })
+        .limit(40),
+      supabase
+        .from('audit_log')
+        .select('table_name, record_id, field_name, old_value, new_value, changed_at')
+        .eq('org_id', orgId)
+        .in('table_name', ['listings', 'properties'])
+        .in('field_name', [
+          'display_rent',
+          'available_from',
+          'listing_title',
+          'listing_description',
+          'highlights',
+          'listing_brief.pets',
+          'listing_brief.parking',
+          'listing_brief.utilities',
+        ])
+        .order('changed_at', { ascending: false })
+        .limit(800),
     ])
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -340,6 +373,14 @@ export async function loadCanaryDb(
   const expenseRows = (expensesRes.data ?? []) as any[]
   const mediaRows = (mediaRes.data ?? []) as any[]
   const orgSlug = (orgRes.data as { slug?: string } | null)?.slug ?? 'canary'
+
+  const onboardRes = await supabase
+    .from('property_onboarding')
+    .select('id, property_id, path, current_step, details_completed_at, completed_at, created_by, updated_at')
+    .eq('org_id', orgId)
+    .is('completed_at', null)
+    .limit(200)
+  const onboardRows = (onboardRes.data ?? []) as any[]
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
   const receiptCountByExpense = new Map<string, number>()
@@ -396,6 +437,9 @@ export async function loadCanaryDb(
     ['payments', paymentsRes],
     ['expenses', expensesRes],
     ['property_media', mediaRes],
+    ['listing_social_state', socialStateRes],
+    ['listing_social_posts', unmatchedPostsRes],
+    ['audit_log', auditRes],
   ] as const) {
     if (res.error) {
       console.error(`[loadCanaryDb:${label}]`, res.error.message, res.error.code ?? '')
@@ -429,7 +473,8 @@ export async function loadCanaryDb(
     map.set(row.property_id, list)
   }
 
-  const properties: CanaryProperty[] = unitRows
+  const properties: CanaryProperty[] = sortPropertiesNewestFirst(
+    unitRows
     .filter((u) => u.properties)
     .map((u) => {
       const p = u.properties
@@ -484,11 +529,13 @@ export async function loadCanaryDb(
         mgmtFeeValue: p.management_fee_value != null ? String(Number(p.management_fee_value)) : '',
         hospitablePropertyId: u.hospitable_property_id?.trim() ?? '',
         hospitableWidgetPropertyId: u.hospitable_widget_property_id?.trim() ?? '',
+        createdAt: String(p.created_at || u.created_at || ''),
         archivedAt: u.archived_at ?? null,
         listingPhotoPaths: listingPhotosByProperty.get(p.id) ?? [],
         privatePhotoPaths: privatePhotosByProperty.get(p.id) ?? [],
       }
-    })
+    }),
+  )
 
   const archivedAddresses = new Set(
     properties.filter((p) => p.archivedAt).map((p) => p.address)
@@ -659,6 +706,25 @@ export async function loadCanaryDb(
     maxPrice: p.max_price != null ? String(Number(p.max_price)) : '',
   }))
 
+  const peopleNameById = new Map(people.map((p) => [p.id, p.name]))
+  const onboardings: CanaryOnboarding[] = onboardRows.map((row) => {
+    const path = row.path === 'vacant' || row.path === 'occupied' ? row.path : null
+    const step = ['path', 'details', 'photos', 'listing', 'lease'].includes(row.current_step)
+      ? row.current_step
+      : 'path'
+    return {
+      id: row.id,
+      propertyId: row.property_id,
+      path,
+      currentStep: step,
+      detailsCompletedAt: row.details_completed_at ?? null,
+      completedAt: row.completed_at ?? null,
+      createdBy: row.created_by ?? null,
+      createdByName: row.created_by ? peopleNameById.get(row.created_by) ?? '' : '',
+      updatedAt: row.updated_at ? String(row.updated_at) : '',
+    }
+  })
+
   const drafts: CanaryDraft[] = listingRows
     .filter((d) => d.units?.properties)
     .map((d) => {
@@ -781,6 +847,65 @@ export async function loadCanaryDb(
       }),
   ].sort((a, b) => (a.date < b.date ? 1 : -1))
 
+  const listingPropertyId = new Map<string, string>()
+  for (const d of listingRows) {
+    const pid = d.units?.properties?.id as string | undefined
+    if (d.id && pid) listingPropertyId.set(d.id as string, pid)
+  }
+  const listingsByProperty = new Map<string, string[]>()
+  for (const [listingId, propertyId] of listingPropertyId) {
+    const list = listingsByProperty.get(propertyId) ?? []
+    list.push(listingId)
+    listingsByProperty.set(propertyId, list)
+  }
+
+  const emptySocial: CanarySocialBoard = { states: [], unmatchedPosts: [], changes: [] }
+  const social: CanarySocialBoard = redactForVendor
+    ? emptySocial
+    : {
+        states: (socialStateRes.data ?? []).map((s) => ({
+          listingId: s.listing_id,
+          facebookFeedAt: s.facebook_feed_at,
+          facebookStoryAt: s.facebook_story_at,
+          instagramFeedAt: s.instagram_feed_at,
+          instagramStoryAt: s.instagram_story_at,
+          changesAckedAt: s.changes_acked_at,
+        })),
+        unmatchedPosts: (unmatchedPostsRes.data ?? []).map((p) => ({
+          id: p.id,
+          platform: p.platform === 'instagram' ? 'instagram' : 'facebook',
+          caption: p.caption,
+          permalink: p.permalink,
+          postedAt: p.posted_at,
+        })),
+        changes: (auditRes.data ?? []).flatMap((a): CanarySocialBoard['changes'] => {
+          const base = {
+            field: a.field_name,
+            oldValue: a.old_value,
+            newValue: a.new_value,
+            changedAt: a.changed_at,
+          }
+          if (a.table_name === 'listings') {
+            return [
+              {
+                ...base,
+                listingId: a.record_id,
+                propertyId: listingPropertyId.get(a.record_id) ?? null,
+              },
+            ]
+          }
+          const lids = listingsByProperty.get(a.record_id) ?? []
+          if (!lids.length) {
+            return [{ ...base, listingId: null, propertyId: a.record_id }]
+          }
+          return lids.map((listingId) => ({
+            ...base,
+            listingId,
+            propertyId: a.record_id,
+          }))
+        }),
+      }
+
   // Defense-in-depth for vendor portal: only assigned projects + their properties.
   // RLS should already enforce this; this keeps the client payload minimal if a
   // session is mis-roled or a policy is missing.
@@ -799,8 +924,10 @@ export async function loadCanaryDb(
       drafts: [],
       payments: [],
       inquiries: [],
+      social: emptySocial,
+      onboardings: [],
     }
   }
 
-  return { orgId, properties, leases, portfolios, projects, people, drafts, payments, inquiries }
+  return { orgId, properties, leases, portfolios, projects, people, drafts, payments, inquiries, social, onboardings }
 }

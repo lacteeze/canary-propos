@@ -27,13 +27,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import SearchableSelect from '@/components/canary/SearchableSelect'
 
 const formSchema = z.object({
   property_id: z.string().uuid('Please select a property'),
@@ -124,20 +118,16 @@ export function RecordExpenseDialog({ properties, onSuccess }: RecordExpenseDial
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Property</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a property" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {properties.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.address}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <SearchableSelect
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Select a property"
+                      searchPlaceholder="Search properties…"
+                      aria-label="Property"
+                      options={properties.map((p) => ({ value: p.id, label: p.address }))}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

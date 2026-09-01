@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createProperty } from '@/app/actions/properties'
 import { CANADIAN_PROVINCES } from '@/lib/constants/provinces'
 import type { CanaryPerson, CanaryPortfolio } from '@/lib/canary/types'
+import SearchableSelect from './SearchableSelect'
 
 const PROPERTY_TYPES = [
   { value: 'house', label: 'House' },
@@ -32,6 +33,8 @@ const labelStyle: React.CSSProperties = {
 
 interface CanaryAddPropertyModalProps {
   onClose: () => void
+  /** After a successful save — open setup wizard for the new unit. */
+  onCreated?: (unitId: string) => void
   defaultProvince: string
   owners: CanaryPerson[]
   portfolios: CanaryPortfolio[]
@@ -39,6 +42,7 @@ interface CanaryAddPropertyModalProps {
 
 export default function CanaryAddPropertyModal({
   onClose,
+  onCreated,
   defaultProvince,
   owners,
   portfolios,
@@ -46,6 +50,7 @@ export default function CanaryAddPropertyModal({
   const router = useRouter()
   const [, startTransition] = useTransition()
   const [streetAddress, setStreetAddress] = useState('')
+  const [unitNumber, setUnitNumber] = useState('')
   const [city, setCity] = useState('')
   const [province, setProvince] = useState(defaultProvince)
   const [postalCode, setPostalCode] = useState('')
@@ -73,6 +78,7 @@ export default function CanaryAddPropertyModal({
       property_type: propertyType,
       owner_id: ownerId || null,
       portfolio_id: portfolioId || null,
+      unit_number: unitNumber.trim() || null,
     })
     setBusy(false)
     if (!res.success) {
@@ -80,8 +86,9 @@ export default function CanaryAddPropertyModal({
       return
     }
     onClose()
+    if (res.unitId) onCreated?.(res.unitId)
     startTransition(() => router.refresh())
-  }, [busy, streetAddress, city, province, postalCode, propertyType, ownerId, portfolioId, onClose, router])
+  }, [busy, streetAddress, unitNumber, city, province, postalCode, propertyType, ownerId, portfolioId, onClose, onCreated, router])
 
   return (
     <>
@@ -105,9 +112,21 @@ export default function CanaryAddPropertyModal({
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
-          <label style={{ gridColumn: '1 / -1' }}>
+          <label>
             <span style={labelStyle}>Street address</span>
-            <input value={streetAddress} onChange={(e) => setStreetAddress(e.target.value)} placeholder="123 Main St" style={fieldStyle} />
+            <input value={streetAddress} onChange={(e) => setStreetAddress(e.target.value)} placeholder="18 Smith Ave" style={fieldStyle} />
+          </label>
+          <label>
+            <span style={labelStyle}>Unit letter / number</span>
+            <input
+              value={unitNumber}
+              onChange={(e) => setUnitNumber(e.target.value)}
+              placeholder="A, B, 1…"
+              style={fieldStyle}
+            />
+            <span style={{ display: 'block', marginTop: 4, fontSize: 12, color: 'var(--faint)' }}>
+              Optional. Use A/B for a duplex unit. Leave blank for a whole building.
+            </span>
           </label>
           <label>
             <span style={labelStyle}>City</span>
@@ -136,30 +155,44 @@ export default function CanaryAddPropertyModal({
           {ownerOptions.length > 0 && (
             <label>
               <span style={labelStyle}>Owner</span>
-              <select className="cy-select cy-select--field" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
-                <option value="">— No owner —</option>
-                {ownerOptions.map((o) => (
-                  <option key={o.id} value={o.id}>{o.name}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                value={ownerId}
+                onChange={setOwnerId}
+                placeholder="— No owner —"
+                searchPlaceholder="Search owners…"
+                aria-label="Owner"
+                options={[
+                  { value: '', label: '— No owner —' },
+                  ...ownerOptions.map((o) => ({
+                    value: o.id,
+                    label: o.name,
+                    searchText: `${o.name} ${o.email} ${o.company}`,
+                  })),
+                ]}
+              />
             </label>
           )}
           {portfolios.length > 0 && (
             <label>
               <span style={labelStyle}>Portfolio</span>
-              <select className="cy-select cy-select--field" value={portfolioId} onChange={(e) => setPortfolioId(e.target.value)}>
-                <option value="">— No portfolio —</option>
-                {portfolios.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                value={portfolioId}
+                onChange={setPortfolioId}
+                placeholder="— No portfolio —"
+                searchPlaceholder="Search portfolios…"
+                aria-label="Portfolio"
+                options={[
+                  { value: '', label: '— No portfolio —' },
+                  ...portfolios.map((p) => ({ value: p.id, label: p.name })),
+                ]}
+              />
             </label>
           )}
         </div>
 
         {error && <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 12 }}>{error}</div>}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'end', gap: 10, marginTop: 18 }}>
           <button type="button" className="cy-btn" onClick={onClose}>Cancel</button>
           <button
             type="button"

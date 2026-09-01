@@ -29,6 +29,9 @@ import {
 import CanaryImport from './CanaryImport'
 import CanaryActionFab, { importDatasetForView, type FabAction } from './CanaryActionFab'
 import CanaryAddPropertyModal from './CanaryAddPropertyModal'
+import NeedsSetupCard, { type NeedsSetupItem } from './NeedsSetupCard'
+import PropertySetupWizard from './PropertySetupWizard'
+import SearchableSelect from './SearchableSelect'
 import DatePickerField from './DatePickerField'
 import EntityDetailDrawer, { type DrawerState } from './EntityDetailDrawer'
 import AddOwnerOccupiedModal from './AddOwnerOccupiedModal'
@@ -44,6 +47,7 @@ import {
 } from './layout'
 import { leasingPipelineHref, listingHref, personHref, propertyHref } from '@/lib/canary/entity-href'
 import { groupCurrentListings } from '@/lib/canary/current-listings-groups'
+import { inNeedsSetupQueue, missingMustHaves } from '@/lib/canary/property-onboarding'
 import { countInquiriesForListing } from '@/lib/canary/pipeline-groups'
 import { AppSidebar, MobileAppChrome, pageLabelForView } from './AppSidebar'
 import GmailInboxView from './GmailInboxView'
@@ -371,6 +375,7 @@ export default function CanaryApp({
   const [mergePrimaryId, setMergePrimaryId] = useState('')
   const [calView, setCalView] = useState<{ propId: string; address: string } | null>(null)
   const [propertyModalOpen, setPropertyModalOpen] = useState(false)
+  const [setupUnitId, setSetupUnitId] = useState<string | null>(null)
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [leasingListOpen, setLeasingListOpen] = useState<
     null | 'new_inquiry' | 'viewings' | 'applications' | 'signed' | 'expiring' | 'listings'
@@ -1055,8 +1060,19 @@ export default function CanaryApp({
     const rows = scoped.drafts.filter(
       (d) => d.status === 'published' || d.status === 'draft' || d.status === 'renewal_sent' || d.status === 'declined',
     )
-    return groupCurrentListings(rows)
-  }, [scoped.drafts])
+    const vacantSetup = new Set(
+      (db.onboardings ?? [])
+        .filter((o) => o.path === 'vacant' && !o.completedAt)
+        .map((o) => o.propertyId),
+    )
+    const pinnedIds = new Set<string>()
+    for (const d of rows) {
+      if (d.status !== 'draft') continue
+      const prop = scoped.properties.find((p) => p.id === d.propId || p.unitId === d.unitId)
+      if (prop && vacantSetup.has(prop.propertyDbId)) pinnedIds.add(d.id)
+    }
+    return groupCurrentListings(rows, pinnedIds)
+  }, [scoped.drafts, scoped.properties, db.onboardings])
   const homeCurrentListings = useMemo(
     () => homeCurrentListingGroups.flatMap((group) => group.items),
     [homeCurrentListingGroups],
@@ -1077,6 +1093,70 @@ export default function CanaryApp({
     }
     return counts
   }, [homeCurrentListings, scoped.inquiries, scoped.properties])
+
+  const openPropertySetup = useCallback((unitId: string) => {
+    setSetupUnitId(unitId)
+    setView('property-setup')
+    setDrawer(null)
+  }, [])
+
+  const exitPropertySetup = useCallback(() => {
+    setSetupUnitId(null)
+    setView('dashboard')
+  }, [])
+
+  const needsSetupItems = useMemo((): NeedsSetupItem[] => {
+    const onboardings = db.onboardings ?? []
+    const items: NeedsSetupItem[] = []
+    for (const ob of onboardings) {
+      const prop = activeProps.find((p) => p.propertyDbId === ob.propertyId)
+      if (!prop) continue
+      const hasListing = scoped.drafts.some((d) => d.propId === prop.id || d.unitId === prop.unitId)
+      const lease = scoped.leases.find(
+        (l) => l.property === prop.address && (l.status === 'Active' || l.status === 'Expiring' || l.status === 'Upcoming'),
+      )
+      const snapshot = {
+        path: ob.path,
+        detailsCompletedAt: ob.detailsCompletedAt,
+        ownerId: prop.ownerId || null,
+        listingPhotoCount: prop.listingPhotoPaths?.length ?? 0,
+        hasListing,
+        hasLease: Boolean(lease),
+        hasTenant: Boolean(lease?.tenantIds),
+        archivedAt: prop.archivedAt,
+        completedAt: ob.completedAt,
+      }
+      if (!inNeedsSetupQueue(snapshot)) continue
+      items.push({
+        unitId: prop.id,
+        propertyId: ob.propertyId,
+        address: prop.address,
+        path: ob.path,
+        missing: missingMustHaves(snapshot),
+        createdByName: ob.createdByName,
+        updatedAt: ob.updatedAt,
+      })
+    }
+    return items
+  }, [db.onboardings, activeProps, scoped.drafts, scoped.leases])
+
+  const setupPropertyIds = useMemo(
+    () => new Set((db.onboardings ?? []).map((o) => o.propertyId)),
+    [db.onboardings],
+  )
+
+  const setupProperty = setupUnitId
+    ? db.properties.find((p) => p.id === setupUnitId) ?? null
+    : null
+  const setupOnboarding = setupProperty
+    ? (db.onboardings ?? []).find((o) => o.propertyId === setupProperty.propertyDbId) ?? null
+    : null
+  const setupDraft = setupProperty
+    ? scoped.drafts.find((d) => d.propId === setupProperty.id || d.unitId === setupProperty.unitId) ?? null
+    : null
+  const setupLease = setupProperty
+    ? scoped.leases.find((l) => l.property === setupProperty.address && (l.status === 'Active' || l.status === 'Expiring' || l.status === 'Upcoming')) ?? null
+    : null
   const leasingKpis: { id: NonNullable<typeof leasingListOpen>; label: string; value: string; color: string }[] = [
     { id: 'new_inquiry', label: 'New', value: String(leasingNewInquiries.length), color: 'var(--green)' },
     { id: 'viewings', label: 'Viewing', value: String(leasingViewings.length), color: 'var(--blue)' },
@@ -2293,12 +2373,17 @@ export default function CanaryApp({
       'inbox',
       'messages',
       'notifications',
+      'property-setup',
     ])
     const propertyParam = params.get('property')
     const listingParam = params.get('listing')
+    const setupParam = params.get('setup')
     if (propertyParam) setPipelinePropertyId(propertyParam)
     if (listingParam) setPipelineListingId(listingParam)
-    if (viewParam && allowedViews.has(viewParam)) {
+    if (viewParam === 'property-setup' && setupParam) {
+      setView('property-setup')
+      setSetupUnitId(setupParam)
+    } else if (viewParam && allowedViews.has(viewParam)) {
       setView(viewParam)
       if (viewParam === 'leases' && (propertyParam || listingParam)) {
         setPageViews((pv) => ({ ...pv, leases: 'pipeline' }))
@@ -2479,6 +2564,7 @@ export default function CanaryApp({
                     </div>
                   )}
 
+                  {(showAskAnswer || !q) && (
                   <div className="cy-search-panel-section cy-search-panel-ask">
                     <div className="cy-search-panel-ask-head">
                       <span className={`cy-search-ask-dot${chatBusy ? ' cy-search-ask-dot--busy' : ''}`} />
@@ -2521,7 +2607,7 @@ export default function CanaryApp({
                       </div>
                     )}
 
-                    {!!search.trim() && (
+                    {!!search.trim() && showAskAnswer && (
                       <button
                         type="button"
                         className="cy-btn-primary cy-accent-btn cy-search-ask-submit"
@@ -2532,6 +2618,7 @@ export default function CanaryApp({
                       </button>
                     )}
                   </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2583,7 +2670,11 @@ export default function CanaryApp({
             footer={renderAccountMenu('top')}
           />
         ) : null}
-        {isNarrowSearch && searchExpanded ? searchUi : null}
+        {isNarrowSearch && searchExpanded ? (
+          <div className="cnry cy-search-sheet" data-theme={theme} data-ui="macos27">
+            {searchUi}
+          </div>
+        ) : null}
 
         {/* ============ ROLE BANNER ============ */}
         {!priv && (
@@ -2797,8 +2888,34 @@ export default function CanaryApp({
           )}
 
           {/* ============ DASHBOARD ============ */}
+          {view === 'property-setup' && setupProperty && (
+            <PropertySetupWizard
+              property={setupProperty}
+              onboarding={
+                setupOnboarding ?? {
+                  id: '',
+                  propertyId: setupProperty.propertyDbId,
+                  path: null,
+                  currentStep: 'path',
+                  detailsCompletedAt: null,
+                  completedAt: null,
+                  createdBy: userPersonId || null,
+                  createdByName: '',
+                  updatedAt: '',
+                }
+              }
+              orgId={userOrgId || db.orgId}
+              owners={db.people}
+              tenants={db.people}
+              portfolios={db.portfolios}
+              draft={setupDraft}
+              lease={setupLease}
+              onExit={exitPropertySetup}
+            />
+          )}
           {view === 'dashboard' && (
             <section className="cy-home-dest">
+              {priv ? <NeedsSetupCard items={needsSetupItems} onOpen={openPropertySetup} /> : null}
               <div className="cy-home-panel">
                 <div className="cy-home-panel-head">
                   <div className="cy-home-panel-title-row">
@@ -2836,13 +2953,30 @@ export default function CanaryApp({
                           const statusLabel = propertyStatusGroupKey(prop?.status)
                           const isPublished = d.status === 'published'
                           const isRenewalSent = d.status === 'renewal_sent'
+                          const isSetupDraft =
+                            Boolean(propertyDbId) &&
+                            d.status === 'draft' &&
+                            setupPropertyIds.has(propertyDbId as string) &&
+                            (db.onboardings ?? []).some((o) => o.propertyId === propertyDbId && o.path === 'vacant')
                           const pipelineHref = leasingPipelineHref({
                             propertyId: propertyDbId,
                             listingId: d.id,
                           })
                           return (
                             <div key={d.id} className="cy-home-row cy-hov">
-                              <a href={listingHref(d.id)} className="cy-home-row-open">
+                              <a
+                                href={isSetupDraft && prop ? '#' : listingHref(d.id)}
+                                className="cy-home-row-open"
+                                onClick={
+                                  isSetupDraft && prop
+                                    ? (e) => {
+                                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
+                                        e.preventDefault()
+                                        openPropertySetup(prop.id)
+                                      }
+                                    : undefined
+                                }
+                              >
                                 <span
                                   className={
                                     isRenewalSent
@@ -2854,6 +2988,7 @@ export default function CanaryApp({
                                   aria-label={isRenewalSent ? 'Renewal sent' : isPublished ? 'Published' : 'Draft'}
                                 />
                                 <span className="cy-home-row-addr">{short(d.address) || d.title || 'Listing'}</span>
+                                {isSetupDraft ? <span className="cy-setup-badge">Setup</span> : null}
                               </a>
                               <a href={listingHref(d.id)} className="cy-home-row-status">
                                 {statusLabel}
@@ -3216,6 +3351,18 @@ export default function CanaryApp({
                               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
                                   <div style={{ fontWeight: 700, fontSize: 15, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{short(p.address)}</div>
+                                  {setupPropertyIds.has(p.propertyDbId) ? (
+                                    <button
+                                      type="button"
+                                      className="cy-setup-badge"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        openPropertySetup(p.id)
+                                      }}
+                                    >
+                                      Setup
+                                    </button>
+                                  ) : null}
                                   {missingPhotos ? (
                                     <span
                                       title="No listing photos"
@@ -4049,24 +4196,35 @@ export default function CanaryApp({
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
               <label style={{ gridColumn: '1/-1', display: 'block' }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Property</span>
-                <select
-                  className="cy-select cy-select--field"
+                <SearchableSelect
                   value={curDraft.propId}
-                  onChange={(e) => {
-                  const p = db.properties.find((x) => x.id === e.target.value)
-                  if (p) startDraftFor(p, { start: curDraft.start, end: curDraft.end })
-                  else setDraft({ ...curDraft, propId: '' })
-                }}
-                >
-                  <option value="">— choose a property —</option>
-                  {propOptions.map((o) => (<option key={o.id} value={o.id}>{o.short}</option>))}
-                </select>
+                  onChange={(next) => {
+                    const p = db.properties.find((x) => x.id === next)
+                    if (p) startDraftFor(p, { start: curDraft.start, end: curDraft.end })
+                    else setDraft({ ...curDraft, propId: '' })
+                  }}
+                  placeholder="— choose a property —"
+                  searchPlaceholder="Search properties…"
+                  aria-label="Property"
+                  options={[
+                    { value: '', label: '— choose a property —' },
+                    ...propOptions.map((o) => ({ value: o.id, label: o.short })),
+                  ]}
+                />
                 <span style={{ fontSize: 12, color: 'var(--faint)' }}>Static details (beds, baths, parking) auto-fill from the property record.</span></label>
               <label style={{ gridColumn: '1/-1' }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Tenant <span style={{ color: 'var(--faint)', fontWeight: 500 }}>(optional — link later if unknown)</span></span>
-                <select className="cy-select cy-select--field" value={curDraft.tenantId} onChange={setDraftField('tenantId')}>
-                  <option value="">— no tenant yet —</option>
-                  {tenantOptions.map((t) => (<option key={t.id} value={t.id}>{t.label}</option>))}
-                </select></label>
+                <SearchableSelect
+                  value={curDraft.tenantId}
+                  onChange={(next) => setDraft({ ...curDraft, tenantId: next })}
+                  placeholder="— no tenant yet —"
+                  searchPlaceholder="Search tenants…"
+                  aria-label="Tenant"
+                  options={[
+                    { value: '', label: '— no tenant yet —' },
+                    ...tenantOptions.map((t) => ({ value: t.id, label: t.label })),
+                  ]}
+                />
+              </label>
               <label>
                 <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Monthly rent $</span>
                 <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'stretch' }}>
@@ -4265,6 +4423,12 @@ export default function CanaryApp({
       {propertyModalOpen && (
         <CanaryAddPropertyModal
           onClose={() => setPropertyModalOpen(false)}
+          onCreated={(unitId) => {
+            setView('property-setup')
+            setSetupUnitId(unitId)
+            setPropFilter('')
+            setPageSort((s) => ({ ...s, properties: null }))
+          }}
           defaultProvince={defaultProvince}
           owners={db.people}
           portfolios={db.portfolios}
@@ -4305,10 +4469,18 @@ export default function CanaryApp({
                 </div>
               </label>
               <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Property</span>
-                <select className="cy-select cy-select--field" value={curPayForm.property} onChange={setPayField('property')}>
-                  <option value="">— select —</option>
-                  {propOptions.map((o) => (<option key={o.id} value={o.id}>{o.short}</option>))}
-                </select></label>
+                <SearchableSelect
+                  value={curPayForm.property}
+                  onChange={(next) => setPayForm({ ...curPayForm, property: next })}
+                  placeholder="— select —"
+                  searchPlaceholder="Search properties…"
+                  aria-label="Property"
+                  options={[
+                    { value: '', label: '— select —' },
+                    ...propOptions.map((o) => ({ value: o.id, label: o.short })),
+                  ]}
+                />
+              </label>
               <label style={{ display: 'block', minWidth: 0 }}><span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Category</span>
                 <select className="cy-select cy-select--field" value={curPayForm.category} onChange={setPayField('category')}>
                   {PAY_CATEGORIES.map((c) => (<option key={c} value={c}>{c}</option>))}

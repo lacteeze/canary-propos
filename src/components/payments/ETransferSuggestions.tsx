@@ -4,13 +4,7 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { recordPayment } from '@/app/(manager)/payments/actions'
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import SearchableSelect from '@/components/canary/SearchableSelect'
 
 interface LeaseOption {
   id: string
@@ -151,23 +145,19 @@ export function ETransferSuggestions({ leases }: ETransferSuggestionsProps) {
               <p className="text-xs text-stone-400">{formatDate(suggestion.received_at)}</p>
             </div>
             <div className="flex flex-shrink-0 items-center gap-2">
-              <Select
+              <SearchableSelect
                 value={selectedLeases[suggestion.id] ?? ''}
-                onValueChange={(val) =>
-                  setSelectedLeases((prev) => ({ ...prev, [suggestion.id]: val ?? '' }))
+                onChange={(val) =>
+                  setSelectedLeases((prev) => ({ ...prev, [suggestion.id]: val }))
                 }
-              >
-                <SelectTrigger className="w-52">
-                  <SelectValue placeholder="Match to lease…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {leases.map((lease) => (
-                    <SelectItem key={lease.id} value={lease.id}>
-                      {lease.tenant_name} — {lease.property_address}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder="Match to lease…"
+                searchPlaceholder="Search tenant or address…"
+                aria-label="Match to lease"
+                options={leases.map((lease) => ({
+                  value: lease.id,
+                  label: `${lease.tenant_name} — ${lease.property_address}`,
+                }))}
+              />
               <Button
                 size="sm"
                 onClick={() => handleConfirm(suggestion)}

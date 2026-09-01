@@ -1,0 +1,586 @@
+'use client'
+
+import React, { useCallback, useMemo, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
+import type { CanaryDraft, CanaryLease, CanaryOnboarding, CanaryPerson, CanaryPortfolio, CanaryProperty } from '@/lib/canary/types'
+import type { PropertyDetailsInput } from '@/app/actions/entity-updates'
+import {
+  canSwitchPathWithoutConfirm,
+  stepsForPath,
+  type OnboardingPath,
+  type OnboardingStep,
+} from '@/lib/canary/property-onboarding'
+import {
+  createOnboardingContact,
+  recomputeOnboardingCompletion,
+  saveOnboardingDetails,
+  saveOnboardingPath,
+  saveOnboardingStep,
+} from '@/app/actions/property-onboarding'
+import { saveDraftListing } from '@/app/actions/canary'
+import { createLease } from '@/app/actions/leases'
+import { emptyListingBrief } from '@/lib/listings/listing-brief'
+import SearchableSelect from './SearchableSelect'
+import { PropertyPhotoUpload } from '@/components/properties/PropertyPhotoUpload'
+
+const PROPERTY_TYPES: { value: PropertyDetailsInput['propertyType']; label: string }[] = [
+  { value: 'house', label: 'House' },
+  { value: 'duplex', label: 'Duplex' },
+  { value: 'apartment_building', label: 'Apartment Building' },
+  { value: 'condo', label: 'Condo' },
+  { value: 'townhouse', label: 'Townhouse' },
+  { value: 'other', label: 'Other' },
+]
+
+function toPropertyType(raw: string): PropertyDetailsInput['propertyType'] {
+  const key = raw.trim().toLowerCase().replace(/\s+/g, '_')
+  const found = PROPERTY_TYPES.find((t) => t.value === key)
+  return found?.value ?? 'house'
+}
+
+function toStatus(raw: string): PropertyDetailsInput['status'] {
+  if (raw === 'Leased' || raw === 'Maintenance' || raw === 'STR' || raw === 'Office') return raw
+  return 'Vacant'
+}
+
+const STEP_LABEL: Record<OnboardingStep, string> = {
+  path: 'Path',
+  details: 'Details',
+  photos: 'Photos',
+  listing: 'Listing',
+  lease: 'Lease',
+}
+
+type WizardProps = {
+  property: CanaryProperty
+  onboarding: CanaryOnboarding
+  orgId: string
+  owners: CanaryPerson[]
+  tenants: CanaryPerson[]
+  portfolios: CanaryPortfolio[]
+  draft: CanaryDraft | null
+  lease: CanaryLease | null
+  onExit: () => void
+}
+
+export default function PropertySetupWizard({
+  property,
+  onboarding,
+  orgId,
+  owners,
+  tenants,
+  portfolios,
+  draft,
+  lease,
+  onExit,
+}: WizardProps) {
+  const router = useRouter()
+  const [, startTransition] = useTransition()
+  const [step, setStep] = useState<OnboardingStep>(onboarding.currentStep || 'path')
+  const [path, setPath] = useState<OnboardingPath | null>(onboarding.path)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  React.useEffect(() => {
+    setPath(onboarding.path)
+  }, [onboarding.path])
+
+  const [ownerId, setOwnerId] = useState(property.ownerId || '')
+  const [portfolioId, setPortfolioId] = useState(property.portfolioId || '')
+  const [propertyType, setPropertyType] = useState(toPropertyType(property.type))
+  const [beds, setBeds] = useState(property.beds || '1')
+  const [baths, setBaths] = useState(property.baths || '1')
+  const [rent, setRent] = useState(property.rate != null ? String(property.rate) : '')
+  const [pets, setPets] = useState(property.petFriendly || '')
+  const [parking, setParking] = useState(property.parking || '')
+  const [utilities, setUtilities] = useState(property.utilitiesIncluded || '')
+  const [feeType, setFeeType] = useState<'percent' | 'flat'>(property.mgmtFeeType === 'flat' ? 'flat' : 'percent')
+  const [feeValue, setFeeValue] = useState(property.mgmtFeeValue || '')
+  const [addingOwner, setAddingOwner] = useState(false)
+  const [newOwner, setNewOwner] = useState({ name: '', email: '', phone: '' })
+
+  const [listingTitle, setListingTitle] = useState(draft?.title || property.address.split(',')[0])
+  const [listingRent, setListingRent] = useState(draft?.rent || rent)
+  const [listingStart, setListingStart] = useState(draft?.start || '')
+  const [listingDesc, setListingDesc] = useState(draft?.description || '')
+
+  const [tenantId, setTenantId] = useState(lease?.tenantIds?.split(',')[0]?.trim() || '')
+  const [addingTenant, setAddingTenant] = useState(false)
+  const [newTenant, setNewTenant] = useState({ name: '', email: '', phone: '' })
+  const [leaseStart, setLeaseStart] = useState(lease?.start || '')
+  const [leaseEnd, setLeaseEnd] = useState(lease?.end || '')
+  const [leaseRent, setLeaseRent] = useState(lease?.rent?.replace(/[^0-9.]/g, '') || rent)
+  const [leaseDeposit, setLeaseDeposit] = useState(lease?.deposit?.replace(/[^0-9.]/g, '') || '')
+
+  const refresh = useCallback(() => {
+    startTransition(() => router.refresh())
+  }, [router])
+
+  const done = useCallback(
+    (completed?: boolean) => {
+      refresh()
+      if (completed) onExit()
+    },
+    [onExit, refresh],
+  )
+
+  const steps = stepsForPath(path)
+  const snapshotBits = {
+    hasListing: Boolean(draft),
+    hasLease: Boolean(lease),
+  }
+
+  const goStep = async (next: OnboardingStep) => {
+    setError('')
+    const res = await saveOnboardingStep(property.propertyDbId, next)
+    if (!res.success) {
+      setError(res.error)
+      return
+    }
+    setStep(next)
+  }
+
+  const exit = async () => {
+    await saveOnboardingStep(property.propertyDbId, step)
+    onExit()
+    refresh()
+  }
+
+  const choosePath = async (path: OnboardingPath) => {
+    if (busy) return
+    let confirmed = false
+    if (!canSwitchPathWithoutConfirm(snapshotBits)) {
+      confirmed = window.confirm(
+        'This property already has a listing or lease. Switch path anyway? Existing records stay.',
+      )
+      if (!confirmed) return
+    }
+    setBusy(true)
+    setError('')
+    const res = await saveOnboardingPath(property.propertyDbId, path, confirmed)
+    setBusy(false)
+    if (!res.success) {
+      setError(res.error)
+      return
+    }
+    setStep('details')
+    setPath(path)
+    done(res.completed)
+  }
+
+  const saveDetails = async () => {
+    if (busy) return
+    const bedsN = parseInt(beds, 10)
+    const bathsN = parseFloat(baths)
+    if (Number.isNaN(bedsN) || bedsN < 0) return setError('Enter bedrooms.')
+    if (Number.isNaN(bathsN) || bathsN < 0) return setError('Enter bathrooms.')
+    const rentN = rent.trim() === '' ? null : parseFloat(rent.replace(/[$,]/g, ''))
+    if (rentN != null && (Number.isNaN(rentN) || rentN < 0)) return setError('Invalid asking rent.')
+    const feeN = feeValue.trim() === '' ? null : parseFloat(feeValue)
+    if (feeN != null && (Number.isNaN(feeN) || feeN < 0)) return setError('Invalid management fee.')
+
+    setBusy(true)
+    setError('')
+    const details: PropertyDetailsInput = {
+      status: toStatus(property.status),
+      bedrooms: bedsN,
+      bathrooms: bathsN,
+      askingRent: rentN,
+      hasGarage: property.hasGarage,
+      propertyType,
+      city: property.city,
+      province: property.area,
+      portfolioId: portfolioId || null,
+      ownerId: ownerId || null,
+      managementFeeType: feeType,
+      managementFeeValue: feeN,
+      hospitablePropertyId: property.hospitablePropertyId || null,
+      hospitableWidgetPropertyId: property.hospitableWidgetPropertyId || null,
+    }
+    const res = await saveOnboardingDetails({
+      propertyId: property.propertyDbId,
+      unitId: property.unitId,
+      details,
+      brief: { ...emptyListingBrief(), pets, parking, utilities },
+    })
+    setBusy(false)
+    if (!res.success) {
+      setError(res.error)
+      return
+    }
+    setStep('photos')
+    done(res.completed)
+  }
+
+  const addContact = async (role: 'owner' | 'tenant') => {
+    const src = role === 'owner' ? newOwner : newTenant
+    setBusy(true)
+    setError('')
+    const res = await createOnboardingContact({ role, ...src })
+    setBusy(false)
+    if (!res.success || !res.id) {
+      setError(res.success ? 'Failed to add contact.' : res.error)
+      return
+    }
+    if (role === 'owner') {
+      setOwnerId(res.id)
+      setAddingOwner(false)
+    } else {
+      setTenantId(res.id)
+      setAddingTenant(false)
+    }
+    refresh()
+  }
+
+  const saveListing = async () => {
+    if (busy) return
+    setBusy(true)
+    setError('')
+    const res = await saveDraftListing({
+      id: draft?.id ?? null,
+      unitId: property.unitId,
+      rent: listingRent === '' ? null : listingRent,
+      start: listingStart || null,
+      description: listingDesc || listingTitle || null,
+      pets: pets || null,
+      utilities: utilities || null,
+      status: 'draft',
+    })
+    if (!res.success) {
+      setBusy(false)
+      setError(res.error)
+      return
+    }
+    await saveOnboardingStep(property.propertyDbId, 'listing')
+    const doneRes = await recomputeOnboardingCompletion(property.propertyDbId)
+    setBusy(false)
+    if (!doneRes.success) {
+      setError(doneRes.error)
+      return
+    }
+    done(doneRes.completed)
+  }
+
+  const saveLease = async () => {
+    if (busy) return
+    if (lease) {
+      await saveOnboardingStep(property.propertyDbId, 'lease')
+      const doneRes = await recomputeOnboardingCompletion(property.propertyDbId)
+      done(doneRes.success ? doneRes.completed : false)
+      return
+    }
+    if (!tenantId) return setError('Select or add a tenant.')
+    const rentN = parseFloat(leaseRent.replace(/[$,]/g, ''))
+    const depN = leaseDeposit.trim() === '' ? 0 : parseFloat(leaseDeposit.replace(/[$,]/g, ''))
+    if (!leaseStart) return setError('Start date is required.')
+    if (Number.isNaN(rentN) || rentN <= 0) return setError('Enter monthly rent.')
+    if (Number.isNaN(depN) || depN < 0) return setError('Invalid deposit.')
+    setBusy(true)
+    setError('')
+    const res = await createLease({
+      unit_id: property.unitId,
+      tenant_id: tenantId,
+      start_date: leaseStart,
+      end_date: leaseEnd || null,
+      monthly_rent: rentN,
+      deposit_amount: depN,
+      rent_due_day: 1,
+    })
+    if (!res.success) {
+      setBusy(false)
+      setError(res.error)
+      return
+    }
+    await saveOnboardingStep(property.propertyDbId, 'lease')
+    const doneRes = await recomputeOnboardingCompletion(property.propertyDbId)
+    setBusy(false)
+    if (!doneRes.success) {
+      setError(doneRes.error)
+      return
+    }
+    done(doneRes.completed)
+  }
+
+  const ownerOptions = useMemo(
+    () => [
+      { value: '', label: 'No owner yet' },
+      ...owners
+        .filter((p) => p.roles.includes('owner') || p.role === 'Client')
+        .map((p) => ({ value: p.id, label: p.name, searchText: `${p.name} ${p.email}` })),
+    ],
+    [owners],
+  )
+  const tenantOptions = useMemo(
+    () => [
+      { value: '', label: 'Select tenant…' },
+      ...tenants
+        .filter((p) => p.roles.includes('tenant') || p.role === 'Tenant')
+        .map((p) => ({ value: p.id, label: p.name, searchText: `${p.name} ${p.email}` })),
+    ],
+    [tenants],
+  )
+  const portfolioOptions = useMemo(
+    () => [
+      { value: '', label: 'No portfolio' },
+      ...portfolios.map((pf) => ({ value: pf.id, label: pf.name })),
+    ],
+    [portfolios],
+  )
+
+  const field: React.CSSProperties = {
+    width: '100%',
+    background: 'var(--input)',
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    padding: '9px 10px',
+    marginTop: 4,
+  }
+  const label: React.CSSProperties = { fontSize: 11.5, color: 'var(--dim)', fontWeight: 600 }
+
+  return (
+    <section className="cy-setup" aria-label="Property setup">
+      <header className="cy-setup-head">
+        <div>
+          <div className="cy-setup-kicker">Property setup</div>
+          <h1 className="cy-setup-title">{property.address.split(',')[0]}</h1>
+        </div>
+        <button type="button" className="cy-btn" onClick={() => void exit()}>
+          Save &amp; exit
+        </button>
+      </header>
+
+      <div className="cy-setup-body">
+        <nav className="cy-setup-rail" aria-label="Setup steps">
+          {steps.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={`cy-setup-rail-btn${s === step ? ' is-current' : ''}`}
+              onClick={() => void goStep(s)}
+            >
+              {STEP_LABEL[s]}
+            </button>
+          ))}
+        </nav>
+
+        <div className="cy-setup-pane">
+          {error ? <div className="cy-setup-error">{error}</div> : null}
+
+          {step === 'path' && (
+            <div className="cy-setup-path">
+              <p className="cy-setup-lead">Is this unit vacant and going on the market, or already occupied?</p>
+              <button type="button" className="cy-setup-choice" disabled={busy} onClick={() => void choosePath('vacant')}>
+                <strong>Vacant</strong>
+                <span>Photos, details, then a listing draft. Publish when you are ready.</span>
+              </button>
+              <button type="button" className="cy-setup-choice" disabled={busy} onClick={() => void choosePath('occupied')}>
+                <strong>Occupied</strong>
+                <span>Photos, details, then the current lease and tenant.</span>
+              </button>
+            </div>
+          )}
+
+          {step === 'details' && (
+            <div className="cy-setup-form">
+              <label style={label}>
+                Owner
+                <SearchableSelect
+                  value={ownerId}
+                  onChange={setOwnerId}
+                  options={ownerOptions}
+                  searchPlaceholder="Search owners…"
+                  aria-label="Owner"
+                />
+              </label>
+              {!addingOwner ? (
+                <button type="button" className="cy-setup-link" onClick={() => setAddingOwner(true)}>
+                  Add owner
+                </button>
+              ) : (
+                <div className="cy-setup-inline">
+                  <input placeholder="Name" value={newOwner.name} onChange={(e) => setNewOwner({ ...newOwner, name: e.target.value })} style={field} />
+                  <input placeholder="Email" value={newOwner.email} onChange={(e) => setNewOwner({ ...newOwner, email: e.target.value })} style={field} />
+                  <input placeholder="Phone" value={newOwner.phone} onChange={(e) => setNewOwner({ ...newOwner, phone: e.target.value })} style={field} />
+                  <button type="button" className="cy-btn-primary" disabled={busy} onClick={() => void addContact('owner')}>
+                    Save owner
+                  </button>
+                </div>
+              )}
+              <label style={label}>
+                Portfolio
+                <SearchableSelect
+                  value={portfolioId}
+                  onChange={setPortfolioId}
+                  options={portfolioOptions}
+                  searchPlaceholder="Search portfolios…"
+                  aria-label="Portfolio"
+                />
+              </label>
+              <label style={label}>
+                Type
+                <select value={propertyType} onChange={(e) => setPropertyType(e.target.value as PropertyDetailsInput['propertyType'])} style={field}>
+                  {PROPERTY_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="cy-setup-row">
+                <label style={label}>
+                  Beds
+                  <input type="number" min={0} value={beds} onChange={(e) => setBeds(e.target.value)} style={field} />
+                </label>
+                <label style={label}>
+                  Baths
+                  <input type="number" min={0} step={0.5} value={baths} onChange={(e) => setBaths(e.target.value)} style={field} />
+                </label>
+              </div>
+              <label style={label}>
+                Asking rent
+                <input value={rent} onChange={(e) => setRent(e.target.value)} style={field} />
+              </label>
+              <label style={label}>
+                Pets
+                <input value={pets} onChange={(e) => setPets(e.target.value)} style={field} />
+              </label>
+              <label style={label}>
+                Parking
+                <input value={parking} onChange={(e) => setParking(e.target.value)} style={field} />
+              </label>
+              <label style={label}>
+                Utilities
+                <input value={utilities} onChange={(e) => setUtilities(e.target.value)} style={field} />
+              </label>
+              <div className="cy-setup-row">
+                <label style={label}>
+                  Fee type
+                  <select value={feeType} onChange={(e) => setFeeType(e.target.value === 'flat' ? 'flat' : 'percent')} style={field}>
+                    <option value="percent">Percent</option>
+                    <option value="flat">Flat</option>
+                  </select>
+                </label>
+                <label style={label}>
+                  Fee value
+                  <input value={feeValue} onChange={(e) => setFeeValue(e.target.value)} style={field} />
+                </label>
+              </div>
+              <button type="button" className="cy-btn-primary" disabled={busy} onClick={() => void saveDetails()}>
+                Continue
+              </button>
+            </div>
+          )}
+
+          {step === 'photos' && (
+            <div>
+              <p className="cy-setup-lead">Add at least one listing photo. You can keep going and come back.</p>
+              <PropertyPhotoUpload
+                propertyId={property.propertyDbId}
+                orgId={orgId}
+                visibility="listing"
+                compact
+                onChanged={() => {
+                  void recomputeOnboardingCompletion(property.propertyDbId).then((res) => {
+                    if (res.success && res.completed) done(true)
+                    else refresh()
+                  })
+                }}
+              />
+              <div className="cy-setup-actions">
+                <button
+                  type="button"
+                  className="cy-btn-primary"
+                  disabled={busy}
+                  onClick={() => void goStep(path === 'occupied' ? 'lease' : 'listing')}
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 'listing' && (
+            <div className="cy-setup-form">
+              <p className="cy-setup-lead">Saved as a draft. Publish later from the listing if you want it on the public site.</p>
+              <label style={label}>
+                Title
+                <input value={listingTitle} onChange={(e) => setListingTitle(e.target.value)} style={field} />
+              </label>
+              <label style={label}>
+                Rent
+                <input value={listingRent} onChange={(e) => setListingRent(e.target.value)} style={field} />
+              </label>
+              <label style={label}>
+                Available from
+                <input type="date" value={listingStart} onChange={(e) => setListingStart(e.target.value)} style={field} />
+              </label>
+              <label style={label}>
+                Description
+                <textarea value={listingDesc} onChange={(e) => setListingDesc(e.target.value)} style={{ ...field, minHeight: 96 }} />
+              </label>
+              <button type="button" className="cy-btn-primary" disabled={busy} onClick={() => void saveListing()}>
+                Save listing draft
+              </button>
+            </div>
+          )}
+
+          {step === 'lease' && (
+            <div className="cy-setup-form">
+              {lease ? (
+                <p className="cy-setup-lead">A lease is already on this unit. Continue to finish setup once owner and photos are in.</p>
+              ) : (
+                <>
+                  <label style={label}>
+                    Tenant
+                    <SearchableSelect
+                      value={tenantId}
+                      onChange={setTenantId}
+                      options={tenantOptions}
+                      searchPlaceholder="Search tenants…"
+                      aria-label="Tenant"
+                    />
+                  </label>
+                  {!addingTenant ? (
+                    <button type="button" className="cy-setup-link" onClick={() => setAddingTenant(true)}>
+                      Add tenant
+                    </button>
+                  ) : (
+                    <div className="cy-setup-inline">
+                      <input placeholder="Name" value={newTenant.name} onChange={(e) => setNewTenant({ ...newTenant, name: e.target.value })} style={field} />
+                      <input placeholder="Email" value={newTenant.email} onChange={(e) => setNewTenant({ ...newTenant, email: e.target.value })} style={field} />
+                      <input placeholder="Phone" value={newTenant.phone} onChange={(e) => setNewTenant({ ...newTenant, phone: e.target.value })} style={field} />
+                      <button type="button" className="cy-btn-primary" disabled={busy} onClick={() => void addContact('tenant')}>
+                        Save tenant
+                      </button>
+                    </div>
+                  )}
+                  <div className="cy-setup-row">
+                    <label style={label}>
+                      Start
+                      <input type="date" value={leaseStart} onChange={(e) => setLeaseStart(e.target.value)} style={field} />
+                    </label>
+                    <label style={label}>
+                      End
+                      <input type="date" value={leaseEnd} onChange={(e) => setLeaseEnd(e.target.value)} style={field} />
+                    </label>
+                  </div>
+                  <div className="cy-setup-row">
+                    <label style={label}>
+                      Rent
+                      <input value={leaseRent} onChange={(e) => setLeaseRent(e.target.value)} style={field} />
+                    </label>
+                    <label style={label}>
+                      Deposit
+                      <input value={leaseDeposit} onChange={(e) => setLeaseDeposit(e.target.value)} style={field} />
+                    </label>
+                  </div>
+                </>
+              )}
+              <button type="button" className="cy-btn-primary" disabled={busy} onClick={() => void saveLease()}>
+                {lease ? 'Finish' : 'Save lease'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}

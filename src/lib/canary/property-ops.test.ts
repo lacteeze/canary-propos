@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  defaultNewPropertyUnit,
   formatPropertyAddress,
   formatPropertyFullLabel,
+  sortPropertiesNewestFirst,
   streetAddressHasCitySegment,
   stripTrailingDuplicateCity,
 } from './property-ops'
@@ -129,5 +131,41 @@ describe('formatPropertyAddress', () => {
         city: 'Paradise',
       }),
     ).toBe('37 A Gallants St, Paradise, NL A1L 1J2, Canada')
+  })
+})
+
+describe('defaultNewPropertyUnit', () => {
+  it('creates a vacant unit row the properties list can load', () => {
+    expect(defaultNewPropertyUnit('org-1', 'prop-1')).toEqual({
+      org_id: 'org-1',
+      property_id: 'prop-1',
+      unit_number: null,
+      bedrooms: 1,
+      bathrooms: 1,
+      status: 'vacant',
+    })
+  })
+
+  it('stores a unit letter or number when provided', () => {
+    expect(defaultNewPropertyUnit('org-1', 'prop-1', '  A  ').unit_number).toBe('A')
+  })
+})
+
+describe('sortPropertiesNewestFirst', () => {
+  it('puts newest created_at first', () => {
+    const rows = [
+      { id: 'old', createdAt: '2026-07-01T12:00:00.000Z' },
+      { id: 'new', createdAt: '2026-09-01T14:10:00.000Z' },
+      { id: 'mid', createdAt: '2026-08-15T09:00:00.000Z' },
+    ]
+    expect(sortPropertiesNewestFirst(rows).map((r) => r.id)).toEqual(['new', 'mid', 'old'])
+  })
+
+  it('sorts missing timestamps last', () => {
+    const rows = [
+      { id: 'bare' },
+      { id: 'new', createdAt: '2026-09-01T14:10:00.000Z' },
+    ]
+    expect(sortPropertiesNewestFirst(rows).map((r) => r.id)).toEqual(['new', 'bare'])
   })
 })

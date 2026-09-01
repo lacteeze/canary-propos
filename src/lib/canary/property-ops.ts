@@ -110,3 +110,37 @@ export function formatPropertyFullLabel(
 export function addressesMatch(a: PropertyAddress, b: PropertyAddress): boolean {
   return propertyAddressKey(a) === propertyAddressKey(b)
 }
+
+/**
+ * Default unit inserted with a new property. The staff properties list is
+ * loaded from `units`, so a property with no unit never appears.
+ */
+export function defaultNewPropertyUnit(
+  orgId: string,
+  propertyId: string,
+  unitNumber?: string | null,
+) {
+  const trimmed = unitNumber?.trim() || null
+  return {
+    org_id: orgId,
+    property_id: propertyId,
+    unit_number: trimmed,
+    bedrooms: 1,
+    bathrooms: 1,
+    status: 'vacant' as const,
+  }
+}
+
+/**
+ * Newest properties first so staff can fill in listings/leases right after add.
+ * Missing timestamps sort last.
+ */
+export function sortPropertiesNewestFirst<T extends { createdAt?: string | null }>(
+  rows: T[],
+): T[] {
+  return [...rows].sort((a, b) => {
+    const bt = Date.parse(b.createdAt || '') || 0
+    const at = Date.parse(a.createdAt || '') || 0
+    return bt - at
+  })
+}

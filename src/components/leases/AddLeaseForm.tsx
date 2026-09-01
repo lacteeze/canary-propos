@@ -33,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import SearchableSelect from '@/components/canary/SearchableSelect'
 
 const formSchema = z
   .object({
@@ -178,20 +179,19 @@ export function AddLeaseForm({ tenants, properties, buttonLabel = 'Add Lease' }:
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Tenant</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select tenant" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {tenants.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {[t.first_name, t.last_name].filter(Boolean).join(' ') || 'Unnamed'}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <SearchableSelect
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Select tenant"
+                      searchPlaceholder="Search tenants…"
+                      aria-label="Tenant"
+                      options={tenants.map((t) => {
+                        const name = [t.first_name, t.last_name].filter(Boolean).join(' ') || 'Unnamed'
+                        return { value: t.id, label: name, searchText: name }
+                      })}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -204,20 +204,19 @@ export function AddLeaseForm({ tenants, properties, buttonLabel = 'Add Lease' }:
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Property</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select property" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {properties.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.street_address}, {p.city}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <SearchableSelect
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Select property"
+                      searchPlaceholder="Search properties…"
+                      aria-label="Property"
+                      options={properties.map((p) => ({
+                        value: p.id,
+                        label: `${p.street_address}, ${p.city}`,
+                      }))}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

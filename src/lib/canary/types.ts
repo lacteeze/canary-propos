@@ -3,6 +3,7 @@
 // The server loader (load-db.ts) maps live Supabase rows into these shapes.
 
 import type { LeaseTermType } from './lease-term'
+import type { OnboardingPath, OnboardingStep } from './property-onboarding'
 
 export type CanaryRole = 'Admin' | 'Manager' | 'Owner' | 'Tenant' | 'Vendor'
 
@@ -42,12 +43,26 @@ export interface CanaryProperty {
   /** raw management fee fields (staff-only edit form) */
   mgmtFeeType: string
   mgmtFeeValue: string
+  /** ISO timestamp when the property row was created */
+  createdAt: string
   /** ISO timestamp when archived — hidden from active views when set */
   archivedAt?: string | null
   /** Listing/marketing photo storage paths (inherited by published listings) */
   listingPhotoPaths: string[]
   /** Staff-only photo storage paths (inspections, historical, pre-reno) */
   privatePhotoPaths: string[]
+}
+
+export interface CanaryOnboarding {
+  id: string
+  propertyId: string
+  path: OnboardingPath | null
+  currentStep: OnboardingStep
+  detailsCompletedAt: string | null
+  completedAt: string | null
+  createdBy: string | null
+  createdByName: string
+  updatedAt: string
 }
 
 export interface CanaryLease {
@@ -483,4 +498,53 @@ export interface CanaryDb {
   drafts: CanaryDraft[]
   payments: CanaryPayment[]
   inquiries: CanaryInquiry[]
+  social: CanarySocialBoard
+  onboardings: CanaryOnboarding[]
+}
+
+export type CanarySocialState = {
+  listingId: string
+  facebookFeedAt: string | null
+  facebookStoryAt: string | null
+  instagramFeedAt: string | null
+  instagramStoryAt: string | null
+  changesAckedAt: string | null
+}
+
+export type CanarySocialUnmatchedPost = {
+  id: string
+  platform: 'facebook' | 'instagram'
+  caption: string | null
+  permalink: string | null
+  postedAt: string
+}
+
+export type CanaryWatchedChange = {
+  listingId: string | null
+  propertyId: string | null
+  field: string
+  oldValue: string | null
+  newValue: string | null
+  changedAt: string
+}
+
+export type CanarySocialBoard = {
+  states: CanarySocialState[]
+  unmatchedPosts: CanarySocialUnmatchedPost[]
+  changes: CanaryWatchedChange[]
+}
+
+export type SocialQueueRow = {
+  listingId: string
+  address: string
+  title: string
+  slug: string | null
+  rent: string
+  facebookFeedAt: string | null
+  facebookStoryAt: string | null
+  instagramFeedAt: string | null
+  instagramStoryAt: string | null
+  duePlatforms: Array<'facebook' | 'instagram'>
+  unreadChanges: Array<{ field: string; oldValue: string | null; newValue: string | null; changedAt: string }>
+  unmatchedPosts: CanarySocialUnmatchedPost[]
 }

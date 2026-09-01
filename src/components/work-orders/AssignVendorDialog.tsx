@@ -8,6 +8,7 @@
 
 import { useState, useTransition } from 'react'
 import { updateWorkOrderStatus } from '@/app/actions/work-orders'
+import SearchableSelect from '@/components/canary/SearchableSelect'
 
 export interface VendorOption {
   id: string
@@ -151,21 +152,19 @@ export function AssignVendorDialog({ workOrderId, vendors, onSuccess }: AssignVe
                     No vendors found. Add a contact with the &ldquo;vendor&rdquo; role first.
                   </p>
                 ) : (
-                  <select
+                  <SearchableSelect
                     id="vendor-select"
                     value={selectedVendorId}
-                    onChange={(e) => setSelectedVendorId(e.target.value)}
-                    required
-                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">Select a vendor…</option>
-                    {vendors.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.first_name} {v.last_name}
-                        {v.email ? ` — ${v.email}` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setSelectedVendorId}
+                    placeholder="Select a vendor…"
+                    searchPlaceholder="Search vendors…"
+                    aria-label="Vendor"
+                    options={vendors.map((v) => ({
+                      value: v.id,
+                      label: `${v.first_name} ${v.last_name}${v.email ? ` — ${v.email}` : ''}`,
+                      searchText: `${v.first_name} ${v.last_name} ${v.email ?? ''} ${v.phone ?? ''}`,
+                    }))}
+                  />
                 )}
               </div>
 

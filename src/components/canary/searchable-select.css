@@ -1,0 +1,125 @@
+.cy-combo {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.cy-combo__trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 38px;
+  background: var(--input, #fff);
+  color: var(--text, #171717);
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-top: 4px;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.3;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cy-combo__trigger:hover:not(:disabled) {
+  border-color: var(--border2, #d4d4d4);
+}
+
+.cy-combo__trigger:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent, #ca8a04) 40%, var(--border, #e5e5e5));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #ca8a04) 12%, transparent);
+}
+
+.cy-combo__trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.cy-combo__value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cy-combo__value--placeholder {
+  color: var(--dim, #737373);
+  font-weight: 500;
+}
+
+.cy-combo__caret {
+  flex-shrink: 0;
+  color: var(--dim, #737373);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.cy-combo__popover {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 100%;
+  min-width: 220px;
+  background: var(--panel, #fff);
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.18));
+  overflow: hidden;
+}
+
+.cy-combo__search {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--elev, #fafafa);
+  color: var(--text, #171717);
+  border: 0;
+  border-bottom: 1px solid var(--border, #e5e5e5);
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 13.5px;
+  outline: none;
+}
+
+.cy-combo__search::placeholder {
+  color: var(--dim, #737373);
+}
+
+.cy-combo__list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.cy-combo__option {
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: var(--text, #171717);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cy-combo__option.is-active,
+.cy-combo__option:hover {
+  background: color-mix(in srgb, var(--accent, #ca8a04) 12%, var(--hover, #f5f5f5));
+}
+
+.cy-combo__option.is-selected {
+  font-weight: 600;
+}
+
+.cy-combo__empty {
+  padding: 10px 8px;
+  font-size: 13px;
+  color: var(--dim, #737373);
+}

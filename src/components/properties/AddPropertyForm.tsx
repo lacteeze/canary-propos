@@ -7,6 +7,7 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from 
 import { createProperty } from '@/app/actions/properties'
 import { CANADIAN_PROVINCES } from '@/lib/constants/provinces'
 import { toast } from 'sonner'
+import SearchableSelect from '@/components/canary/SearchableSelect'
 
 const PROPERTY_TYPES = [
   { value: 'house', label: 'House' },
@@ -43,6 +44,7 @@ export function AddPropertyForm({
 }: AddPropertyFormProps) {
   const [open, setOpen] = useState(false)
   const [streetAddress, setStreetAddress] = useState('')
+  const [unitNumber, setUnitNumber] = useState('')
   const [city, setCity] = useState('')
   const [province, setProvince] = useState(orgProvince)
   const [postalCode, setPostalCode] = useState('')
@@ -64,12 +66,14 @@ export function AddPropertyForm({
         property_type: propertyType,
         owner_id: ownerId || null,
         portfolio_id: portfolioId || null,
+        unit_number: unitNumber.trim() || null,
       })
       if (result.success) {
         toast.success('Property created')
         setOpen(false)
         // Reset form
         setStreetAddress('')
+        setUnitNumber('')
         setCity('')
         setProvince(orgProvince)
         setPostalCode('')
@@ -108,6 +112,17 @@ export function AddPropertyForm({
               value={streetAddress}
               onChange={(e) => setStreetAddress(e.target.value)}
               placeholder="123 Main St"
+              className="mt-1 block w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-stone-700">Unit letter / number</label>
+            <input
+              type="text"
+              value={unitNumber}
+              onChange={(e) => setUnitNumber(e.target.value)}
+              placeholder="A, B, 1…"
               className="mt-1 block w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
             />
           </div>
@@ -181,18 +196,20 @@ export function AddPropertyForm({
           {owners.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-stone-700">Owner</label>
-              <select
+              <SearchableSelect
                 value={ownerId}
-                onChange={(e) => setOwnerId(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-              >
-                <option value="">— No owner assigned —</option>
-                {owners.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {[o.first_name, o.last_name].filter(Boolean).join(' ') || o.id}
-                  </option>
-                ))}
-              </select>
+                onChange={setOwnerId}
+                placeholder="— No owner assigned —"
+                searchPlaceholder="Search owners…"
+                aria-label="Owner"
+                options={[
+                  { value: '', label: '— No owner assigned —' },
+                  ...owners.map((o) => ({
+                    value: o.id,
+                    label: [o.first_name, o.last_name].filter(Boolean).join(' ') || o.id,
+                  })),
+                ]}
+              />
             </div>
           )}
 
@@ -200,18 +217,17 @@ export function AddPropertyForm({
           {portfolios.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-stone-700">Portfolio</label>
-              <select
+              <SearchableSelect
                 value={portfolioId}
-                onChange={(e) => setPortfolioId(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-              >
-                <option value="">— No portfolio —</option>
-                {portfolios.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setPortfolioId}
+                placeholder="— No portfolio —"
+                searchPlaceholder="Search portfolios…"
+                aria-label="Portfolio"
+                options={[
+                  { value: '', label: '— No portfolio —' },
+                  ...portfolios.map((p) => ({ value: p.id, label: p.name })),
+                ]}
+              />
             </div>
           )}
 

@@ -54,8 +54,9 @@ export type CurrentListingGroup<T> = {
   items: T[]
 }
 
-export function groupCurrentListings<T extends CurrentListingSortable & { status: string }>(
+export function groupCurrentListings<T extends CurrentListingSortable & { status: string; id?: string }>(
   listings: T[],
+  pinnedIds?: ReadonlySet<string>,
 ): CurrentListingGroup<T>[] {
   const buckets: Record<CurrentListingGroupId, T[]> = {
     renewals: [],
@@ -69,7 +70,14 @@ export function groupCurrentListings<T extends CurrentListingSortable & { status
     .map(({ id, label }) => ({
       id,
       label,
-      items: [...buckets[id]].sort(compareCurrentListingsByDate),
+      items: [...buckets[id]].sort((a, b) => {
+        if (id === 'drafts' && pinnedIds && pinnedIds.size) {
+          const aPin = a.id && pinnedIds.has(a.id) ? 1 : 0
+          const bPin = b.id && pinnedIds.has(b.id) ? 1 : 0
+          if (aPin !== bPin) return bPin - aPin
+        }
+        return compareCurrentListingsByDate(a, b)
+      }),
     }))
     .filter((group) => group.items.length > 0)
 }

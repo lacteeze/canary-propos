@@ -23,6 +23,7 @@ import {
   normalizeHospitableWidgetPropertyIdInput,
   parseHospitableWidgetPropertyId,
 } from '@/lib/hospitable/parse-widget-property-id'
+import SearchableSelect from './SearchableSelect'
 
 const MONO = "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif"
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -334,16 +335,30 @@ function PropertyQuickEdit({
           <div className="cy-cal-side-section-title">Staff only</div>
           <div className="cy-cal-side-grid">
             <label>{formLabel('Portfolio')}
-              <select className="cy-select cy-select--field" value={portfolioId} onChange={(e) => setPortfolioId(e.target.value)}>
-                <option value="">— None —</option>
-                {portfolios.map((pf) => <option key={pf.id} value={pf.id}>{pf.name}</option>)}
-              </select>
+              <SearchableSelect
+                value={portfolioId}
+                onChange={setPortfolioId}
+                placeholder="— None —"
+                searchPlaceholder="Search portfolios…"
+                aria-label="Portfolio"
+                options={[
+                  { value: '', label: '— None —' },
+                  ...portfolios.map((pf) => ({ value: pf.id, label: pf.name })),
+                ]}
+              />
             </label>
             <label>{formLabel('Owner')}
-              <select className="cy-select cy-select--field" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
-                <option value="">— None —</option>
-                {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-              </select>
+              <SearchableSelect
+                value={ownerId}
+                onChange={setOwnerId}
+                placeholder="— None —"
+                searchPlaceholder="Search owners…"
+                aria-label="Owner"
+                options={[
+                  { value: '', label: '— None —' },
+                  ...owners.map((o) => ({ value: o.id, label: o.name })),
+                ]}
+              />
             </label>
             <label>{formLabel('Fee type')}
               <select className="cy-select cy-select--field" value={feeType} onChange={(e) => setFeeType(e.target.value)}>

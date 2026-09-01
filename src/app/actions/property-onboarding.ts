@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import {
+  defaultOwnerPortfolioName,
   isOnboardingComplete,
   type OnboardingPath,
   type OnboardingStep,
@@ -12,7 +13,12 @@ import { updatePropertyDetails, type PropertyDetailsInput } from '@/app/actions/
 import { savePropertyListingBrief } from '@/app/actions/property-knowledge'
 import type { ListingBrief } from '@/lib/listings/listing-brief'
 
-type ActionResult = { success: true; id?: string; completed?: boolean } | { success: false; error: string }
+type ActionResult = {
+  success: true
+  id?: string
+  portfolioId?: string
+  completed?: boolean
+} | { success: false; error: string }
 
 async function getManagerContext() {
   const supabase = await createClient()
@@ -215,7 +221,20 @@ export async function saveOnboardingDetails(input: {
   const parsed = detailsSchema.safeParse(input)
   if (!parsed.success) return { success: false, error: 'Invalid details.' }
 
-  const detailsRes = await updatePropertyDetails(parsed.data.unitId, parsed.data.details)
+  const details = { ...parsed.data.details }
+  if (details.ownerId && !details.portfolioId) {
+    const { data: owner } = await ctx.supabase
+      .from('people')
+      .select('first_name, last_name, email')
+      .eq('id', details.ownerId)
+      .eq('org_id', ctx.person.org_id)
+      .maybeSingle()
+    const ownerName = [owner?.first_name, owner?.last_name].filter(Boolean).join(' ').trim() || owner?.email || 'New portfolio'
+    const ensured = await ensureOwnerPortfolio(ctx.supabase, ctx.person.org_id, details.ownerId, ownerName)
+    if (ensured.success) details.portfolioId = ensured.id
+  }
+
+  const detailsRes = await updatePropertyDetails(parsed.data.unitId, details)
   if (!detailsRes.success) return detailsRes
   const briefRes = await savePropertyListingBrief(parsed.data.propertyId, parsed.data.brief)
   if (!briefRes.success) return { success: false, error: briefRes.error }
@@ -242,6 +261,7 @@ export async function createOnboardingContact(input: {
   name: string
   email: string
   phone?: string
+  propertyId?: string
 }): Promise<ActionResult> {
   const ctx = await getManagerContext()
   if (!ctx) return { success: false, error: 'Only managers can add people.' }
@@ -251,6 +271,7 @@ export async function createOnboardingContact(input: {
       name: z.string().trim().min(1, 'Name is required'),
       email: z.string().trim().email('Valid email is required'),
       phone: z.string().optional(),
+      propertyId: z.string().uuid().optional(),
     })
     .safeParse(input)
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
@@ -258,10 +279,13 @@ export async function createOnboardingContact(input: {
   const email = parsed.data.email.toLowerCase()
   const { data: existing } = await ctx.supabase
     .from('people')
-    .select('id, role')
+    .select('id, role, first_name, last_name')
     .eq('org_id', ctx.person.org_id)
     .eq('email', email)
     .maybeSingle()
+
+  let personId: string
+  let displayName = parsed.data.name.trim()
 
   if (existing) {
     const roles = (existing.role as unknown as string[]) ?? []
@@ -276,29 +300,102 @@ export async function createOnboardingContact(input: {
         return { success: false, error: 'A person with this email exists. Pick them from the list.' }
       }
     }
-    revalidatePath('/app')
-    return { success: true, id: existing.id }
+    personId = existing.id
+    displayName =
+      [existing.first_name, existing.last_name].filter(Boolean).join(' ').trim() || displayName
+  } else {
+    const { first, last } = splitPersonName(parsed.data.name)
+    const { data: created, error } = await ctx.supabase
+      .from('people')
+      .insert({
+        org_id: ctx.person.org_id,
+        email,
+        first_name: first,
+        last_name: last,
+        phone: parsed.data.phone?.trim() || null,
+        role: [parsed.data.role],
+        active: true,
+        status: 'Active',
+      })
+      .select('id')
+      .single()
+    if (error || !created) {
+      console.error('[createOnboardingContact]', error)
+      return { success: false, error: 'Failed to create contact.' }
+    }
+    personId = created.id
   }
 
-  const { first, last } = splitPersonName(parsed.data.name)
-  const { data: created, error } = await ctx.supabase
-    .from('people')
-    .insert({
-      org_id: ctx.person.org_id,
-      email,
-      first_name: first,
-      last_name: last,
-      phone: parsed.data.phone?.trim() || null,
-      role: [parsed.data.role],
-      active: true,
-      status: 'Active',
-    })
+  let portfolioId: string | undefined
+  if (parsed.data.role === 'owner') {
+    const ensured = await ensureOwnerPortfolio(ctx.supabase, ctx.person.org_id, personId, displayName)
+    if (!ensured.success) return ensured
+    portfolioId = ensured.id
+  }
+
+  if (parsed.data.propertyId && parsed.data.role === 'owner') {
+    const patch: { owner_id: string; portfolio_id?: string; updated_at: string } = {
+      owner_id: personId,
+      updated_at: new Date().toISOString(),
+    }
+    if (portfolioId) patch.portfolio_id = portfolioId
+    const { error } = await ctx.supabase
+      .from('properties')
+      .update(patch)
+      .eq('id', parsed.data.propertyId)
+      .eq('org_id', ctx.person.org_id)
+    if (error) {
+      console.error('[createOnboardingContact] property', error)
+      return { success: false, error: 'Owner saved, but the property was not linked. Select them from the list.' }
+    }
+  }
+
+  revalidatePath('/app')
+  return { success: true, id: personId, portfolioId }
+}
+
+async function ensureOwnerPortfolio(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orgId: string,
+  ownerId: string,
+  ownerName: string,
+): Promise<{ success: true; id: string } | { success: false; error: string }> {
+  const { data: existing } = await supabase
+    .from('portfolios')
+    .select('id')
+    .eq('org_id', orgId)
+    .eq('owner_id', ownerId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (existing?.id) return { success: true, id: existing.id }
+
+  const name = defaultOwnerPortfolioName(ownerName)
+  const { data: byName } = await supabase
+    .from('portfolios')
+    .select('id, owner_id')
+    .eq('org_id', orgId)
+    .eq('name', name)
+    .maybeSingle()
+  if (byName?.id) {
+    if (!byName.owner_id) {
+      await supabase
+        .from('portfolios')
+        .update({ owner_id: ownerId, updated_at: new Date().toISOString() })
+        .eq('id', byName.id)
+        .eq('org_id', orgId)
+    }
+    return { success: true, id: byName.id }
+  }
+
+  const { data: created, error } = await supabase
+    .from('portfolios')
+    .insert({ org_id: orgId, name, owner_id: ownerId })
     .select('id')
     .single()
   if (error || !created) {
-    console.error('[createOnboardingContact]', error)
-    return { success: false, error: 'Failed to create contact.' }
+    console.error('[ensureOwnerPortfolio]', error)
+    return { success: false, error: 'Owner saved, but a portfolio could not be created.' }
   }
-  revalidatePath('/app')
   return { success: true, id: created.id }
 }

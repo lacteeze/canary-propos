@@ -6,6 +6,11 @@ import type { CanaryDraft, CanaryLease, CanaryOnboarding, CanaryPerson, CanaryPo
 import type { PropertyDetailsInput } from '@/app/actions/entity-updates'
 import {
   canSwitchPathWithoutConfirm,
+  defaultOwnerPortfolioName,
+  mergeSelectOptions,
+  missingMustHaves,
+  MISSING_MUST_HAVE_LABEL,
+  stepAfterListingDraftSave,
   stepsForPath,
   type OnboardingPath,
   type OnboardingStep,
@@ -17,9 +22,10 @@ import {
   saveOnboardingPath,
   saveOnboardingStep,
 } from '@/app/actions/property-onboarding'
+import { createPortfolio } from '@/app/actions/portfolios'
 import { saveDraftListing } from '@/app/actions/canary'
 import { createLease } from '@/app/actions/leases'
-import { emptyListingBrief } from '@/lib/listings/listing-brief'
+import { DEFAULT_LISTING_BRIEF_OPTIONS, emptyListingBrief } from '@/lib/listings/listing-brief'
 import SearchableSelect from './SearchableSelect'
 import { PropertyPhotoUpload } from '@/components/properties/PropertyPhotoUpload'
 
@@ -79,11 +85,20 @@ export default function PropertySetupWizard({
   const [step, setStep] = useState<OnboardingStep>(onboarding.currentStep || 'path')
   const [path, setPath] = useState<OnboardingPath | null>(onboarding.path)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
 
   React.useEffect(() => {
     setPath(onboarding.path)
   }, [onboarding.path])
+
+  React.useEffect(() => {
+    if (property.ownerId) setOwnerId(property.ownerId)
+  }, [property.ownerId])
+
+  React.useEffect(() => {
+    if (property.portfolioId) setPortfolioId(property.portfolioId)
+  }, [property.portfolioId])
 
   const [ownerId, setOwnerId] = useState(property.ownerId || '')
   const [portfolioId, setPortfolioId] = useState(property.portfolioId || '')
@@ -98,6 +113,10 @@ export default function PropertySetupWizard({
   const [feeValue, setFeeValue] = useState(property.mgmtFeeValue || '')
   const [addingOwner, setAddingOwner] = useState(false)
   const [newOwner, setNewOwner] = useState({ name: '', email: '', phone: '' })
+  const [addingPortfolio, setAddingPortfolio] = useState(false)
+  const [newPortfolioName, setNewPortfolioName] = useState('')
+  const [extraOwners, setExtraOwners] = useState<{ value: string; label: string; searchText?: string }[]>([])
+  const [extraPortfolios, setExtraPortfolios] = useState<{ value: string; label: string }[]>([])
 
   const [listingTitle, setListingTitle] = useState(draft?.title || property.address.split(',')[0])
   const [listingRent, setListingRent] = useState(draft?.rent || rent)
@@ -190,8 +209,8 @@ export default function PropertySetupWizard({
       propertyType,
       city: property.city,
       province: property.area,
-      portfolioId: portfolioId || null,
-      ownerId: ownerId || null,
+      portfolioId: portfolioId || property.portfolioId || null,
+      ownerId: ownerId || property.ownerId || null,
       managementFeeType: feeType,
       managementFeeValue: feeN,
       hospitablePropertyId: property.hospitablePropertyId || null,
@@ -203,32 +222,69 @@ export default function PropertySetupWizard({
       details,
       brief: { ...emptyListingBrief(), pets, parking, utilities },
     })
-    setBusy(false)
     if (!res.success) {
+      setBusy(false)
       setError(res.error)
       return
     }
     setStep('photos')
     done(res.completed)
+    if (!res.completed) setBusy(false)
   }
 
   const addContact = async (role: 'owner' | 'tenant') => {
     const src = role === 'owner' ? newOwner : newTenant
     setBusy(true)
     setError('')
-    const res = await createOnboardingContact({ role, ...src })
+    const res = await createOnboardingContact({
+      role,
+      ...src,
+      propertyId: role === 'owner' ? property.propertyDbId : undefined,
+    })
     setBusy(false)
     if (!res.success || !res.id) {
       setError(res.success ? 'Failed to add contact.' : res.error)
       return
     }
+    const label = src.name.trim()
     if (role === 'owner') {
+      setExtraOwners((prev) =>
+        mergeSelectOptions(prev, [{ value: res.id!, label, searchText: `${label} ${src.email}` }]),
+      )
       setOwnerId(res.id)
+      if (res.portfolioId) {
+        setExtraPortfolios((prev) =>
+          mergeSelectOptions(prev, [{ value: res.portfolioId!, label: defaultOwnerPortfolioName(label) }]),
+        )
+        setPortfolioId(res.portfolioId)
+      }
       setAddingOwner(false)
+      setNewOwner({ name: '', email: '', phone: '' })
     } else {
       setTenantId(res.id)
       setAddingTenant(false)
     }
+    refresh()
+  }
+
+  const addPortfolio = async () => {
+    const name = newPortfolioName.trim() || defaultOwnerPortfolioName(
+      extraOwners.find((o) => o.value === ownerId)?.label ||
+        owners.find((p) => p.id === ownerId)?.name ||
+        '',
+    )
+    setBusy(true)
+    setError('')
+    const res = await createPortfolio({ name, owner_id: ownerId || null })
+    setBusy(false)
+    if (!res.success || !res.id) {
+      setError(res.success ? 'Failed to add portfolio.' : res.error)
+      return
+    }
+    setExtraPortfolios((prev) => mergeSelectOptions(prev, [{ value: res.id!, label: name }]))
+    setPortfolioId(res.id)
+    setAddingPortfolio(false)
+    setNewPortfolioName('')
     refresh()
   }
 
@@ -253,12 +309,39 @@ export default function PropertySetupWizard({
     }
     await saveOnboardingStep(property.propertyDbId, 'listing')
     const doneRes = await recomputeOnboardingCompletion(property.propertyDbId)
-    setBusy(false)
     if (!doneRes.success) {
+      setBusy(false)
       setError(doneRes.error)
       return
     }
-    done(doneRes.completed)
+    if (doneRes.completed) {
+      done(true)
+      return
+    }
+
+    const leftover = missingMustHaves({
+      path,
+      detailsCompletedAt: onboarding.detailsCompletedAt || new Date().toISOString(),
+      ownerId: ownerId || property.ownerId || null,
+      listingPhotoCount: property.listingPhotoPaths?.length ?? 0,
+      hasListing: true,
+      hasLease: Boolean(lease),
+      hasTenant: Boolean(lease?.tenantIds),
+    })
+    const next = stepAfterListingDraftSave(leftover)
+    const labels = leftover.map((item) => MISSING_MUST_HAVE_LABEL[item]).join(', ')
+    setNotice(
+      leftover.includes('owner')
+        ? 'Listing draft saved. Add an owner to finish setup.'
+        : `Listing draft saved. Still need: ${labels || 'a few details'}.`,
+    )
+    setError('')
+    if (next !== 'done' && next !== 'listing') {
+      await saveOnboardingStep(property.propertyDbId, next)
+      setStep(next)
+    }
+    setBusy(false)
+  }
   }
 
   const saveLease = async () => {
@@ -293,22 +376,27 @@ export default function PropertySetupWizard({
     }
     await saveOnboardingStep(property.propertyDbId, 'lease')
     const doneRes = await recomputeOnboardingCompletion(property.propertyDbId)
-    setBusy(false)
     if (!doneRes.success) {
+      setBusy(false)
       setError(doneRes.error)
       return
     }
     done(doneRes.completed)
+    if (!doneRes.completed) setBusy(false)
   }
 
   const ownerOptions = useMemo(
-    () => [
-      { value: '', label: 'No owner yet' },
-      ...owners
-        .filter((p) => p.roles.includes('owner') || p.role === 'Client')
-        .map((p) => ({ value: p.id, label: p.name, searchText: `${p.name} ${p.email}` })),
-    ],
-    [owners],
+    () =>
+      mergeSelectOptions(
+        [
+          { value: '', label: 'No owner yet' },
+          ...owners
+            .filter((p) => p.roles.includes('owner') || p.role === 'Client')
+            .map((p) => ({ value: p.id, label: p.name, searchText: `${p.name} ${p.email}` })),
+        ],
+        extraOwners,
+      ),
+    [owners, extraOwners],
   )
   const tenantOptions = useMemo(
     () => [
@@ -320,11 +408,15 @@ export default function PropertySetupWizard({
     [tenants],
   )
   const portfolioOptions = useMemo(
-    () => [
-      { value: '', label: 'No portfolio' },
-      ...portfolios.map((pf) => ({ value: pf.id, label: pf.name })),
-    ],
-    [portfolios],
+    () =>
+      mergeSelectOptions(
+        [
+          { value: '', label: 'No portfolio' },
+          ...portfolios.map((pf) => ({ value: pf.id, label: pf.name })),
+        ],
+        extraPortfolios,
+      ),
+    [portfolios, extraPortfolios],
   )
 
   const field: React.CSSProperties = {
@@ -365,6 +457,7 @@ export default function PropertySetupWizard({
 
         <div className="cy-setup-pane">
           {error ? <div className="cy-setup-error">{error}</div> : null}
+          {notice ? <div className="cy-setup-notice" role="status">{notice}</div> : null}
 
           {step === 'path' && (
             <div className="cy-setup-path">
@@ -382,16 +475,17 @@ export default function PropertySetupWizard({
 
           {step === 'details' && (
             <div className="cy-setup-form">
-              <label style={label}>
-                Owner
+              <div>
+                <span style={label}>Owner</span>
                 <SearchableSelect
                   value={ownerId}
                   onChange={setOwnerId}
                   options={ownerOptions}
+                  placeholder="No owner yet"
                   searchPlaceholder="Search owners…"
                   aria-label="Owner"
                 />
-              </label>
+              </div>
               {!addingOwner ? (
                 <button type="button" className="cy-setup-link" onClick={() => setAddingOwner(true)}>
                   Add owner
@@ -406,19 +500,53 @@ export default function PropertySetupWizard({
                   </button>
                 </div>
               )}
-              <label style={label}>
-                Portfolio
+              <div>
+                <span style={label}>Portfolio</span>
                 <SearchableSelect
                   value={portfolioId}
                   onChange={setPortfolioId}
                   options={portfolioOptions}
+                  placeholder="No portfolio"
                   searchPlaceholder="Search portfolios…"
                   aria-label="Portfolio"
                 />
-              </label>
+              </div>
+              {!addingPortfolio ? (
+                <button
+                  type="button"
+                  className="cy-setup-link"
+                  onClick={() => {
+                    const ownerName =
+                      extraOwners.find((o) => o.value === ownerId)?.label ||
+                      owners.find((p) => p.id === ownerId)?.name ||
+                      ''
+                    setNewPortfolioName(ownerName ? defaultOwnerPortfolioName(ownerName) : '')
+                    setAddingPortfolio(true)
+                  }}
+                >
+                  Add portfolio
+                </button>
+              ) : (
+                <div className="cy-setup-inline">
+                  <input
+                    placeholder="Portfolio name"
+                    value={newPortfolioName}
+                    onChange={(e) => setNewPortfolioName(e.target.value)}
+                    style={field}
+                  />
+                  <button type="button" className="cy-btn-primary" disabled={busy} onClick={() => void addPortfolio()}>
+                    Save portfolio
+                  </button>
+                </div>
+              )}
               <label style={label}>
                 Type
-                <select value={propertyType} onChange={(e) => setPropertyType(e.target.value as PropertyDetailsInput['propertyType'])} style={field}>
+                <select
+                  className="cy-select cy-select--field"
+                  value={propertyType}
+                  onChange={(e) => setPropertyType(e.target.value as PropertyDetailsInput['propertyType'])}
+                  style={{ ...field, width: '100%' }}
+                >
                   {PROPERTY_TYPES.map((t) => (
                     <option key={t.value} value={t.value}>{t.label}</option>
                   ))}
@@ -440,20 +568,35 @@ export default function PropertySetupWizard({
               </label>
               <label style={label}>
                 Pets
-                <input value={pets} onChange={(e) => setPets(e.target.value)} style={field} />
+                <select className="cy-select cy-select--field" value={pets} onChange={(e) => setPets(e.target.value)} style={{ ...field, width: '100%' }}>
+                  <option value="">— Select —</option>
+                  {(pets && !DEFAULT_LISTING_BRIEF_OPTIONS.pets.includes(pets) ? [pets, ...DEFAULT_LISTING_BRIEF_OPTIONS.pets] : DEFAULT_LISTING_BRIEF_OPTIONS.pets).map((o) => (
+                    <option key={o} value={o}>{o}</option>
+                  ))}
+                </select>
               </label>
               <label style={label}>
                 Parking
-                <input value={parking} onChange={(e) => setParking(e.target.value)} style={field} />
+                <select className="cy-select cy-select--field" value={parking} onChange={(e) => setParking(e.target.value)} style={{ ...field, width: '100%' }}>
+                  <option value="">— Select —</option>
+                  {(parking && !DEFAULT_LISTING_BRIEF_OPTIONS.parking.includes(parking) ? [parking, ...DEFAULT_LISTING_BRIEF_OPTIONS.parking] : DEFAULT_LISTING_BRIEF_OPTIONS.parking).map((o) => (
+                    <option key={o} value={o}>{o}</option>
+                  ))}
+                </select>
               </label>
               <label style={label}>
                 Utilities
-                <input value={utilities} onChange={(e) => setUtilities(e.target.value)} style={field} />
+                <select className="cy-select cy-select--field" value={utilities} onChange={(e) => setUtilities(e.target.value)} style={{ ...field, width: '100%' }}>
+                  <option value="">— Select —</option>
+                  {(utilities && !DEFAULT_LISTING_BRIEF_OPTIONS.utilities.includes(utilities) ? [utilities, ...DEFAULT_LISTING_BRIEF_OPTIONS.utilities] : DEFAULT_LISTING_BRIEF_OPTIONS.utilities).map((o) => (
+                    <option key={o} value={o}>{o}</option>
+                  ))}
+                </select>
               </label>
               <div className="cy-setup-row">
                 <label style={label}>
                   Fee type
-                  <select value={feeType} onChange={(e) => setFeeType(e.target.value === 'flat' ? 'flat' : 'percent')} style={field}>
+                  <select className="cy-select cy-select--field" value={feeType} onChange={(e) => setFeeType(e.target.value === 'flat' ? 'flat' : 'percent')} style={{ ...field, width: '100%' }}>
                     <option value="percent">Percent</option>
                     <option value="flat">Flat</option>
                   </select>
@@ -464,7 +607,7 @@ export default function PropertySetupWizard({
                 </label>
               </div>
               <button type="button" className="cy-btn-primary" disabled={busy} onClick={() => void saveDetails()}>
-                Continue
+                {busy ? 'Saving…' : 'Continue'}
               </button>
             </div>
           )}
@@ -498,26 +641,32 @@ export default function PropertySetupWizard({
           )}
 
           {step === 'listing' && (
-            <div className="cy-setup-form">
+            <div className="cy-setup-form" aria-busy={busy}>
               <p className="cy-setup-lead">Saved as a draft. Publish later from the listing if you want it on the public site.</p>
               <label style={label}>
                 Title
-                <input value={listingTitle} onChange={(e) => setListingTitle(e.target.value)} style={field} />
+                <input value={listingTitle} onChange={(e) => setListingTitle(e.target.value)} style={field} disabled={busy} />
               </label>
               <label style={label}>
                 Rent
-                <input value={listingRent} onChange={(e) => setListingRent(e.target.value)} style={field} />
+                <input value={listingRent} onChange={(e) => setListingRent(e.target.value)} style={field} disabled={busy} />
               </label>
               <label style={label}>
                 Available from
-                <input type="date" value={listingStart} onChange={(e) => setListingStart(e.target.value)} style={field} />
+                <input type="date" value={listingStart} onChange={(e) => setListingStart(e.target.value)} style={field} disabled={busy} />
               </label>
               <label style={label}>
                 Description
-                <textarea value={listingDesc} onChange={(e) => setListingDesc(e.target.value)} style={{ ...field, minHeight: 96 }} />
+                <textarea value={listingDesc} onChange={(e) => setListingDesc(e.target.value)} style={{ ...field, minHeight: 96 }} disabled={busy} />
               </label>
-              <button type="button" className="cy-btn-primary" disabled={busy} onClick={() => void saveListing()}>
-                Save listing draft
+              <button
+                type="button"
+                className="cy-btn-primary"
+                disabled={busy}
+                aria-live="polite"
+                onClick={() => void saveListing()}
+              >
+                {busy ? 'Saving draft…' : 'Save listing draft'}
               </button>
             </div>
           )}
@@ -528,12 +677,13 @@ export default function PropertySetupWizard({
                 <p className="cy-setup-lead">A lease is already on this unit. Continue to finish setup once owner and photos are in.</p>
               ) : (
                 <>
-                  <label style={label}>
-                    Tenant
+                  <label>
+                    <span style={label}>Tenant</span>
                     <SearchableSelect
                       value={tenantId}
                       onChange={setTenantId}
                       options={tenantOptions}
+                      placeholder="Select tenant…"
                       searchPlaceholder="Search tenants…"
                       aria-label="Tenant"
                     />
@@ -575,7 +725,7 @@ export default function PropertySetupWizard({
                 </>
               )}
               <button type="button" className="cy-btn-primary" disabled={busy} onClick={() => void saveLease()}>
-                {lease ? 'Finish' : 'Save lease'}
+                {busy ? 'Saving…' : lease ? 'Finish' : 'Save lease'}
               </button>
             </div>
           )}

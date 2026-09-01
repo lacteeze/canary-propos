@@ -36,7 +36,7 @@ const portfolioSchema = z.object({
 export async function createPortfolio(data: {
   name: string
   owner_id?: string | null
-}): Promise<ActionResult> {
+}): Promise<ActionResult & { id?: string }> {
   const ctx = await getCallerContext()
   if (!ctx) return { success: false, error: 'You must be signed in.' }
 
@@ -49,17 +49,22 @@ export async function createPortfolio(data: {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
   }
 
-  const { error } = await ctx.supabase.from('portfolios').insert({
-    org_id: ctx.person.org_id,
-    name: parsed.data.name,
-    owner_id: parsed.data.owner_id ?? null,
-  })
+  const { data: created, error } = await ctx.supabase
+    .from('portfolios')
+    .insert({
+      org_id: ctx.person.org_id,
+      name: parsed.data.name,
+      owner_id: parsed.data.owner_id ?? null,
+    })
+    .select('id')
+    .single()
 
-  if (error) {
+  if (error || !created) {
     console.error('[createPortfolio]', error)
     return { success: false, error: 'Failed to create portfolio. Please try again.' }
   }
 
+  revalidatePath('/app')
   revalidatePath('/properties')
-  return { success: true }
+  return { success: true, id: created.id }
 }

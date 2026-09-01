@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   canSwitchPathWithoutConfirm,
+  defaultOwnerPortfolioName,
   inNeedsSetupQueue,
   isOnboardingComplete,
+  mergeSelectOptions,
   missingMustHaves,
+  stepAfterListingDraftSave,
   stepsForPath,
 } from './property-onboarding'
 
@@ -99,10 +102,53 @@ describe('isOnboardingComplete / inNeedsSetupQueue', () => {
   })
 })
 
+describe('stepAfterListingDraftSave', () => {
+  it('stays in setup on details when the owner is still missing', () => {
+    expect(stepAfterListingDraftSave(['owner'])).toBe('details')
+    expect(stepAfterListingDraftSave(['owner', 'photos'])).toBe('details')
+  })
+
+  it('leaves setup only when nothing is left', () => {
+    expect(stepAfterListingDraftSave([])).toBe('done')
+  })
+})
+
 describe('canSwitchPathWithoutConfirm', () => {
   it('allows a free switch until a listing or lease exists', () => {
     expect(canSwitchPathWithoutConfirm({ hasListing: false, hasLease: false })).toBe(true)
     expect(canSwitchPathWithoutConfirm({ hasListing: true, hasLease: false })).toBe(false)
     expect(canSwitchPathWithoutConfirm({ hasListing: false, hasLease: true })).toBe(false)
+  })
+})
+
+describe('defaultOwnerPortfolioName', () => {
+  it('uses the owner name as the portfolio name', () => {
+    expect(defaultOwnerPortfolioName('Beth Whalen')).toBe('Beth Whalen')
+  })
+
+  it('falls back when the name is blank', () => {
+    expect(defaultOwnerPortfolioName('   ')).toBe('New portfolio')
+  })
+})
+
+describe('mergeSelectOptions', () => {
+  it('keeps a just-created owner in the list before the server refresh', () => {
+    const merged = mergeSelectOptions(
+      [
+        { value: '', label: 'No owner yet' },
+        { value: 'old', label: 'Existing Owner' },
+      ],
+      [{ value: 'new', label: 'Beth Whalen', searchText: 'Beth Whalen nfbethwhelan@gmail.com' }],
+    )
+    expect(merged.map((o) => o.value)).toEqual(['', 'old', 'new'])
+    expect(merged[2]?.label).toBe('Beth Whalen')
+  })
+
+  it('does not duplicate an id that the server list already has', () => {
+    const merged = mergeSelectOptions(
+      [{ value: 'new', label: 'Beth Whalen' }],
+      [{ value: 'new', label: 'Beth Whalen' }],
+    )
+    expect(merged).toHaveLength(1)
   })
 })

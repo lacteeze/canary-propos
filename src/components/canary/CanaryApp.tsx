@@ -1098,11 +1098,24 @@ export default function CanaryApp({
     setSetupUnitId(unitId)
     setView('property-setup')
     setDrawer(null)
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.set('view', 'property-setup')
+      url.searchParams.set('setup', unitId)
+      window.history.replaceState({}, '', `${url.pathname}?${url.searchParams.toString()}`)
+    }
   }, [])
 
   const exitPropertySetup = useCallback(() => {
     setSetupUnitId(null)
     setView('dashboard')
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('view')
+      url.searchParams.delete('setup')
+      const qs = url.searchParams.toString()
+      window.history.replaceState({}, '', qs ? `${url.pathname}?${qs}` : url.pathname)
+    }
   }, [])
 
   const needsSetupItems = useMemo((): NeedsSetupItem[] => {
@@ -4428,6 +4441,12 @@ export default function CanaryApp({
             setSetupUnitId(unitId)
             setPropFilter('')
             setPageSort((s) => ({ ...s, properties: null }))
+            if (typeof window !== 'undefined') {
+              const url = new URL(window.location.href)
+              url.searchParams.set('view', 'property-setup')
+              url.searchParams.set('setup', unitId)
+              window.history.replaceState({}, '', `${url.pathname}?${url.searchParams.toString()}`)
+            }
           }}
           defaultProvince={defaultProvince}
           owners={db.people}

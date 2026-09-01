@@ -67,3 +67,34 @@ export function inNeedsSetupQueue(snapshot: OnboardingSnapshot): boolean {
 export function canSwitchPathWithoutConfirm(snapshot: Pick<OnboardingSnapshot, 'hasListing' | 'hasLease'>): boolean {
   return !snapshot.hasListing && !snapshot.hasLease
 }
+
+/** After a listing draft writes, send staff to the first remaining must-have instead of the dashboard. */
+export function stepAfterListingDraftSave(missing: MissingMustHave[]): OnboardingStep | 'done' {
+  if (missing.length === 0) return 'done'
+  if (missing.includes('owner') || missing.includes('details') || missing.includes('path')) return 'details'
+  if (missing.includes('photos')) return 'photos'
+  return 'listing'
+}
+
+export function defaultOwnerPortfolioName(ownerName: string): string {
+  const name = ownerName.trim()
+  return name || 'New portfolio'
+}
+
+export type SelectOption = {
+  value: string
+  label: string
+  searchText?: string
+}
+
+/** Keep a just-created row visible in a combobox before `router.refresh()` lands. */
+export function mergeSelectOptions(options: SelectOption[], extra: SelectOption[]): SelectOption[] {
+  const seen = new Set(options.map((o) => o.value))
+  const merged = [...options]
+  for (const item of extra) {
+    if (!item.value || seen.has(item.value)) continue
+    merged.push(item)
+    seen.add(item.value)
+  }
+  return merged
+}

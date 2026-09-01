@@ -44,10 +44,20 @@ async function heroStoragePath(propertyId: string, photoPaths: string[] | null):
   return paths[0] ?? null
 }
 
+function imageResponse(bytes: Uint8Array, storagePath: string): NextResponse {
+  return new NextResponse(bytes, {
+    status: 200,
+    headers: {
+      'Content-Type': contentTypeForPath(storagePath),
+      'Cache-Control': CACHE_CONTROL,
+    },
+  })
+}
+
 async function downloadShareSizedHero(
   supabase: ReturnType<typeof createAdminClient>,
   storagePath: string,
-): Promise<Buffer | null> {
+): Promise<Uint8Array | null> {
   const { data, error } = await supabase.storage.from('org-assets').createSignedUrl(storagePath, 120, {
     transform: { width: 1200, quality: 70, resize: 'contain' },
   })
@@ -55,7 +65,7 @@ async function downloadShareSizedHero(
   try {
     const res = await fetch(data.signedUrl)
     if (!res.ok) return null
-    const bytes = Buffer.from(await res.arrayBuffer())
+    const bytes = new Uint8Array(await res.arrayBuffer())
     if (!bytes.length) return null
     return bytes
   } catch (err) {
@@ -111,15 +121,7 @@ export async function GET(
 
     const supabase = createAdminClient()
     const resized = await downloadShareSizedHero(supabase, storagePath)
-    if (resized) {
-      return new NextResponse(resized, {
-        status: 200,
-        headers: {
-          'Content-Type': contentTypeForPath(storagePath),
-          'Cache-Control': CACHE_CONTROL,
-        },
-      })
-    }
+    if (resized) return imageResponse(resized, storagePath)
 
     const { data, error } = await supabase.storage.from('org-assets').download(storagePath)
     if (error || !data) {
@@ -127,14 +129,7 @@ export async function GET(
       return orgIconFallback()
     }
 
-    const bytes = Buffer.from(await data.arrayBuffer())
-    return new NextResponse(bytes, {
-      status: 200,
-      headers: {
-        'Content-Type': contentTypeForPath(storagePath),
-        'Cache-Control': CACHE_CONTROL,
-      },
-    })
+    return imageResponse(new Uint8Array(await data.arrayBuffer()), storagePath)
   } catch (err) {
     console.error('[og-property] unexpected error:', err)
     return orgIconFallback()

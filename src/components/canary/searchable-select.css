@@ -123,3 +123,28 @@
   font-size: 13px;
   color: var(--dim, #737373);
 }
+
+.cy-combo__create {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-top: 1px solid var(--border, #e5e5e5);
+  background: var(--elev, #fafafa);
+  color: var(--accent, #ca8a04);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 650;
+  text-align: left;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.cy-combo__create:hover {
+  background: color-mix(in srgb, var(--accent, #ca8a04) 10%, var(--elev, #fafafa));
+}
+
+.cy-combo__create:focus-visible {
+  outline: 2px solid var(--accent, #ca8a04);
+  outline-offset: -2px;
+}

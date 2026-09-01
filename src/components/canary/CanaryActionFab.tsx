@@ -1,12 +1,13 @@
 'use client'
 
 import React, { useEffect, useRef, useState } from 'react'
-import { Building2, FileText, Home, Plus, Upload, Wallet } from 'lucide-react'
+import { Building2, FileText, Home, Plus, Upload, Users, Wallet } from 'lucide-react'
 import type { ImportDataset } from '@/lib/canary/import-specs'
 
-export type FabAction = 'property' | 'lease' | 'listing' | 'expense' | 'import'
+export type FabAction = 'person' | 'property' | 'lease' | 'listing' | 'expense' | 'import'
 
 const ACTION_META: Record<FabAction, { label: string; icon: React.ReactNode; description: string }> = {
+  person: { label: 'Person', icon: <Users size={18} />, description: 'Add an owner or tenant' },
   property: { label: 'Property', icon: <Home size={18} />, description: 'Add a new property' },
   lease: { label: 'Lease', icon: <FileText size={18} />, description: 'Draft a new lease' },
   listing: { label: 'Listing', icon: <Building2 size={18} />, description: 'Publish a public listing' },
@@ -26,7 +27,7 @@ const VIEW_IMPORT_DATASET: Partial<Record<string, ImportDataset>> = {
 /** All FAB actions for privileged users — import dataset is scoped separately by view. */
 export function fabActionsForView(_view: string, priv: boolean): FabAction[] {
   if (!priv) return []
-  return ['property', 'lease', 'listing', 'expense', 'import']
+  return ['person', 'property', 'lease', 'listing', 'expense', 'import']
 }
 
 export function importDatasetForView(view: string): ImportDataset | undefined {

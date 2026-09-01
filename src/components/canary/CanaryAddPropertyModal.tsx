@@ -6,6 +6,7 @@ import { createProperty } from '@/app/actions/properties'
 import { CANADIAN_PROVINCES } from '@/lib/constants/provinces'
 import type { CanaryPerson, CanaryPortfolio } from '@/lib/canary/types'
 import SearchableSelect from './SearchableSelect'
+import PersonPicker from './PersonPicker'
 
 const PROPERTY_TYPES = [
   { value: 'house', label: 'House' },
@@ -56,11 +57,15 @@ export default function CanaryAddPropertyModal({
   const [postalCode, setPostalCode] = useState('')
   const [propertyType, setPropertyType] = useState('house')
   const [ownerId, setOwnerId] = useState('')
+  const [extraPortfolios, setExtraPortfolios] = useState<{ id: string; name: string }[]>([])
   const [portfolioId, setPortfolioId] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const ownerOptions = owners.filter((p) => p.roles.includes('owner') || p.role === 'Client')
+  const portfolioOptions = [
+    ...portfolios,
+    ...extraPortfolios.filter((extra) => !portfolios.some((p) => p.id === extra.id)),
+  ]
 
   const submit = useCallback(async () => {
     if (busy) return
@@ -152,42 +157,41 @@ export default function CanaryAddPropertyModal({
               ))}
             </select>
           </label>
-          {ownerOptions.length > 0 && (
-            <label>
-              <span style={labelStyle}>Owner</span>
-              <SearchableSelect
-                value={ownerId}
-                onChange={setOwnerId}
-                placeholder="— No owner —"
-                searchPlaceholder="Search owners…"
-                aria-label="Owner"
-                options={[
-                  { value: '', label: '— No owner —' },
-                  ...ownerOptions.map((o) => ({
-                    value: o.id,
-                    label: o.name,
-                    searchText: `${o.name} ${o.email} ${o.company}`,
-                  })),
-                ]}
-              />
-            </label>
-          )}
-          {portfolios.length > 0 && (
-            <label>
-              <span style={labelStyle}>Portfolio</span>
-              <SearchableSelect
-                value={portfolioId}
-                onChange={setPortfolioId}
-                placeholder="— No portfolio —"
-                searchPlaceholder="Search portfolios…"
-                aria-label="Portfolio"
-                options={[
-                  { value: '', label: '— No portfolio —' },
-                  ...portfolios.map((p) => ({ value: p.id, label: p.name })),
-                ]}
-              />
-            </label>
-          )}
+          <label>
+            <span style={labelStyle}>Owner</span>
+            <PersonPicker
+              role="owner"
+              value={ownerId}
+              onChange={setOwnerId}
+              people={owners}
+              placeholder="— No owner —"
+              aria-label="Owner"
+              onCreated={(created) => {
+                setOwnerId(created.id)
+                if (created.portfolioId) {
+                  setExtraPortfolios((prev) => [
+                    ...prev,
+                    { id: created.portfolioId!, name: created.portfolioName || created.name },
+                  ])
+                  setPortfolioId(created.portfolioId)
+                }
+              }}
+            />
+          </label>
+          <label>
+            <span style={labelStyle}>Portfolio</span>
+            <SearchableSelect
+              value={portfolioId}
+              onChange={setPortfolioId}
+              placeholder="— No portfolio —"
+              searchPlaceholder="Search portfolios…"
+              aria-label="Portfolio"
+              options={[
+                { value: '', label: '— No portfolio —' },
+                ...portfolioOptions.map((p) => ({ value: p.id, label: p.name })),
+              ]}
+            />
+          </label>
         </div>
 
         {error && <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 12 }}>{error}</div>}

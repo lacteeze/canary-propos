@@ -24,6 +24,7 @@ import {
   parseHospitableWidgetPropertyId,
 } from '@/lib/hospitable/parse-widget-property-id'
 import SearchableSelect from './SearchableSelect'
+import PersonPicker, { type PersonPickerPerson } from './PersonPicker'
 
 const MONO = "var(--font-instrument-sans), 'Instrument Sans', system-ui, sans-serif"
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -152,7 +153,7 @@ interface PropertyOccupancyCalendarProps {
   strBookings: CanaryStrBooking[]
   projects: CanaryProject[]
   portfolios: { id: string; name: string }[]
-  owners: { id: string; name: string }[]
+  owners: PersonPickerPerson[]
   canEdit: boolean
   priv: boolean
   money: (n: number | null | undefined) => string
@@ -173,7 +174,7 @@ function PropertyQuickEdit({
 }: {
   property: CanaryProperty
   portfolios: { id: string; name: string }[]
-  owners: { id: string; name: string }[]
+  owners: PersonPickerPerson[]
   canEdit: boolean
   priv: boolean
   money: (n: number | null | undefined) => string
@@ -189,6 +190,7 @@ function PropertyQuickEdit({
   const [hasGarage, setHasGarage] = useState(Boolean(property.hasGarage))
   const [portfolioId, setPortfolioId] = useState(property.portfolioId)
   const [ownerId, setOwnerId] = useState(property.ownerId)
+  const [extraPortfolios, setExtraPortfolios] = useState<{ id: string; name: string }[]>([])
   const [feeType, setFeeType] = useState(property.mgmtFeeType === 'flat' ? 'flat' : 'percent')
   const [feeValue, setFeeValue] = useState(property.mgmtFeeValue)
   const [hospitablePropertyId, setHospitablePropertyId] = useState(property.hospitablePropertyId || '')
@@ -216,6 +218,7 @@ function PropertyQuickEdit({
     setHospitableWidgetPropertyId(property.hospitableWidgetPropertyId || '')
     setErr('')
     setOk(false)
+    setExtraPortfolios([])
   }, [property])
 
   if (!canEdit) {
@@ -344,20 +347,32 @@ function PropertyQuickEdit({
                 options={[
                   { value: '', label: '— None —' },
                   ...portfolios.map((pf) => ({ value: pf.id, label: pf.name })),
+                  ...extraPortfolios
+                    .filter((pf) => !portfolios.some((p) => p.id === pf.id))
+                    .map((pf) => ({ value: pf.id, label: pf.name })),
                 ]}
               />
             </label>
             <label>{formLabel('Owner')}
-              <SearchableSelect
+              <PersonPicker
+                role="owner"
                 value={ownerId}
                 onChange={setOwnerId}
+                people={owners}
+                propertyId={property.propertyDbId}
                 placeholder="— None —"
-                searchPlaceholder="Search owners…"
                 aria-label="Owner"
-                options={[
-                  { value: '', label: '— None —' },
-                  ...owners.map((o) => ({ value: o.id, label: o.name })),
-                ]}
+                onCreated={(created) => {
+                  setOwnerId(created.id)
+                  if (created.portfolioId) {
+                    setExtraPortfolios((prev) =>
+                      prev.some((p) => p.id === created.portfolioId)
+                        ? prev
+                        : [...prev, { id: created.portfolioId!, name: created.portfolioName || created.name }],
+                    )
+                    setPortfolioId(created.portfolioId)
+                  }
+                }}
               />
             </label>
             <label>{formLabel('Fee type')}

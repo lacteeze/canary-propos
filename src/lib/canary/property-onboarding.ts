@@ -87,6 +87,11 @@ export type SelectOption = {
   searchText?: string
 }
 
+export function isOwnerPerson(person: { roles?: string[]; role?: string }): boolean {
+  if (person.roles?.includes('owner')) return true
+  return person.role === 'Client' || person.role === 'Owner'
+}
+
 /** Keep a just-created row visible in a combobox before `router.refresh()` lands. */
 export function mergeSelectOptions(options: SelectOption[], extra: SelectOption[]): SelectOption[] {
   const seen = new Set(options.map((o) => o.value))

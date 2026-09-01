@@ -29,6 +29,7 @@ import {
 import CanaryImport from './CanaryImport'
 import CanaryActionFab, { importDatasetForView, type FabAction } from './CanaryActionFab'
 import CanaryAddPropertyModal from './CanaryAddPropertyModal'
+import CanaryAddPersonModal from './CanaryAddPersonModal'
 import NeedsSetupCard, { type NeedsSetupItem } from './NeedsSetupCard'
 import PropertySetupWizard from './PropertySetupWizard'
 import SearchableSelect from './SearchableSelect'
@@ -47,7 +48,7 @@ import {
 } from './layout'
 import { leasingPipelineHref, listingHref, personHref, propertyHref } from '@/lib/canary/entity-href'
 import { groupCurrentListings } from '@/lib/canary/current-listings-groups'
-import { inNeedsSetupQueue, missingMustHaves } from '@/lib/canary/property-onboarding'
+import { inNeedsSetupQueue, isOwnerPerson, missingMustHaves } from '@/lib/canary/property-onboarding'
 import { countInquiriesForListing } from '@/lib/canary/pipeline-groups'
 import { AppSidebar, MobileAppChrome, pageLabelForView } from './AppSidebar'
 import GmailInboxView from './GmailInboxView'
@@ -375,6 +376,7 @@ export default function CanaryApp({
   const [mergePrimaryId, setMergePrimaryId] = useState('')
   const [calView, setCalView] = useState<{ propId: string; address: string } | null>(null)
   const [propertyModalOpen, setPropertyModalOpen] = useState(false)
+  const [personModalOpen, setPersonModalOpen] = useState(false)
   const [setupUnitId, setSetupUnitId] = useState<string | null>(null)
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [leasingListOpen, setLeasingListOpen] = useState<
@@ -2346,6 +2348,10 @@ export default function CanaryApp({
   const defaultProvince = db.properties.find((p) => p.area)?.area || 'NL'
 
   const handleFabAction = useCallback((action: FabAction) => {
+    if (action === 'person') {
+      setPersonModalOpen(true)
+      return
+    }
     if (action === 'property') {
       setPropertyModalOpen(true)
       return
@@ -3421,6 +3427,11 @@ export default function CanaryApp({
                   </button>
                 ))}
                 <span style={{ color: 'var(--dim)', fontSize: 13, marginLeft: 'auto' }}>{filteredPeople.length + ' people'}</span>
+                {priv ? (
+                  <button type="button" className="cy-btn-primary" onClick={() => setPersonModalOpen(true)}>
+                    Add person
+                  </button>
+                ) : null}
               </div>
               {showDefault && (
                 <div className="cy-card" style={{ overflow: 'hidden' }}>
@@ -4011,7 +4022,7 @@ export default function CanaryApp({
               (j) => j.property === calView.address || j.propertyDbId === calProp.propertyDbId,
             )}
             portfolios={db.portfolios.map((pf) => ({ id: pf.id, name: pf.name }))}
-            owners={db.people.filter((p) => p.role === 'Client').map((p) => ({ id: p.id, name: p.name }))}
+            owners={db.people.filter(isOwnerPerson)}
             canEdit={priv}
             priv={priv}
             money={money}
@@ -4431,6 +4442,8 @@ export default function CanaryApp({
 
       {/* ============ FLOATING ACTION BUTTON ============ */}
       <CanaryActionFab view={view} priv={priv} onAction={handleFabAction} />
+
+      {personModalOpen && <CanaryAddPersonModal onClose={() => setPersonModalOpen(false)} />}
 
       {/* ============ ADD PROPERTY MODAL ============ */}
       {propertyModalOpen && (

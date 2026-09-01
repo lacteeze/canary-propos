@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterSelectOptions } from './SearchableSelect'
+import { createOptionLabel, filterSelectOptions } from './SearchableSelect'
 
 describe('filterSelectOptions', () => {
   const people = [
@@ -18,5 +18,15 @@ describe('filterSelectOptions', () => {
 
   it('matches email and other searchText', () => {
     expect(filterSelectOptions(people, 'navy.mil').map((o) => o.label)).toEqual(['Grace Hopper'])
+  })
+})
+
+describe('createOptionLabel', () => {
+  it('uses the typed name so staff can add the person they just searched for', () => {
+    expect(createOptionLabel('Beth Whelan', 'owner')).toBe('Add “Beth Whelan”')
+  })
+
+  it('falls back to the noun when the search box is empty', () => {
+    expect(createOptionLabel('  ', 'owner')).toBe('Add owner')
   })
 })

@@ -32,6 +32,13 @@ type SearchableSelectProps = {
   'aria-label'?: string
   className?: string
   emptyMessage?: string
+  onCreate?: (query: string) => void
+  createLabel?: string
+}
+
+export function createOptionLabel(query: string, noun: string): string {
+  const q = query.trim()
+  return q ? `Add “${q}”` : `Add ${noun}`
 }
 
 export default function SearchableSelect({
@@ -45,6 +52,8 @@ export default function SearchableSelect({
   'aria-label': ariaLabel,
   className,
   emptyMessage = 'No matches',
+  onCreate,
+  createLabel = 'person',
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -129,7 +138,15 @@ export default function SearchableSelect({
     if (e.key === 'Enter') {
       e.preventDefault()
       const item = filtered[highlight]
-      if (item) pick(item.value)
+      if (item) {
+        pick(item.value)
+        return
+      }
+      if (onCreate) {
+        const q = query
+        close()
+        onCreate(q)
+      }
     }
   }
 
@@ -206,6 +223,20 @@ export default function SearchableSelect({
               })
             )}
           </ul>
+          {onCreate ? (
+            <button
+              type="button"
+              className="cy-combo__create"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                const q = query
+                close()
+                onCreate(q)
+              }}
+            >
+              {createOptionLabel(query, createLabel)}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -18,6 +18,8 @@ import { getOrCreatePropertyThread, getThreadMessages, sendChatMessage, type Cha
 import { LEASE_TERM_LABELS } from '@/lib/canary/lease-term'
 import type { CanaryDb, CanaryDraft, CanaryLease, CanaryPerson, CanaryProperty } from '@/lib/canary/types'
 import SearchableSelect from './SearchableSelect'
+import PersonPicker, { type PersonPickerPerson } from './PersonPicker'
+import { isOwnerPerson } from '@/lib/canary/property-onboarding'
 import { draftStatusBadge, leaseDbStatusFromDisplay } from '@/lib/canary/types'
 import { listingPublicHref, propertyPublicHref } from '@/lib/listings/listing-href'
 import AuditLogPanel from './AuditLogPanel'
@@ -538,7 +540,7 @@ function PropertyEditForm({
   property: CanaryProperty
   priv: boolean
   portfolios: { id: string; name: string }[]
-  owners: { id: string; name: string }[]
+  owners: PersonPickerPerson[]
   onClose: () => void
   onSaved: () => void
 }) {
@@ -552,6 +554,7 @@ function PropertyEditForm({
   const [hasGarage, setHasGarage] = useState(Boolean(property.hasGarage))
   const [portfolioId, setPortfolioId] = useState(property.portfolioId)
   const [ownerId, setOwnerId] = useState(property.ownerId)
+  const [extraPortfolios, setExtraPortfolios] = useState<{ id: string; name: string }[]>([])
   const [feeType, setFeeType] = useState(property.mgmtFeeType === 'flat' ? 'flat' : 'percent')
   const [feeValue, setFeeValue] = useState(property.mgmtFeeValue)
   const [hospitablePropertyId, setHospitablePropertyId] = useState(property.hospitablePropertyId || '')
@@ -674,20 +677,32 @@ function PropertyEditForm({
                   options={[
                     { value: '', label: '— None —' },
                     ...portfolios.map((pf) => ({ value: pf.id, label: pf.name })),
+                    ...extraPortfolios
+                      .filter((pf) => !portfolios.some((p) => p.id === pf.id))
+                      .map((pf) => ({ value: pf.id, label: pf.name })),
                   ]}
                 />
               </label>
               <label>{formLabel('Owner')}
-                <SearchableSelect
+                <PersonPicker
+                  role="owner"
                   value={ownerId}
                   onChange={setOwnerId}
+                  people={owners}
+                  propertyId={property.propertyDbId}
                   placeholder="— None —"
-                  searchPlaceholder="Search owners…"
                   aria-label="Owner"
-                  options={[
-                    { value: '', label: '— None —' },
-                    ...owners.map((o) => ({ value: o.id, label: o.name })),
-                  ]}
+                  onCreated={(created) => {
+                    setOwnerId(created.id)
+                    if (created.portfolioId) {
+                      setExtraPortfolios((prev) =>
+                        prev.some((p) => p.id === created.portfolioId)
+                          ? prev
+                          : [...prev, { id: created.portfolioId!, name: created.portfolioName || created.name }],
+                      )
+                      setPortfolioId(created.portfolioId)
+                    }
+                  }}
                 />
               </label>
               <label>{formLabel('Fee type')}
@@ -1635,7 +1650,7 @@ export default function EntityDetailDrawer({
             property={propertyForEdit}
             priv={priv}
             portfolios={db.portfolios.map((pf) => ({ id: pf.id, name: pf.name }))}
-            owners={db.people.filter((pe) => pe.role === 'Client').map((pe) => ({ id: pe.id, name: pe.name }))}
+            owners={db.people.filter(isOwnerPerson)}
             onClose={() => setEditingProperty(false)}
             onSaved={refresh}
           />
@@ -1684,7 +1699,7 @@ export default function EntityDetailDrawer({
             property={propertyForEdit}
             priv={priv}
             portfolios={db.portfolios.map((pf) => ({ id: pf.id, name: pf.name }))}
-            owners={db.people.filter((pe) => pe.role === 'Client').map((pe) => ({ id: pe.id, name: pe.name }))}
+            owners={db.people.filter(isOwnerPerson)}
             onClose={() => setEditingProperty(false)}
             onSaved={refresh}
           />
@@ -1731,7 +1746,7 @@ export default function EntityDetailDrawer({
           property={propertyForEdit}
           priv={priv}
           portfolios={db.portfolios.map((pf) => ({ id: pf.id, name: pf.name }))}
-          owners={db.people.filter((pe) => pe.role === 'Client').map((pe) => ({ id: pe.id, name: pe.name }))}
+          owners={db.people.filter(isOwnerPerson)}
           onClose={() => setEditingProperty(false)}
           onSaved={refresh}
         />

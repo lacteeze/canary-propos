@@ -16,7 +16,6 @@ import {
   type OnboardingStep,
 } from '@/lib/canary/property-onboarding'
 import {
-  createOnboardingContact,
   recomputeOnboardingCompletion,
   saveOnboardingDetails,
   saveOnboardingPath,
@@ -27,6 +26,7 @@ import { saveDraftListing } from '@/app/actions/canary'
 import { createLease } from '@/app/actions/leases'
 import { DEFAULT_LISTING_BRIEF_OPTIONS, emptyListingBrief } from '@/lib/listings/listing-brief'
 import SearchableSelect from './SearchableSelect'
+import PersonPicker from './PersonPicker'
 import { PropertyPhotoUpload } from '@/components/properties/PropertyPhotoUpload'
 
 const PROPERTY_TYPES: { value: PropertyDetailsInput['propertyType']; label: string }[] = [
@@ -111,8 +111,6 @@ export default function PropertySetupWizard({
   const [utilities, setUtilities] = useState(property.utilitiesIncluded || '')
   const [feeType, setFeeType] = useState<'percent' | 'flat'>(property.mgmtFeeType === 'flat' ? 'flat' : 'percent')
   const [feeValue, setFeeValue] = useState(property.mgmtFeeValue || '')
-  const [addingOwner, setAddingOwner] = useState(false)
-  const [newOwner, setNewOwner] = useState({ name: '', email: '', phone: '' })
   const [addingPortfolio, setAddingPortfolio] = useState(false)
   const [newPortfolioName, setNewPortfolioName] = useState('')
   const [extraOwners, setExtraOwners] = useState<{ value: string; label: string; searchText?: string }[]>([])
@@ -124,8 +122,6 @@ export default function PropertySetupWizard({
   const [listingDesc, setListingDesc] = useState(draft?.description || '')
 
   const [tenantId, setTenantId] = useState(lease?.tenantIds?.split(',')[0]?.trim() || '')
-  const [addingTenant, setAddingTenant] = useState(false)
-  const [newTenant, setNewTenant] = useState({ name: '', email: '', phone: '' })
   const [leaseStart, setLeaseStart] = useState(lease?.start || '')
   const [leaseEnd, setLeaseEnd] = useState(lease?.end || '')
   const [leaseRent, setLeaseRent] = useState(lease?.rent?.replace(/[^0-9.]/g, '') || rent)
@@ -230,41 +226,6 @@ export default function PropertySetupWizard({
     setStep('photos')
     done(res.completed)
     if (!res.completed) setBusy(false)
-  }
-
-  const addContact = async (role: 'owner' | 'tenant') => {
-    const src = role === 'owner' ? newOwner : newTenant
-    setBusy(true)
-    setError('')
-    const res = await createOnboardingContact({
-      role,
-      ...src,
-      propertyId: role === 'owner' ? property.propertyDbId : undefined,
-    })
-    setBusy(false)
-    if (!res.success || !res.id) {
-      setError(res.success ? 'Failed to add contact.' : res.error)
-      return
-    }
-    const label = src.name.trim()
-    if (role === 'owner') {
-      setExtraOwners((prev) =>
-        mergeSelectOptions(prev, [{ value: res.id!, label, searchText: `${label} ${src.email}` }]),
-      )
-      setOwnerId(res.id)
-      if (res.portfolioId) {
-        setExtraPortfolios((prev) =>
-          mergeSelectOptions(prev, [{ value: res.portfolioId!, label: defaultOwnerPortfolioName(label) }]),
-        )
-        setPortfolioId(res.portfolioId)
-      }
-      setAddingOwner(false)
-      setNewOwner({ name: '', email: '', phone: '' })
-    } else {
-      setTenantId(res.id)
-      setAddingTenant(false)
-    }
-    refresh()
   }
 
   const addPortfolio = async () => {
@@ -384,28 +345,6 @@ export default function PropertySetupWizard({
     if (!doneRes.completed) setBusy(false)
   }
 
-  const ownerOptions = useMemo(
-    () =>
-      mergeSelectOptions(
-        [
-          { value: '', label: 'No owner yet' },
-          ...owners
-            .filter((p) => p.roles.includes('owner') || p.role === 'Client')
-            .map((p) => ({ value: p.id, label: p.name, searchText: `${p.name} ${p.email}` })),
-        ],
-        extraOwners,
-      ),
-    [owners, extraOwners],
-  )
-  const tenantOptions = useMemo(
-    () => [
-      { value: '', label: 'Select tenant…' },
-      ...tenants
-        .filter((p) => p.roles.includes('tenant') || p.role === 'Tenant')
-        .map((p) => ({ value: p.id, label: p.name, searchText: `${p.name} ${p.email}` })),
-    ],
-    [tenants],
-  )
   const portfolioOptions = useMemo(
     () =>
       mergeSelectOptions(
@@ -476,29 +415,29 @@ export default function PropertySetupWizard({
             <div className="cy-setup-form">
               <div>
                 <span style={label}>Owner</span>
-                <SearchableSelect
+                <PersonPicker
+                  role="owner"
                   value={ownerId}
                   onChange={setOwnerId}
-                  options={ownerOptions}
+                  people={owners}
+                  propertyId={property.propertyDbId}
                   placeholder="No owner yet"
-                  searchPlaceholder="Search owners…"
                   aria-label="Owner"
+                  onCreated={(created) => {
+                    setExtraOwners((prev) =>
+                      mergeSelectOptions(prev, [{ value: created.id, label: created.name }]),
+                    )
+                    if (created.portfolioId) {
+                      setExtraPortfolios((prev) =>
+                        mergeSelectOptions(prev, [
+                          { value: created.portfolioId!, label: created.portfolioName || defaultOwnerPortfolioName(created.name) },
+                        ]),
+                      )
+                      setPortfolioId(created.portfolioId)
+                    }
+                  }}
                 />
               </div>
-              {!addingOwner ? (
-                <button type="button" className="cy-setup-link" onClick={() => setAddingOwner(true)}>
-                  Add owner
-                </button>
-              ) : (
-                <div className="cy-setup-inline">
-                  <input placeholder="Name" value={newOwner.name} onChange={(e) => setNewOwner({ ...newOwner, name: e.target.value })} style={field} />
-                  <input placeholder="Email" value={newOwner.email} onChange={(e) => setNewOwner({ ...newOwner, email: e.target.value })} style={field} />
-                  <input placeholder="Phone" value={newOwner.phone} onChange={(e) => setNewOwner({ ...newOwner, phone: e.target.value })} style={field} />
-                  <button type="button" className="cy-btn-primary" disabled={busy} onClick={() => void addContact('owner')}>
-                    Save owner
-                  </button>
-                </div>
-              )}
               <div>
                 <span style={label}>Portfolio</span>
                 <SearchableSelect
@@ -678,29 +617,15 @@ export default function PropertySetupWizard({
                 <>
                   <label>
                     <span style={label}>Tenant</span>
-                    <SearchableSelect
+                    <PersonPicker
+                      role="tenant"
                       value={tenantId}
                       onChange={setTenantId}
-                      options={tenantOptions}
+                      people={tenants}
                       placeholder="Select tenant…"
-                      searchPlaceholder="Search tenants…"
                       aria-label="Tenant"
                     />
                   </label>
-                  {!addingTenant ? (
-                    <button type="button" className="cy-setup-link" onClick={() => setAddingTenant(true)}>
-                      Add tenant
-                    </button>
-                  ) : (
-                    <div className="cy-setup-inline">
-                      <input placeholder="Name" value={newTenant.name} onChange={(e) => setNewTenant({ ...newTenant, name: e.target.value })} style={field} />
-                      <input placeholder="Email" value={newTenant.email} onChange={(e) => setNewTenant({ ...newTenant, email: e.target.value })} style={field} />
-                      <input placeholder="Phone" value={newTenant.phone} onChange={(e) => setNewTenant({ ...newTenant, phone: e.target.value })} style={field} />
-                      <button type="button" className="cy-btn-primary" disabled={busy} onClick={() => void addContact('tenant')}>
-                        Save tenant
-                      </button>
-                    </div>
-                  )}
                   <div className="cy-setup-row">
                     <label style={label}>
                       Start

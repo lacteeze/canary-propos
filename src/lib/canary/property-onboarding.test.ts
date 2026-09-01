@@ -4,6 +4,7 @@ import {
   defaultOwnerPortfolioName,
   inNeedsSetupQueue,
   isOnboardingComplete,
+  isOwnerPerson,
   mergeSelectOptions,
   missingMustHaves,
   stepAfterListingDraftSave,
@@ -150,5 +151,13 @@ describe('mergeSelectOptions', () => {
       [{ value: 'new', label: 'Beth Whalen' }],
     )
     expect(merged).toHaveLength(1)
+  })
+})
+
+describe('isOwnerPerson', () => {
+  it('treats the owner role as a client even when the display label is missing', () => {
+    expect(isOwnerPerson({ roles: ['owner'] })).toBe(true)
+    expect(isOwnerPerson({ role: 'Client' })).toBe(true)
+    expect(isOwnerPerson({ roles: ['tenant'], role: 'Tenant' })).toBe(false)
   })
 })

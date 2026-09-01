@@ -342,7 +342,6 @@ export default function PropertySetupWizard({
     }
     setBusy(false)
   }
-  }
 
   const saveLease = async () => {
     if (busy) return

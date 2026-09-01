@@ -133,8 +133,12 @@ export default function PropertySetupWizard({
 
   const done = useCallback(
     (completed?: boolean) => {
+      if (completed) {
+        onExit()
+        refresh()
+        return
+      }
       refresh()
-      if (completed) onExit()
     },
     [onExit, refresh],
   )

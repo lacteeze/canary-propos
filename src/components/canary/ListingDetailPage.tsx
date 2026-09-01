@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { useAppRouter } from './useAppRouter'
 import {
   activateDraftListing,
@@ -88,7 +89,8 @@ export default function ListingDetailPage({
       setError(res.error ?? 'Could not save listing.')
       return
     }
-    goBack()
+    toast.success('Listing saved.')
+    router.refresh()
   }
 
   const remove = async () => {
@@ -101,7 +103,7 @@ export default function ListingDetailPage({
       setError(res.error ?? 'Could not delete listing.')
       return
     }
-    goBack()
+    router.push('/app?view=leases')
   }
 
   const activate = async () => {
@@ -138,7 +140,7 @@ export default function ListingDetailPage({
       setError(res.error ?? 'Could not activate listing.')
       return
     }
-    goBack()
+    router.push('/app?view=leases')
   }
 
   if (!listing) {

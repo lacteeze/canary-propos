@@ -8,6 +8,7 @@ import { PublicHeader } from '@/components/public/PublicHeader'
 import { fontDisplay } from '@/lib/landing/typography'
 import type { CityGroup } from '@/lib/listings/browse-types'
 import { publicListingAmenityTags, resolveParkingDisplay } from '@/lib/listings/browse-utils'
+import { formatListingLeaseEnd } from '@/lib/listings/public-property-page'
 
 function formatCAD(n: number) {
   return new Intl.NumberFormat('en-CA', {
@@ -53,8 +54,6 @@ export type ListingDetailViewProps = {
   listingPhotos: string[]
   /** Full-res URLs for hero + lightbox (index-aligned with listingPhotos). */
   listingPhotosFull?: string[]
-  /** Active lease end for this listing's unit, already formatted. */
-  leaseEndLabel?: string | null
   carouselGroups: CityGroup[]
   orgSlug: string
   /** Org-level Hospitable Direct site UUID when widget should render */
@@ -104,7 +103,6 @@ export function ListingDetailView({
   listing,
   listingPhotos,
   listingPhotosFull,
-  leaseEndLabel,
   carouselGroups,
   orgSlug,
   hospitableSiteUuid,
@@ -152,6 +150,7 @@ export function ListingDetailView({
         year: 'numeric',
       })
     : null
+  const leaseEndLabel = formatListingLeaseEnd(listing.available_until)
 
   const briefParking =
     property?.listing_brief &&

@@ -1,5 +1,6 @@
 // src/app/(public)/listings/[id]/page.tsx
 // Public listing detail — UUID path; redirects to /{slug} when a public slug exists.
+import type { Metadata } from 'next'
 import { notFound, permanentRedirect } from 'next/navigation'
 import {
   listingIsPubliclyAvailable,
@@ -9,6 +10,12 @@ import {
   renderPublishedListingPage,
   renderPropertyPublicPage,
 } from '@/lib/listings/public-slug-page'
+import {
+  buildPublicShareMetadata,
+  fallbackPublicShareMetadata,
+  resolvePublicRequestOrg,
+  resolvePublicShareSubject,
+} from '@/lib/listings/public-share-metadata'
 import { isListingUuid } from '@/lib/listings/listing-href'
 import { getOrgBySlug } from '@/lib/orgs'
 import { headers } from 'next/headers'
@@ -20,6 +27,15 @@ export const fetchCache = 'force-no-store'
 interface PageProps {
   params: Promise<{ id: string }>
   searchParams: Promise<{ org?: string }>
+}
+
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
+  const { id } = await params
+  const { org: orgSlugParam } = await searchParams
+  const org = await resolvePublicRequestOrg(orgSlugParam)
+  if (!org) return fallbackPublicShareMetadata()
+  const subject = await resolvePublicShareSubject({ orgId: org.id, listingId: id })
+  return buildPublicShareMetadata(subject)
 }
 
 export default async function ListingDetailPage({ params, searchParams }: PageProps) {

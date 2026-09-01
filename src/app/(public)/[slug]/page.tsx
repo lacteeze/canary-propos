@@ -1,5 +1,6 @@
 // src/app/(public)/[slug]/page.tsx
 // Root-level SEO slug: published listing first, else public property page (incl. leased).
+import type { Metadata } from 'next'
 import { notFound, permanentRedirect } from 'next/navigation'
 import {
   listingIsPubliclyAvailable,
@@ -9,6 +10,12 @@ import {
   renderPublishedListingPage,
   renderPropertyPublicPage,
 } from '@/lib/listings/public-slug-page'
+import {
+  buildPublicShareMetadata,
+  fallbackPublicShareMetadata,
+  resolvePublicRequestOrg,
+  resolvePublicShareSubject,
+} from '@/lib/listings/public-share-metadata'
 import { isListingUuid } from '@/lib/listings/listing-href'
 import { isReservedListingSlug } from '@/lib/listings/reserved-slugs'
 import { getOrgBySlug } from '@/lib/orgs'
@@ -21,6 +28,15 @@ export const fetchCache = 'force-no-store'
 interface PageProps {
   params: Promise<{ slug: string }>
   searchParams: Promise<{ org?: string }>
+}
+
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
+  const { slug } = await params
+  const { org: orgSlugParam } = await searchParams
+  const org = await resolvePublicRequestOrg(orgSlugParam)
+  if (!org) return fallbackPublicShareMetadata()
+  const subject = await resolvePublicShareSubject({ orgId: org.id, slug })
+  return buildPublicShareMetadata(subject)
 }
 
 export default async function PublicSlugPage({ params, searchParams }: PageProps) {

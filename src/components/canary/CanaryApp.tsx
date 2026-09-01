@@ -5,7 +5,8 @@
 // Supabase data (loaded server-side in src/app/(canary)/app/page.tsx).
 import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { Bell, CalendarIcon, ChevronDown, ImageOff, Repeat2, Search, Settings, UserRound, X } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useAppRouter } from './useAppRouter'
+import NavProgress from './NavProgress'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { activateDraftListing, deleteDraftListing, saveDraftListing, savePaymentEntry } from '@/app/actions/canary'
@@ -311,8 +312,9 @@ export default function CanaryApp({
   userAvatarUrl = null,
   userOrgId = '',
 }: CanaryAppProps) {
-  const router = useRouter()
+  const router = useAppRouter()
   const [, startTransition] = useTransition()
+  const [viewPending, startViewTransition] = useTransition()
 
   const [view, setView] = useState(userRole === 'Vendor' ? 'projects' : 'dashboard')
   const [theme, setTheme] = useState<'dark' | 'light'>('light')
@@ -938,12 +940,14 @@ export default function CanaryApp({
   const [pipelineListingId, setPipelineListingId] = useState<string | null>(null)
 
   const navigateView = useCallback((key: string) => {
-    setView(key)
-    setDrawer(null)
-    setMoreOpen(false)
-    setPipelinePropertyId(null)
-    setPipelineListingId(null)
-  }, [])
+    startViewTransition(() => {
+      setView(key)
+      setDrawer(null)
+      setMoreOpen(false)
+      setPipelinePropertyId(null)
+      setPipelineListingId(null)
+    })
+  }, [startViewTransition])
 
   const openListingPipeline = useCallback(
     (opts: { propertyId: string | null; listingId: string }) => {
@@ -2233,8 +2237,10 @@ export default function CanaryApp({
     if (target.kind === 'href') {
       router.push(target.href)
     } else if (target.kind === 'view') {
-      setView(target.view)
-      setDrawer(null)
+      startViewTransition(() => {
+        setView(target.view)
+        setDrawer(null)
+      })
     } else if (target.drawer) {
       if (target.drawer.kind === 'property') {
         router.push(propertyHref(target.drawer.id))
@@ -2254,7 +2260,7 @@ export default function CanaryApp({
     }
     setSearchExpanded(false)
     setSearch('')
-  }, [view, router])
+  }, [view, router, startViewTransition])
 
   const askLinkIndex = useMemo(() => {
     const items: { label: string; target: AskNavTarget }[] = []
@@ -2651,6 +2657,9 @@ export default function CanaryApp({
       data-theme={theme}
       data-sidebar={sidebarCollapsed ? 'collapsed' : 'expanded'}
     >
+      <React.Suspense fallback={null}>
+        <NavProgress pending={viewPending} />
+      </React.Suspense>
       <input
         ref={avatarInputRef}
         type="file"
@@ -3354,6 +3363,7 @@ export default function CanaryApp({
                               role="button"
                               tabIndex={0}
                               onClick={() => router.push(propertyHref(p.id))}
+                              onPointerEnter={() => router.prefetch(propertyHref(p.id))}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault()
@@ -3436,7 +3446,7 @@ export default function CanaryApp({
               {showDefault && (
                 <div className="cy-card" style={{ overflow: 'hidden' }}>
                   {(genRows as CanaryPerson[]).slice(0, 120).map((pe) => (
-                    <div key={pe.id} className="cy-hov" onClick={() => router.push(personHref(pe.id))} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer', minWidth: 0 }}>
+                    <div key={pe.id} className="cy-hov" onClick={() => router.push(personHref(pe.id))} onPointerEnter={() => router.prefetch(personHref(pe.id))} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer', minWidth: 0 }}>
                       <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--elev)', border: '1px solid var(--border)', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 12, color: 'var(--dim)', flex: 'none' }}>{(pe.name || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}</div>
                       <div style={{ minWidth: 0, flex: 2 }}>
                         <div style={{ fontWeight: 650, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pe.name || '—'}</div>

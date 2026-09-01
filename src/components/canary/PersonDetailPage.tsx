@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
+import { useAppRouter } from './useAppRouter'
 import { toast } from 'sonner'
 import { invitePersonToPortal } from '@/app/(manager)/people/actions'
 import { listingHref, moneyCad, personHref, propertyHref, shortAddress, tenantNamesFromInfo } from '@/lib/canary/entity-href'
@@ -22,7 +22,7 @@ export default function PersonDetailPage({
   priv: boolean
   chrome: EntityChrome
 }) {
-  const router = useRouter()
+  const router = useAppRouter()
   const goBack = useEntityBack('/app?view=people')
   const [, startTransition] = useTransition()
   const [overlay, setOverlay] = useState<DrawerState>(null)

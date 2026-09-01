@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useAppRouter } from './useAppRouter'
 import {
   activateDraftListing,
   deleteDraftListing,
@@ -35,7 +35,7 @@ export default function ListingDetailPage({
   canEdit: boolean
   chrome: EntityChrome
 }) {
-  const router = useRouter()
+  const router = useAppRouter()
   const goBack = useEntityBack('/app')
   const listing = db.drafts.find((d) => d.id === id)
   const property = listing

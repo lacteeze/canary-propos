@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useCallback, useEffect, useState, type ReactNode } from 'react'
+import NavProgress from './NavProgress'
+import { useAppRouter } from './useAppRouter'
 import { Bell, ChevronDown, Settings } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { CanaryRole } from '@/lib/canary/types'
@@ -44,7 +45,7 @@ function useMediaQuery(query: string) {
 }
 
 export function useEntityBack(fallbackHref: string) {
-  const router = useRouter()
+  const router = useAppRouter()
   return useCallback(() => {
     if (typeof window !== 'undefined' && window.history.length > 1) {
       router.back()
@@ -84,7 +85,7 @@ export function EntityPageShell({
   activeView: string
   pageTitle: string
 }) {
-  const router = useRouter()
+  const router = useAppRouter()
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -215,6 +216,9 @@ export function EntityPageShell({
       data-theme={theme}
       data-sidebar={sidebarCollapsed ? 'collapsed' : 'expanded'}
     >
+      <Suspense fallback={null}>
+        <NavProgress />
+      </Suspense>
       <AppSidebar
         theme={theme}
         collapsed={sidebarCollapsed}

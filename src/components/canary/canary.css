@@ -5429,3 +5429,38 @@
   }
 }
 
+.cnry .cy-nav-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 6px 14px;
+  background: var(--panel);
+  border-bottom: 2px solid var(--accent);
+  color: var(--text);
+  pointer-events: none;
+}
+.cnry .cy-nav-progress-bar {
+  width: 28px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+.cnry .cy-nav-progress-label {
+  font-size: 13px;
+  font-weight: 700;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .cnry .cy-nav-progress-bar {
+    animation: cy-nav-pulse 0.9s ease-in-out infinite;
+  }
+}
+@keyframes cy-nav-pulse {
+  50% { opacity: 0.35; }
+}
+

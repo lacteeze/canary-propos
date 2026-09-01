@@ -1,6 +1,7 @@
 // src/lib/canary/load-db.ts
 // Loads live Supabase data (scoped by RLS for the signed-in user) and maps it
 // into the CanaryDb shape consumed by the CanaryApp client.
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { hasGarage } from '@/lib/listings/browse-utils'
@@ -143,7 +144,7 @@ function utilitiesLabel(description: string | null): string {
   return 'Not included'
 }
 
-export async function getCaller(): Promise<Caller | 'no-user' | 'no-person'> {
+export const getCaller = cache(async function getCaller(): Promise<Caller | 'no-user' | 'no-person'> {
   const supabase = await createClient()
   const {
     data: { user },
@@ -182,15 +183,25 @@ export async function getCaller(): Promise<Caller | 'no-user' | 'no-person'> {
     email: resolved.email ?? '',
     avatarPath: resolved.avatar_path ?? null,
   }
-}
+})
 
-export async function loadCanaryDb(
+export function loadCanaryDb(
   orgId: string,
   options?: { redactForVendor?: boolean; vendorPersonId?: string }
 ): Promise<CanaryDb> {
+  return loadCanaryDbCached(
+    orgId,
+    options?.redactForVendor === true,
+    options?.vendorPersonId?.trim() || '',
+  )
+}
+
+const loadCanaryDbCached = cache(async function loadCanaryDbCached(
+  orgId: string,
+  redactForVendor: boolean,
+  vendorPersonId: string,
+): Promise<CanaryDb> {
   const supabase = await createClient()
-  const redactForVendor = options?.redactForVendor === true
-  const vendorPersonId = options?.vendorPersonId?.trim() || ''
 
   // Safety caps keep a single Canary shell load from unbounded egress.
   // Portfolio tables (units/leases/people) stay generous so the app remains complete for ~150+ units.
@@ -930,4 +941,4 @@ export async function loadCanaryDb(
   }
 
   return { orgId, properties, leases, portfolios, projects, people, drafts, payments, inquiries, social, onboardings }
-}
+})

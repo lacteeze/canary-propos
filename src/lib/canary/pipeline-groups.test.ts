@@ -13,7 +13,7 @@ function inquiry(
   return {
     listingId: null,
     propertyId: null,
-    type: 'showing',
+    type: 'inquiry',
     email: 't@example.com',
     phone: '',
     status: 'new',

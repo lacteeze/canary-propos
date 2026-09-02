@@ -44,8 +44,8 @@ async function heroStoragePath(propertyId: string, photoPaths: string[] | null):
   return paths[0] ?? null
 }
 
-function imageResponse(bytes: Uint8Array, storagePath: string): NextResponse {
-  return new NextResponse(bytes, {
+function imageResponse(body: ArrayBuffer, storagePath: string): NextResponse {
+  return new NextResponse(body, {
     status: 200,
     headers: {
       'Content-Type': contentTypeForPath(storagePath),
@@ -57,7 +57,7 @@ function imageResponse(bytes: Uint8Array, storagePath: string): NextResponse {
 async function downloadShareSizedHero(
   supabase: ReturnType<typeof createAdminClient>,
   storagePath: string,
-): Promise<Uint8Array | null> {
+): Promise<ArrayBuffer | null> {
   const { data, error } = await supabase.storage.from('org-assets').createSignedUrl(storagePath, 120, {
     transform: { width: 1200, quality: 70, resize: 'contain' },
   })
@@ -65,9 +65,9 @@ async function downloadShareSizedHero(
   try {
     const res = await fetch(data.signedUrl)
     if (!res.ok) return null
-    const bytes = new Uint8Array(await res.arrayBuffer())
-    if (!bytes.length) return null
-    return bytes
+    const body = await res.arrayBuffer()
+    if (!body.byteLength) return null
+    return body
   } catch (err) {
     console.warn('[og-property] share-size fetch failed:', err)
     return null
@@ -129,7 +129,7 @@ export async function GET(
       return orgIconFallback()
     }
 
-    return imageResponse(new Uint8Array(await data.arrayBuffer()), storagePath)
+    return imageResponse(await data.arrayBuffer(), storagePath)
   } catch (err) {
     console.error('[og-property] unexpected error:', err)
     return orgIconFallback()

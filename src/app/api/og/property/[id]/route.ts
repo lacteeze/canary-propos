@@ -4,6 +4,7 @@
 
 import { NextResponse } from 'next/server'
 import { isListingUuid } from '@/lib/listings/listing-href'
+import { binaryResponseBody } from '@/lib/http/binary-response-body'
 import {
   loadPropertyById,
   publicPropertyLookupClient,
@@ -45,7 +46,7 @@ async function heroStoragePath(propertyId: string, photoPaths: string[] | null):
 }
 
 function imageResponse(bytes: Uint8Array, storagePath: string): NextResponse {
-  return new NextResponse(bytes, {
+  return new NextResponse(binaryResponseBody(bytes), {
     status: 200,
     headers: {
       'Content-Type': contentTypeForPath(storagePath),

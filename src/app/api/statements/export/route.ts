@@ -12,6 +12,7 @@ import {
 } from '@/lib/billing/period-summary'
 import { ClientStatementPDF } from '@/components/payments/ClientStatementPDF'
 import { StatementPDF } from '@/components/payments/StatementPDF'
+import { binaryResponseBody } from '@/lib/http/binary-response-body'
 
 export const runtime = 'nodejs'
 
@@ -111,7 +112,7 @@ export async function GET(request: NextRequest) {
         },
       }) as any
     )
-    return new NextResponse(new Uint8Array(buffer), {
+    return new NextResponse(binaryResponseBody(new Uint8Array(buffer)), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="portfolio-${year}-${month}.pdf"`,
@@ -160,7 +161,7 @@ export async function GET(request: NextRequest) {
         },
       }) as any
     )
-    return new NextResponse(new Uint8Array(buffer), {
+    return new NextResponse(binaryResponseBody(new Uint8Array(buffer)), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="property-${year}-${month}.pdf"`,

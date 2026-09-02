@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { binaryResponseBody } from '@/lib/http/binary-response-body'
 import {
   fetchDriveThumbnail,
   refreshDriveTokenIfNeeded,
@@ -55,7 +56,7 @@ export async function GET(
       return new NextResponse(null, { status: 404 })
     }
 
-    return new NextResponse(new Uint8Array(thumb.buffer), {
+    return new NextResponse(binaryResponseBody(new Uint8Array(thumb.buffer)), {
       status: 200,
       headers: {
         'Content-Type': thumb.contentType,

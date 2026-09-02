@@ -2,6 +2,7 @@
 // Falls back to the static Canary mark so tabs never break.
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { binaryResponseBody } from '@/lib/http/binary-response-body'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
@@ -15,7 +16,7 @@ const CACHE_CONTROL = 'public, max-age=86400, stale-while-revalidate=604800, imm
 async function fallbackIcon(): Promise<NextResponse> {
   try {
     const buf = await readFile(FALLBACK_PATH)
-    return new NextResponse(buf, {
+    return new NextResponse(binaryResponseBody(buf), {
       status: 200,
       headers: {
         'Content-Type': 'image/png',
@@ -62,7 +63,7 @@ export async function GET() {
               ? 'image/svg+xml'
               : 'image/jpeg'
 
-    return new NextResponse(bytes, {
+    return new NextResponse(binaryResponseBody(bytes), {
       status: 200,
       headers: {
         'Content-Type': contentType,

@@ -5,6 +5,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { addMonthsToIsoDate, toListingIsoDate } from '@/lib/canary/lease-term'
 import { createListing, updateListing } from '@/app/actions/listings'
 import { generateListingDescription } from '@/app/actions/listing-ai'
 import { toast } from 'sonner'
@@ -24,6 +25,7 @@ interface ExistingListing {
   highlights: string[] | null
   display_rent: number | null
   available_from: string | null
+  available_until?: string | null
   listing_status: string
 }
 
@@ -63,7 +65,8 @@ export function ListingForm({
   const [displayRent, setDisplayRent] = useState(
     existingListing?.display_rent != null ? String(existingListing.display_rent) : ''
   )
-  const [availableFrom, setAvailableFrom] = useState(existingListing?.available_from ?? '')
+  const [availableFrom, setAvailableFrom] = useState(toListingIsoDate(existingListing?.available_from))
+  const [availableUntil, setAvailableUntil] = useState(toListingIsoDate(existingListing?.available_until))
   const [status, setStatus] = useState(existingListing?.listing_status ?? 'draft')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -90,6 +93,7 @@ export function ListingForm({
       highlights,
       display_rent: displayRent ? parseFloat(displayRent) : null,
       available_from: availableFrom || null,
+      available_until: availableUntil || null,
       status,
       property_id: propertyId,
     }
@@ -236,9 +240,23 @@ export function ListingForm({
               <input
                 type="date"
                 value={availableFrom}
-                onChange={(e) => setAvailableFrom(e.target.value)}
+                onChange={(e) => {
+                  const start = e.target.value
+                  setAvailableFrom(start)
+                  setAvailableUntil((prev) => prev || (start ? addMonthsToIsoDate(start, 12) || '' : ''))
+                }}
                 className="mt-1 block w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-stone-700">Lease end</label>
+              <input
+                type="date"
+                value={availableUntil}
+                onChange={(e) => setAvailableUntil(e.target.value)}
+                className="mt-1 block w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              />
+              <p className="mt-1 text-xs text-stone-400">Shown on the public listing. Required for mid-term.</p>
             </div>
           </div>
 

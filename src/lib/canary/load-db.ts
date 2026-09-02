@@ -331,6 +331,7 @@ const loadCanaryDbCached = cache(async function loadCanaryDbCached(
         .in('field_name', [
           'display_rent',
           'available_from',
+          'available_until',
           'listing_title',
           'listing_description',
           'highlights',

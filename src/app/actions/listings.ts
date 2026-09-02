@@ -113,6 +113,10 @@ const listingSchema = z.object({
   highlights: z.array(z.string()).default([]),
   display_rent: z.coerce.number().positive().optional().nullable(),
   available_from: z.string().optional().nullable(),
+  available_until: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(''), z.null()])
+    .optional()
+    .nullable(),
   status: listingStatusEnum.default('draft'),
 })
 
@@ -124,6 +128,7 @@ export async function createListing(data: {
   highlights?: string[]
   display_rent?: number | null
   available_from?: string | null
+  available_until?: string | null
   status?: string
   property_id: string
 }): Promise<ActionResult> {
@@ -168,7 +173,8 @@ export async function createListing(data: {
     listing_description: parsed.data.listing_description ?? null,
     highlights: parsed.data.highlights.length > 0 ? parsed.data.highlights : null,
     display_rent: parsed.data.display_rent ?? null,
-    available_from: parsed.data.available_from ?? null,
+    available_from: parsed.data.available_from || null,
+    available_until: parsed.data.available_until || null,
     status: parsed.data.status,
     slug,
   })
@@ -179,6 +185,7 @@ export async function createListing(data: {
   }
 
   revalidatePath('/properties/' + data.property_id)
+  if (slug) revalidatePath(`/${slug}`)
   return { success: true }
 }
 
@@ -192,6 +199,7 @@ export async function updateListing(
     highlights?: string[]
     display_rent?: number | null
     available_from?: string | null
+    available_until?: string | null
     status?: string
     property_id: string
   }
@@ -211,7 +219,7 @@ export async function updateListing(
   // T-03-08: org_id guard on update
   const { data: existing, error: fetchError } = await ctx.supabase
     .from('listings')
-    .select('id, slug, unit_id, listing_title, listing_description, display_rent, available_from, highlights, status, published_at')
+    .select('id, slug, unit_id, listing_title, listing_description, display_rent, available_from, available_until, highlights, status, published_at')
     .eq('id', id)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -239,7 +247,8 @@ export async function updateListing(
     listing_description: parsed.data.listing_description ?? null,
     highlights: parsed.data.highlights.length > 0 ? parsed.data.highlights : null,
     display_rent: parsed.data.display_rent ?? null,
-    available_from: parsed.data.available_from ?? null,
+    available_from: parsed.data.available_from || null,
+    available_until: parsed.data.available_until || null,
     status: parsed.data.status,
     updated_at: new Date().toISOString(),
   }
@@ -271,6 +280,9 @@ export async function updateListing(
   }
 
   revalidatePath('/properties/' + data.property_id)
+  revalidatePath(`/listings/${id}`)
+  const publicSlug = updatePayload.slug ?? existing.slug
+  if (publicSlug) revalidatePath(`/${publicSlug}`)
   return { success: true }
 }
 

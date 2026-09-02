@@ -9,6 +9,7 @@ import { fontDisplay } from '@/lib/landing/typography'
 import type { CityGroup } from '@/lib/listings/browse-types'
 import { publicListingAmenityTags, resolveParkingDisplay } from '@/lib/listings/browse-utils'
 import { formatListingLeaseEnd } from '@/lib/listings/public-property-page'
+import { deriveTermTypeFromHighlights } from '@/lib/landing/listing-term'
 
 function formatCAD(n: number) {
   return new Intl.NumberFormat('en-CA', {
@@ -27,7 +28,7 @@ export type ListingDetailListing = {
   highlights: string[] | null
   display_rent: number | null
   available_from: string | null
-  available_until?: string | null
+  available_until: string | null
   status: string
   slug?: string | null
   units: {
@@ -151,6 +152,7 @@ export function ListingDetailView({
       })
     : null
   const leaseEndLabel = formatListingLeaseEnd(listing.available_until)
+  const isMidTerm = deriveTermTypeFromHighlights(listing.highlights) === 'mid'
 
   const briefParking =
     property?.listing_brief &&
@@ -204,7 +206,9 @@ export function ListingDetailView({
           </Link>
         }
       >
-        <p className="cpub-stat-pill cpub-listing-hero-eyebrow">Available for rent</p>
+        <p className="cpub-stat-pill cpub-listing-hero-eyebrow">
+          {isMidTerm ? 'Mid-term rental' : 'Available for rent'}
+        </p>
         <h1 className="cpub-listing-hero-title">{heroAddress}</h1>
 
         <div className="cpub-listing-hero-meta">
@@ -230,6 +234,12 @@ export function ListingDetailView({
             <div className="cpub-listing-hero-stat">
               {unit.sq_footage}
               <span>Sq ft</span>
+            </div>
+          )}
+          {isMidTerm && (
+            <div className="cpub-listing-hero-stat">
+              <span>Term</span>
+              Mid-term
             </div>
           )}
           {availableLabel && (
@@ -408,8 +418,20 @@ export function ListingDetailView({
                     Available {availableLabel}
                   </p>
                 )}
+                {isMidTerm && (
+                  <p style={{ margin: availableLabel ? '6px 0 0' : '8px 0 0', fontSize: 14, fontWeight: 650, color: 'var(--text)' }}>
+                    Mid-term — not a long-term tenancy
+                  </p>
+                )}
                 {leaseEndLabel && (
-                  <p style={{ margin: availableLabel ? '4px 0 0' : '8px 0 0', fontSize: 13.5, color: 'var(--dim)' }}>
+                  <p
+                    style={{
+                      margin: availableLabel || isMidTerm ? '4px 0 0' : '8px 0 0',
+                      fontSize: 15,
+                      fontWeight: 650,
+                      color: 'var(--text)',
+                    }}
+                  >
                     Lease ends {leaseEndLabel}
                   </p>
                 )}

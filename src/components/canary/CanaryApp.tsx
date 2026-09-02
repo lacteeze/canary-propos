@@ -752,12 +752,18 @@ export default function CanaryApp({
     if (!draft || !draft.propId || draftSaving) return
     setDraftSaving(true)
     setDraftError('')
+    const advertisedEnd =
+      draft.end ||
+      (draft.termType !== 'month_to_month' && draft.start
+        ? addMonthsToIsoDate(draft.start, 12)
+        : null) ||
+      null
     const res = await saveDraftListing({
       id: draft.id,
       unitId: draft.propId,
       rent: draft.rent === '' ? null : rentNum(draft.rent),
       start: draft.start || null,
-      end: draft.end || null,
+      end: advertisedEnd,
       description: draft.description || null,
       pets: draft.pets,
       utilities: draft.utilities,

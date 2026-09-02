@@ -1,5 +1,6 @@
 'use client'
 
+import { addMonthsToIsoDate } from '@/lib/canary/lease-term'
 import React, { useCallback, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import type { CanaryDraft, CanaryLease, CanaryOnboarding, CanaryPerson, CanaryPortfolio, CanaryProperty } from '@/lib/canary/types'
@@ -119,6 +120,9 @@ export default function PropertySetupWizard({
   const [listingTitle, setListingTitle] = useState(draft?.title || property.address.split(',')[0])
   const [listingRent, setListingRent] = useState(draft?.rent || rent)
   const [listingStart, setListingStart] = useState(draft?.start || '')
+  const [listingEnd, setListingEnd] = useState(
+    draft?.end || (draft?.start ? addMonthsToIsoDate(draft.start, 12) || '' : ''),
+  )
   const [listingDesc, setListingDesc] = useState(draft?.description || '')
 
   const [tenantId, setTenantId] = useState(lease?.tenantIds?.split(',')[0]?.trim() || '')
@@ -257,11 +261,15 @@ export default function PropertySetupWizard({
     if (busy) return
     setBusy(true)
     setError('')
+    const advertisedEnd =
+      listingEnd || (listingStart ? addMonthsToIsoDate(listingStart, 12) : null) || null
+    if (advertisedEnd && advertisedEnd !== listingEnd) setListingEnd(advertisedEnd)
     const res = await saveDraftListing({
       id: draft?.id ?? null,
       unitId: property.unitId,
       rent: listingRent === '' ? null : listingRent,
       start: listingStart || null,
+      end: advertisedEnd,
       description: listingDesc || listingTitle || null,
       pets: pets || null,
       utilities: utilities || null,
@@ -595,7 +603,30 @@ export default function PropertySetupWizard({
               </label>
               <label style={label}>
                 Available from
-                <input type="date" value={listingStart} onChange={(e) => setListingStart(e.target.value)} style={field} disabled={busy} />
+                <input
+                  type="date"
+                  value={listingStart}
+                  onChange={(e) => {
+                    const start = e.target.value
+                    setListingStart(start)
+                    setListingEnd((prev) => prev || (start ? addMonthsToIsoDate(start, 12) || '' : ''))
+                  }}
+                  style={field}
+                  disabled={busy}
+                />
+              </label>
+              <label style={label}>
+                Lease end
+                <input
+                  type="date"
+                  value={listingEnd}
+                  onChange={(e) => setListingEnd(e.target.value)}
+                  style={field}
+                  disabled={busy}
+                />
+                <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--faint)', fontWeight: 500 }}>
+                  Shown to tenants on the public listing. Mid-term homes need a fixed end date.
+                </span>
               </label>
               <label style={label}>
                 Description

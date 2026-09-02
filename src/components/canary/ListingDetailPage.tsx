@@ -75,6 +75,19 @@ export default function ListingDetailPage({
 
   const submit = async () => {
     if (!form.propId || saving || !canEdit) return
+    const advertisedEnd =
+      form.end ||
+      (form.termType !== 'month_to_month' && form.start
+        ? addMonthsToIsoDate(form.start, 12)
+        : null) ||
+      null
+    if (form.status === 'published' && form.termType !== 'month_to_month' && !advertisedEnd) {
+      setError('Add a lease end date before publishing. Tenants need to see when the term finishes.')
+      return
+    }
+    if (advertisedEnd && advertisedEnd !== form.end) {
+      setForm((prev) => ({ ...prev, end: advertisedEnd }))
+    }
     setSaving(true)
     setError('')
     const res = await saveDraftListing({
@@ -84,7 +97,7 @@ export default function ListingDetailPage({
       rentalCredit: form.rentalCredit === '' ? null : rentNum(form.rentalCredit),
       rentalCreditExpiry: form.rentalCreditExpiry || null,
       start: form.start || null,
-      end: form.end || null,
+      end: advertisedEnd,
       description: form.description || null,
       pets: form.pets,
       utilities: form.utilities,
@@ -327,6 +340,9 @@ export default function ListingDetailPage({
                 placeholder={form.termType === 'month_to_month' ? 'Optional end date' : 'Pick end date'}
               />
             </div>
+            <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--faint)', fontWeight: 500 }}>
+              Shown to tenants on the public listing. Mid-term homes need a fixed end date.
+            </span>
           </label>
           <label>
             <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Beds</span>
@@ -477,7 +493,7 @@ function listingToForm(listing: CanaryDraft | undefined) {
     rentalCredit: listing?.rentalCredit ?? '',
     rentalCreditExpiry: listing?.rentalCreditExpiry ?? '',
     start: listing?.start ?? '',
-    end: listing?.end ?? '',
+    end: listing?.end || (listing?.start ? addMonthsToIsoDate(listing.start, 12) || '' : ''),
     beds: listing?.beds ?? '',
     baths: listing?.baths ?? '',
     parking: listing?.parking ?? '',

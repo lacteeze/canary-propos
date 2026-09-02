@@ -99,7 +99,7 @@ export default async function PropertyDetailPage({ params }: PageProps) {
   const { data: listings } = unitIds.length > 0
     ? await supabase
         .from('listings')
-        .select('id, unit_id, listing_title, listing_description, highlights, display_rent, available_from, status')
+        .select('id, unit_id, listing_title, listing_description, highlights, display_rent, available_from, available_until, status')
         .in('unit_id', unitIds)
         .eq('org_id', callerPerson.org_id)
     : { data: [] }
@@ -496,6 +496,7 @@ export default async function PropertyDetailPage({ params }: PageProps) {
                             ? ` · ${new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 0 }).format(listing.display_rent)}/mo`
                             : ' · Rent not set'}
                           {listing.available_from ? ` · Available ${listing.available_from}` : ''}
+                          {listing.available_until ? ` · Lease ends ${listing.available_until}` : ''}
                         </p>
                         {listing.listing_description && (
                           <p className="mt-2 text-sm text-stone-600 line-clamp-2">{listing.listing_description}</p>
@@ -534,6 +535,7 @@ export default async function PropertyDetailPage({ params }: PageProps) {
                               highlights: listing.highlights,
                               display_rent: listing.display_rent,
                               available_from: listing.available_from,
+                              available_until: listing.available_until,
                               listing_status: listing.status,
                             }}
                           />

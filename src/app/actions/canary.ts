@@ -17,6 +17,29 @@ import {
 type ActionResult = { success: true; id?: string } | { success: false; error: string }
 type ListingUpsert = Database['public']['Tables']['listings']['Insert']
 
+function listingSaveError(error: { message?: string } | null | undefined): string {
+  const msg = error?.message || ''
+  if (msg.includes('listing_status')) {
+    return 'Could not save — run database migrations 0030_listing_status_renewal_sent and 0060_listing_status_declined.'
+  }
+  if (msg.includes('rental_credit')) {
+    return 'Could not save — run database migration 0059_listings_rental_credit.'
+  }
+  if (msg.includes('available_until')) {
+    return 'Could not save lease end — run database migration 0063_listings_available_until.'
+  }
+  return msg || 'Failed to save the draft listing.'
+}
+
+function revalidateListingSurfaces(opts: { listingId?: string | null; slug?: string | null }) {
+  revalidatePath('/app')
+  if (opts.listingId) {
+    revalidatePath(`/app/listings/${opts.listingId}`)
+    revalidatePath(`/listings/${opts.listingId}`)
+  }
+  if (opts.slug) revalidatePath(`/${opts.slug}`)
+}
+
 async function getStaffContext() {
   const supabase = await createClient()
   const {
@@ -138,15 +161,13 @@ export async function saveDraftListing(input: {
     listing_description: descriptionParts.join(' ') || null,
     display_rent: d.rent ?? null,
     available_from: d.start || null,
+    available_until: d.end || null,
     status: d.status,
     updated_at: new Date().toISOString(),
   }
   if (Object.prototype.hasOwnProperty.call(input, 'rentalCredit')) {
     record.rental_credit = d.rentalCredit && d.rentalCredit > 0 ? d.rentalCredit : null
     record.rental_credit_expiry = d.rentalCreditExpiry || null
-  }
-  if (input.end !== undefined) {
-    record.available_until = d.end || null
   }
   if (d.status === 'published') {
     record.published_at = existing?.published_at ?? new Date().toISOString()
@@ -187,15 +208,9 @@ export async function saveDraftListing(input: {
       .eq('org_id', ctx.person.org_id)
     if (error) {
       console.error('[saveDraftListing:update]', error)
-      const msg = error.message?.includes('listing_status')
-        ? 'Could not save — run database migrations 0030_listing_status_renewal_sent and 0060_listing_status_declined.'
-        : error.message?.includes('rental_credit')
-          ? 'Could not save — run database migration 0059_listings_rental_credit.'
-        : error.message || 'Failed to save the draft listing.'
-      return { success: false, error: msg }
+      return { success: false, error: listingSaveError(error) }
     }
-    revalidatePath('/app')
-    revalidatePath(`/app/listings/${d.id}`)
+    revalidateListingSurfaces({ listingId: d.id, slug: record.slug ?? existing?.slug })
     return { success: true, id: d.id }
   }
 
@@ -203,19 +218,13 @@ export async function saveDraftListing(input: {
   const { data: inserted, error } = await ctx.supabase
     .from('listings')
     .upsert(record, { onConflict: 'unit_id' })
-    .select('id')
+    .select('id, slug')
     .single()
   if (error) {
     console.error('[saveDraftListing:insert]', error)
-    const msg = error.message?.includes('listing_status')
-      ? 'Could not save — run database migrations 0030_listing_status_renewal_sent and 0060_listing_status_declined.'
-      : error.message?.includes('rental_credit')
-        ? 'Could not save — run database migration 0059_listings_rental_credit.'
-      : error.message || 'Failed to save the draft listing.'
-    return { success: false, error: msg }
+    return { success: false, error: listingSaveError(error) }
   }
-  revalidatePath('/app')
-  if (inserted?.id) revalidatePath(`/app/listings/${inserted.id}`)
+  revalidateListingSurfaces({ listingId: inserted?.id, slug: inserted?.slug ?? record.slug })
   return { success: true, id: inserted?.id }
 }
 

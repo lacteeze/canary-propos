@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { hasGarage } from '@/lib/listings/browse-utils'
 import { normalizeLeaseTermType, toListingIsoDate } from './lease-term'
+import { deriveTermTypeFromHighlights } from '@/lib/landing/listing-term'
 import type {
   CanaryDb,
   CanaryDraft,
@@ -261,7 +262,7 @@ const loadCanaryDbCached = cache(async function loadCanaryDbCached(
       supabase
         .from('listings')
         .select(
-          `id, listing_title, listing_description, display_rent, status, available_from, available_until, updated_at, published_at, slug,
+          `id, listing_title, listing_description, display_rent, status, available_from, available_until, highlights, updated_at, published_at, slug,
            units!unit_id(id, unit_number, bedrooms, bathrooms, amenities,
              properties!property_id(id, street_address, city, listing_brief))`
         )
@@ -353,7 +354,7 @@ const loadCanaryDbCached = cache(async function loadCanaryDbCached(
   const declinedListings = await supabase
     .from('listings')
     .select(
-      `id, listing_title, listing_description, display_rent, status, available_from, available_until, updated_at, published_at, slug,
+      `id, listing_title, listing_description, display_rent, status, available_from, available_until, highlights, updated_at, published_at, slug,
        units!unit_id(id, unit_number, bedrooms, bathrooms, amenities,
          properties!property_id(id, street_address, city, listing_brief))`
     )
@@ -770,6 +771,7 @@ const loadCanaryDbCached = cache(async function loadCanaryDbCached(
       rentalCreditExpiry: listingCreditById.get(d.id)?.rental_credit_expiry ?? '',
       start: toListingIsoDate(d.available_from),
       end: toListingIsoDate(d.available_until),
+      listingTerm: deriveTermTypeFromHighlights(d.highlights),
       beds: d.units.bedrooms != null ? String(d.units.bedrooms) : '',
       baths: d.units.bathrooms != null ? String(d.units.bathrooms).replace(/\.0$/, '') : '',
       parking: (() => {

@@ -244,6 +244,8 @@ export interface CanaryDraft {
   rentalCreditExpiry: string
   start: string
   end: string
+  /** Public card tag: long-term vs mid-term (from listing highlights). */
+  listingTerm: 'long' | 'mid'
   beds: string
   baths: string
   parking: string

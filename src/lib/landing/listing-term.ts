@@ -9,6 +9,16 @@ export function leaseHighlightForTermType(termType: ListingTermType): string {
   return termType === 'mid' ? MID_TERM_LEASE : LONG_TERM_LEASE
 }
 
+const TERM_HIGHLIGHT_RE = /^(long|mid)[- ]term(?: lease)?$/i
+
+export function withListingTermHighlight(
+  highlights: string[] | null | undefined,
+  termType: ListingTermType,
+): string[] {
+  const rest = (highlights ?? []).filter((h) => !TERM_HIGHLIGHT_RE.test(h.trim()))
+  return [leaseHighlightForTermType(termType), ...rest]
+}
+
 export function deriveTermTypeFromHighlights(
   highlights: string[] | null | undefined
 ): ListingTermType {

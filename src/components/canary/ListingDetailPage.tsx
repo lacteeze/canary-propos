@@ -11,6 +11,7 @@ import {
 import { generateListingDescription } from '@/app/actions/listing-ai'
 import { moneyCad, propertyHref, shortAddress } from '@/lib/canary/entity-href'
 import { addMonthsToIsoDate, validateLeaseDates, type LeaseTermType } from '@/lib/canary/lease-term'
+import type { ListingTermType } from '@/lib/landing/listing-term'
 import type { CanaryDb, CanaryDraft, DraftListingStatus } from '@/lib/canary/types'
 import { draftStatusBadge } from '@/lib/canary/types'
 import { listingPublicHref } from '@/lib/listings/listing-href'
@@ -81,7 +82,11 @@ export default function ListingDetailPage({
         ? addMonthsToIsoDate(form.start, 12)
         : null) ||
       null
-    if (form.status === 'published' && form.termType !== 'month_to_month' && !advertisedEnd) {
+    if (
+      form.status === 'published' &&
+      !advertisedEnd &&
+      (form.listingTerm === 'mid' || form.termType !== 'month_to_month')
+    ) {
       setError('Add a lease end date before publishing. Tenants need to see when the term finishes.')
       return
     }
@@ -98,6 +103,7 @@ export default function ListingDetailPage({
       rentalCreditExpiry: form.rentalCreditExpiry || null,
       start: form.start || null,
       end: advertisedEnd,
+      listingTerm: form.listingTerm,
       description: form.description || null,
       pets: form.pets,
       utilities: form.utilities,
@@ -313,7 +319,30 @@ export default function ListingDetailPage({
             </div>
           </label>
           <label>
-            <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Term type</span>
+            <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Listing term</span>
+            <select
+              className="cy-select cy-select--field"
+              value={form.listingTerm}
+              disabled={!canEdit}
+              onChange={(e) => {
+                const listingTerm = e.target.value as ListingTermType
+                setForm((prev) => ({
+                  ...prev,
+                  listingTerm,
+                  termType: listingTerm === 'mid' ? 'fixed_term' : prev.termType,
+                }))
+              }}
+              style={{ marginTop: 4, width: '100%' }}
+            >
+              <option value="long">Long-term</option>
+              <option value="mid">Mid-term</option>
+            </select>
+            <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--faint)', fontWeight: 500 }}>
+              Tag on the public listing cards. Mid-term is not a long-term tenancy.
+            </span>
+          </label>
+          <label>
+            <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Lease term</span>
             <select
               className="cy-select cy-select--field"
               value={form.termType}
@@ -494,6 +523,7 @@ function listingToForm(listing: CanaryDraft | undefined) {
     rentalCreditExpiry: listing?.rentalCreditExpiry ?? '',
     start: listing?.start ?? '',
     end: listing?.end || (listing?.start ? addMonthsToIsoDate(listing.start, 12) || '' : ''),
+    listingTerm: (listing?.listingTerm === 'mid' ? 'mid' : 'long') as ListingTermType,
     beds: listing?.beds ?? '',
     baths: listing?.baths ?? '',
     parking: listing?.parking ?? '',

@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { normalizeLeaseTermType, validateLeaseDates } from '@/lib/canary/lease-term'
 import type { LeaseTermType } from '@/lib/canary/lease-term'
 import { allocateListingSlugPreferProperty } from '@/lib/listings/slugify'
+import { withListingTermHighlight, type ListingTermType } from '@/lib/landing/listing-term'
 import type { Database } from '@/types/supabase'
 import {
   DEFAULT_EXPENSE_RATES,
@@ -82,6 +83,7 @@ const draftSchema = z.object({
   pets: z.string().optional().nullable(),
   utilities: z.string().optional().nullable(),
   status: draftListingStatusSchema.default('draft'),
+  listingTerm: z.enum(['long', 'mid']).optional(),
 })
 
 export async function saveDraftListing(input: {
@@ -96,6 +98,7 @@ export async function saveDraftListing(input: {
   pets?: string | null
   utilities?: string | null
   status: 'draft' | 'renewal_sent' | 'published' | 'declined'
+  listingTerm?: ListingTermType
 }): Promise<ActionResult> {
   const ctx = await getStaffContext()
   if (!ctx) return { success: false, error: 'Only managers can save draft listings.' }
@@ -164,6 +167,9 @@ export async function saveDraftListing(input: {
     available_until: d.end || null,
     status: d.status,
     updated_at: new Date().toISOString(),
+  }
+  if (d.listingTerm) {
+    record.highlights = withListingTermHighlight(existing?.highlights, d.listingTerm)
   }
   if (Object.prototype.hasOwnProperty.call(input, 'rentalCredit')) {
     record.rental_credit = d.rentalCredit && d.rentalCredit > 0 ? d.rentalCredit : null

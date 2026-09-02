@@ -1,6 +1,7 @@
 'use client'
 
 import { addMonthsToIsoDate } from '@/lib/canary/lease-term'
+import type { ListingTermType } from '@/lib/landing/listing-term'
 import React, { useCallback, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import type { CanaryDraft, CanaryLease, CanaryOnboarding, CanaryPerson, CanaryPortfolio, CanaryProperty } from '@/lib/canary/types'
@@ -124,6 +125,9 @@ export default function PropertySetupWizard({
     draft?.end || (draft?.start ? addMonthsToIsoDate(draft.start, 12) || '' : ''),
   )
   const [listingDesc, setListingDesc] = useState(draft?.description || '')
+  const [listingTerm, setListingTerm] = useState<ListingTermType>(
+    draft?.listingTerm === 'mid' ? 'mid' : 'long',
+  )
 
   const [tenantId, setTenantId] = useState(lease?.tenantIds?.split(',')[0]?.trim() || '')
   const [leaseStart, setLeaseStart] = useState(lease?.start || '')
@@ -270,6 +274,7 @@ export default function PropertySetupWizard({
       rent: listingRent === '' ? null : listingRent,
       start: listingStart || null,
       end: advertisedEnd,
+      listingTerm,
       description: listingDesc || listingTitle || null,
       pets: pets || null,
       utilities: utilities || null,
@@ -614,6 +619,19 @@ export default function PropertySetupWizard({
                   style={field}
                   disabled={busy}
                 />
+              </label>
+              <label style={label}>
+                Listing term
+                <select
+                  className="cy-select cy-select--field"
+                  value={listingTerm}
+                  onChange={(e) => setListingTerm(e.target.value as ListingTermType)}
+                  style={{ ...field, marginTop: 4 }}
+                  disabled={busy}
+                >
+                  <option value="long">Long-term</option>
+                  <option value="mid">Mid-term</option>
+                </select>
               </label>
               <label style={label}>
                 Lease end

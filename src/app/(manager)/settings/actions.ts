@@ -14,6 +14,11 @@ const provinceCodes = CANADIAN_PROVINCES.map((p) => p.value) as [string, ...stri
 
 const updateOrgSchema = z.object({
   name: z.string().min(2, 'Organization name must be at least 2 characters').max(80, 'Organization name must be 80 characters or fewer'),
+  slug: z
+    .string()
+    .min(2, 'Slug must be at least 2 characters')
+    .max(60, 'Slug must be 60 characters or fewer')
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Use lowercase letters, numbers, and hyphens'),
   province: z.enum(provinceCodes, { error: 'Please select a valid Canadian province or territory' }),
   logoPath: z.string().nullable().optional(),
 })
@@ -44,6 +49,7 @@ async function getCallerContext() {
 // --- updateOrgProfile: saves org name / province / logo (ORGS-04) ---
 export async function updateOrgProfile(formData: {
   name: string
+  slug: string
   province: string
   logoPath?: string | null
 }): Promise<UpdateOrgResult> {
@@ -62,12 +68,13 @@ export async function updateOrgProfile(formData: {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
   }
 
-  const { name, province, logoPath } = parsed.data
+  const { name, slug, province, logoPath } = parsed.data
 
   const { error } = await ctx.supabase
     .from('organizations')
     .update({
       name: name.trim(),
+      slug: slug.trim(),
       province,
       updated_at: new Date().toISOString(),
       ...(logoPath !== undefined ? { logo_path: logoPath } : {}),

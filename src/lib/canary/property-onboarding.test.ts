@@ -47,17 +47,17 @@ describe('missingMustHaves', () => {
     ).toEqual(['details'])
   })
 
-  it('requires owner even after details are saved', () => {
+  it('treats owner as optional (self-managed)', () => {
     expect(
       missingMustHaves({
         ...vacantReady,
         ownerId: null,
       }),
-    ).toEqual(['owner'])
+    ).toEqual([])
   })
 
-  it('requires a listing photo', () => {
-    expect(missingMustHaves({ ...vacantReady, listingPhotoCount: 0 })).toEqual(['photos'])
+  it('treats photos as a warning, not a blocker', () => {
+    expect(missingMustHaves({ ...vacantReady, listingPhotoCount: 0 })).toEqual([])
   })
 
   it('requires a listing on the vacant path only', () => {
@@ -104,9 +104,10 @@ describe('isOnboardingComplete / inNeedsSetupQueue', () => {
 })
 
 describe('stepAfterListingDraftSave', () => {
-  it('stays in setup on details when the owner is still missing', () => {
-    expect(stepAfterListingDraftSave(['owner'])).toBe('details')
-    expect(stepAfterListingDraftSave(['owner', 'photos'])).toBe('details')
+  it('returns to details only for path or details leftovers', () => {
+    expect(stepAfterListingDraftSave(['details'])).toBe('details')
+    expect(stepAfterListingDraftSave(['photos'])).toBe('photos')
+    expect(stepAfterListingDraftSave(['owner'])).toBe('listing')
   })
 
   it('leaves setup only when nothing is left', () => {

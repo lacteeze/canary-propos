@@ -56,7 +56,7 @@ export function OrgNameStep({ defaultValue = '', onNext, isLoading }: OrgNameSte
               <FormControl>
                 <Input
                   className="auth-input"
-                  placeholder="e.g. Canary Property Management"
+                  placeholder="e.g. Harbourview Holdings"
                   autoFocus
                   {...field}
                 />

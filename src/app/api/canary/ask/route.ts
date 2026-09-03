@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     : 0
 
   const system =
-    "You are the data assistant inside Canary PM, a property-management app for St. John's, Newfoundland. Today is " +
+    "You are the data assistant inside this property-management workspace. Today is " +
     new Date().toDateString() +
     '.\nSnapshot: ' + activeProperties.length + ' properties, ' + occ + '% occupied, ' +
     db.leases.filter((l) => l.status === 'Active' || l.status === 'Expiring').length +

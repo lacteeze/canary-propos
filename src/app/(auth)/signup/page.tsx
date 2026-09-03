@@ -22,6 +22,7 @@ export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [checkEmail, setCheckEmail] = useState<string | null>(null)
 
   const form = useForm<SignUpValues>({
     resolver: zodResolver(signUpSchema),
@@ -33,7 +34,7 @@ export default function SignUpPage() {
     setError(null)
 
     const supabase = createClient()
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: values.email,
       password: values.password,
       options: {
@@ -43,12 +44,40 @@ export default function SignUpPage() {
 
     if (error) {
       setIsLoading(false)
-      setError('Something went wrong creating your account. Please try again.')
+      const already =
+        error.message.toLowerCase().includes('already') ||
+        error.message.toLowerCase().includes('registered')
+      setError(
+        already
+          ? 'An account with this email already exists. Sign in to continue.'
+          : 'Something went wrong creating your account. Please try again.',
+      )
       return
     }
 
-    // After sign-up, redirect to onboarding wizard (D-03: same flow for everyone)
+    if (!data.session) {
+      setIsLoading(false)
+      setCheckEmail(values.email)
+      return
+    }
+
     router.push('/onboarding')
+  }
+
+  if (checkEmail) {
+    return (
+      <div className="auth-card">
+        <p className="auth-kicker">Check your email</p>
+        <h1 className="auth-title">Confirm your address</h1>
+        <p className="auth-sub">
+          Check your email — we sent a confirmation link to {checkEmail}. Open it to finish
+          creating your workspace.
+        </p>
+        <Link href="/login" className="auth-link">
+          Back to sign in
+        </Link>
+      </div>
+    )
   }
 
   return (

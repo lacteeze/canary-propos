@@ -31,6 +31,8 @@ import CanaryImport from './CanaryImport'
 import CanaryActionFab, { importDatasetForView, type FabAction } from './CanaryActionFab'
 import CanaryAddPropertyModal from './CanaryAddPropertyModal'
 import CanaryAddPersonModal from './CanaryAddPersonModal'
+import { EmptyState } from './EmptyState'
+import { SetupBanner } from '@/components/onboarding/SetupBanner'
 import NeedsSetupCard, { type NeedsSetupItem } from './NeedsSetupCard'
 import PropertySetupWizard from './PropertySetupWizard'
 import SearchableSelect from './SearchableSelect'
@@ -2727,6 +2729,9 @@ export default function CanaryApp({
         )}
 
         <main className="cy-main">
+          {priv ? (
+            <SetupBanner setupComplete={db.properties.length > 0 && db.people.length > 0} />
+          ) : null}
 
           {/* ============ LEASING PIPELINE KPIs ============ */}
           {view === 'leases' && (
@@ -3318,7 +3323,15 @@ export default function CanaryApp({
                   <button onClick={() => setSelectedPropIds([])} style={{ border: 'none', background: 'none', color: 'var(--dim)', fontWeight: 600, cursor: 'pointer', fontSize: 13, marginLeft: 'auto' }}>Clear</button>
                 </div>
               )}
-              {showDefault && (
+              {showDefault && !genRows.length && priv ? (
+                <EmptyState
+                  title="Add your first property"
+                  hint="Once you add a building, leases, listings, and work orders will live here."
+                  actionLabel="Add property"
+                  onAction={() => setPropertyModalOpen(true)}
+                />
+              ) : null}
+              {showDefault && !!genRows.length && (
                 <div
                   className="cy-layout-grid"
                   style={{
@@ -3450,7 +3463,15 @@ export default function CanaryApp({
                   </button>
                 ) : null}
               </div>
-              {showDefault && (
+              {showDefault && !(genRows as CanaryPerson[]).length && priv ? (
+                <EmptyState
+                  title="Add your first person"
+                  hint="Invite a teammate or add an owner or tenant so work has someone attached."
+                  actionLabel="Add person"
+                  onAction={() => setPersonModalOpen(true)}
+                />
+              ) : null}
+              {showDefault && !!(genRows as CanaryPerson[]).length && (
                 <div className="cy-card" style={{ overflow: 'hidden' }}>
                   {(genRows as CanaryPerson[]).slice(0, 120).map((pe) => (
                     <div key={pe.id} className="cy-hov" onClick={() => router.push(personHref(pe.id))} onPointerEnter={() => router.prefetch(personHref(pe.id))} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer', minWidth: 0 }}>

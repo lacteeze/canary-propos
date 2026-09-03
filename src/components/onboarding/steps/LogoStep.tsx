@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { Upload, Loader2 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { createClient } from '@/lib/supabase/client'
 
 const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024 // 2MB
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp']
@@ -49,7 +50,25 @@ export function LogoStep({ onNext, onSkip, isLoading }: LogoStepProps) {
       onNext(null)
       return
     }
-    onNext(file.name)
+    const supabase = createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      setError('You must be signed in to upload a logo.')
+      return
+    }
+    const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
+    const storagePath = `pending/${user.id}/branding/logo-${Date.now()}.${ext}`
+    const { error: uploadError } = await supabase.storage.from('org-assets').upload(storagePath, file, {
+      contentType: file.type,
+      upsert: true,
+    })
+    if (uploadError) {
+      setError(uploadError.message || 'Failed to upload logo.')
+      return
+    }
+    onNext(storagePath)
   }
 
   return (

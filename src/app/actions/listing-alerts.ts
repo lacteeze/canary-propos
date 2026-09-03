@@ -12,12 +12,13 @@ import { sendPingramEmail } from '@/lib/email/pingram'
 import { PINGRAM_EMAIL_TYPES } from '@/lib/email/pingram-types'
 import { ListingAlertConfirmEmail } from '@/lib/email/templates/ListingAlertConfirmEmail'
 import { ListingAlertNotifyEmail } from '@/lib/email/templates/ListingAlertNotifyEmail'
+import { brandFromOrg } from '@/lib/brand'
 
 export type ListingAlertActionResult =
   | { success: true }
   | { success: false; error: string }
 
-const DEFAULT_COMPANY_NOTIFY = 'info@canarypm.ca'
+const DEFAULT_COMPANY_NOTIFY = brandFromOrg({ slug: 'canary' }).supportEmail
 const SOURCE = 'landing_footer'
 
 const schema = z.object({

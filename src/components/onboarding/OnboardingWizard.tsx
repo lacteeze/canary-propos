@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { WizardShell } from '@/components/onboarding/WizardShell'
 import { SignOutButton } from '@/components/onboarding/SignOutButton'
 import { OrgNameStep } from '@/components/onboarding/steps/OrgNameStep'
@@ -11,6 +11,7 @@ import { createOrganization } from '@/app/onboarding/actions'
 import { createClient } from '@/lib/supabase/client'
 
 const TOTAL_STEPS = 5
+const WIZARD_STORAGE_KEY = 'canary:onboarding-wizard'
 
 interface WizardData {
   name: string
@@ -43,20 +44,38 @@ export function OnboardingWizard() {
     setStep(2)
   }
 
-  async function handleLogo(logoPathOrName: string | null) {
-    if (logoPathOrName && data.name) {
-      const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (user) {
-        const filePath = `pending/${user.id}/${Date.now()}-${logoPathOrName}`
-        setData((d) => ({ ...d, logoPath: filePath }))
-      }
-    } else {
-      setData((d) => ({ ...d, logoPath: null }))
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(WIZARD_STORAGE_KEY)
+      if (!raw) return
+      const saved = JSON.parse(raw) as Partial<WizardData> & { step?: number }
+      setData((d) => ({
+        ...d,
+        name: saved.name ?? d.name,
+        logoPath: saved.logoPath ?? d.logoPath,
+        province: saved.province ?? d.province,
+        inviteEmail: saved.inviteEmail ?? d.inviteEmail,
+        orgId: saved.orgId ?? d.orgId,
+      }))
+      if (saved.step && saved.step >= 1 && saved.step <= TOTAL_STEPS) setStep(saved.step)
+    } catch {
+      // ignore
     }
+  }, [])
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        WIZARD_STORAGE_KEY,
+        JSON.stringify({ step, ...data }),
+      )
+    } catch {
+      // ignore
+    }
+  }, [step, data])
+
+  async function handleLogo(logoPath: string | null) {
+    setData((d) => ({ ...d, logoPath }))
     setStep(3)
   }
 
@@ -108,6 +127,11 @@ export function OnboardingWizard() {
     setError(null)
     try {
       await refreshSessionClaims()
+      try {
+        sessionStorage.removeItem(WIZARD_STORAGE_KEY)
+      } catch {
+        // ignore
+      }
       window.location.href = '/app'
     } catch {
       setGoingToApp(false)

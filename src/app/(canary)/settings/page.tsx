@@ -31,7 +31,7 @@ export default async function SettingsPage() {
 
   const { data: org } = await supabase
     .from('organizations')
-    .select('id, name, province, logo_path, gmail_connected_at, drive_connected_at, tasks_connected_at')
+    .select('id, name, slug, province, logo_path, gmail_connected_at, drive_connected_at, tasks_connected_at')
     .eq('id', person.org_id)
     .single()
 
@@ -59,6 +59,7 @@ export default async function SettingsPage() {
         <OrgSettingsForm
           orgId={org.id}
           initialName={org.name}
+          initialSlug={org.slug}
           initialProvince={org.province}
           initialLogoPath={org.logo_path}
           initialLogoUrl={initialLogoUrl}

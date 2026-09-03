@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CANADIAN_PROVINCES } from '@/lib/constants/provinces'
+import { inviteUser } from '@/app/(manager)/people/actions'
 
 const provinceCodes = CANADIAN_PROVINCES.map((p) => p.value) as [string, ...string[]]
 
@@ -188,6 +189,14 @@ export async function createOrganization(formData: {
 
   // Refresh session cookies so the access token carries org_id/role for RLS
   await supabase.auth.refreshSession()
+
+  const teammateEmail = inviteResult.data.email?.trim()
+  if (teammateEmail) {
+    const invite = await inviteUser({ email: teammateEmail, role: 'manager' })
+    if (!invite.success) {
+      console.error('[createOrganization] teammate invite failed', invite.error)
+    }
+  }
 
   return { success: true, orgId: org.id, personId: person.id }
 }

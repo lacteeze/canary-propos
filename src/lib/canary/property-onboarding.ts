@@ -43,14 +43,17 @@ export function missingMustHaves(snapshot: OnboardingSnapshot): MissingMustHave[
   const missing: MissingMustHave[] = []
   if (snapshot.path !== 'vacant' && snapshot.path !== 'occupied') missing.push('path')
   if (!snapshot.detailsCompletedAt) missing.push('details')
-  if (!snapshot.ownerId) missing.push('owner')
-  if (snapshot.listingPhotoCount < 1) missing.push('photos')
   if (snapshot.path === 'vacant' && !snapshot.hasListing) missing.push('listing')
   if (snapshot.path === 'occupied') {
     if (!snapshot.hasLease) missing.push('lease')
     if (!snapshot.hasTenant) missing.push('tenant')
   }
   return missing
+}
+
+/** Photos are a warning, not a setup blocker. */
+export function photoWarning(snapshot: OnboardingSnapshot): boolean {
+  return snapshot.listingPhotoCount < 1
 }
 
 export function isOnboardingComplete(snapshot: OnboardingSnapshot): boolean {
@@ -71,7 +74,7 @@ export function canSwitchPathWithoutConfirm(snapshot: Pick<OnboardingSnapshot, '
 /** After a listing draft writes, send staff to the first remaining must-have instead of the dashboard. */
 export function stepAfterListingDraftSave(missing: MissingMustHave[]): OnboardingStep | 'done' {
   if (missing.length === 0) return 'done'
-  if (missing.includes('owner') || missing.includes('details') || missing.includes('path')) return 'details'
+  if (missing.includes('details') || missing.includes('path')) return 'details'
   if (missing.includes('photos')) return 'photos'
   return 'listing'
 }

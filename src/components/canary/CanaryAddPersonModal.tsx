@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createOnboardingContact } from '@/app/actions/property-onboarding'
+import { inviteUser } from '@/app/(manager)/people/actions'
 
 const fieldStyle: React.CSSProperties = {
   width: '100%',
@@ -19,7 +20,7 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 600,
 }
 
-type PersonRole = 'owner' | 'tenant'
+type PersonRole = 'owner' | 'tenant' | 'manager' | 'employee'
 
 export default function CanaryAddPersonModal({ onClose }: { onClose: () => void }) {
   const router = useRouter()
@@ -42,12 +43,19 @@ export default function CanaryAddPersonModal({ onClose }: { onClose: () => void 
     }
     setBusy(true)
     setError('')
-    const res = await createOnboardingContact({
-      role,
-      name: name.trim(),
-      email: email.trim(),
-      phone: phone.trim() || undefined,
-    })
+    const res =
+      role === 'manager' || role === 'employee'
+        ? await inviteUser({
+            email: email.trim(),
+            role,
+            firstName: name.trim().split(/\s+/)[0],
+          })
+        : await createOnboardingContact({
+            role,
+            name: name.trim(),
+            email: email.trim(),
+            phone: phone.trim() || undefined,
+          })
     setBusy(false)
     if (!res.success) {
       setError(res.error)
@@ -72,7 +80,7 @@ export default function CanaryAddPersonModal({ onClose }: { onClose: () => void 
             <div className="cy-eyebrow" style={{ marginBottom: 4 }}>People</div>
             <div style={{ fontWeight: 700, fontSize: 19 }}>Add person</div>
             <div style={{ color: 'var(--dim)', fontSize: 13, marginTop: 6 }}>
-              Creates an owner or tenant you can assign to properties and leases.
+              Creates a contact or sends a workspace invite.
             </div>
           </div>
           <button type="button" className="cy-btn" onClick={onClose}>✕</button>
@@ -101,6 +109,14 @@ export default function CanaryAddPersonModal({ onClose }: { onClose: () => void 
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
                 <input type="radio" name="person-role" checked={role === 'tenant'} onChange={() => setRole('tenant')} />
                 Tenant
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                <input type="radio" name="person-role" checked={role === 'manager'} onChange={() => setRole('manager')} />
+                Manager
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                <input type="radio" name="person-role" checked={role === 'employee'} onChange={() => setRole('employee')} />
+                Employee
               </label>
             </div>
           </fieldset>

@@ -14,6 +14,7 @@ const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024 // 2MB
 interface OrgSettingsFormProps {
   orgId: string
   initialName: string
+  initialSlug: string
   initialProvince: string
   initialLogoPath: string | null
   initialLogoUrl: string | null
@@ -28,11 +29,13 @@ function extensionForMime(mime: string): string {
 export function OrgSettingsForm({
   orgId,
   initialName,
+  initialSlug,
   initialProvince,
   initialLogoPath,
   initialLogoUrl,
 }: OrgSettingsFormProps) {
   const [name, setName] = useState(initialName)
+  const [slug, setSlug] = useState(initialSlug)
   const [province, setProvince] = useState(initialProvince)
   const [logoPath, setLogoPath] = useState<string | null>(initialLogoPath)
   const [logoUrl, setLogoUrl] = useState<string | null>(initialLogoUrl)
@@ -45,7 +48,7 @@ export function OrgSettingsForm({
     e.preventDefault()
     setError(null)
     startTransition(async () => {
-      const result = await updateOrgProfile({ name, province, logoPath })
+      const result = await updateOrgProfile({ name, slug, province, logoPath })
       if (result.success) {
         toast.success('Changes saved')
       } else {
@@ -93,6 +96,7 @@ export function OrgSettingsForm({
 
       const saveResult = await updateOrgProfile({
         name,
+        slug,
         province,
         logoPath: storagePath,
       })
@@ -136,6 +140,7 @@ export function OrgSettingsForm({
     try {
       const saveResult = await updateOrgProfile({
         name,
+        slug,
         province,
         logoPath: null,
       })
@@ -178,9 +183,24 @@ export function OrgSettingsForm({
           required
           minLength={2}
           maxLength={80}
-          placeholder="e.g. Canary Property Management"
+          placeholder="e.g. Harbourview Holdings"
           className="cy-input"
         />
+        <label htmlFor="settings-slug" className="cy-label" style={{ marginTop: 14 }}>
+          Public slug
+        </label>
+        <input
+          id="settings-slug"
+          type="text"
+          value={slug}
+          onChange={(e) => setSlug(e.target.value.toLowerCase())}
+          required
+          minLength={2}
+          maxLength={60}
+          placeholder="harbourview"
+          className="cy-input"
+        />
+        <p className="cy-settings-help">Used in your public listing URLs.</p>
         <div className="cy-settings-actions">
           <button type="submit" disabled={isPending || uploadingLogo} className="cy-btn cy-btn--active">
             {isPending ? 'Saving…' : 'Save changes'}

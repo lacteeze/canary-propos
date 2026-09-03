@@ -9,6 +9,7 @@ import { sendEmail } from '@/lib/email/send'
 import { PINGRAM_EMAIL_TYPES } from '@/lib/email/pingram-types'
 import { TenantInviteEmail } from '@/lib/email/templates/TenantInviteEmail'
 import { TeamInviteEmail } from '@/lib/email/templates/TeamInviteEmail'
+import { brandFromOrg } from '@/lib/brand'
 
 // --- Schemas ---
 
@@ -104,11 +105,12 @@ export async function inviteUser(formData: {
   // Fetch org name for email
   const { data: org } = await ctx.supabase
     .from('organizations')
-    .select('name')
+    .select('name, slug')
     .eq('id', orgId)
     .single()
 
-  const orgName = org?.name ?? 'Your property manager'
+  const orgName = org?.name ?? brandFromOrg(org).name
+  const sender = `${brandFromOrg(org).name} <${brandFromOrg(org).senderEmail}>`
 
   // Build sign-up URL embedding the token
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
@@ -126,7 +128,7 @@ export async function inviteUser(formData: {
       type: PINGRAM_EMAIL_TYPES.tenantInvite,
       to: email,
       subject: `Your tenancy invite from ${orgName}`,
-      from: 'Canary PM <notifications@canarypm.ca>',
+      from: sender,
       template: createElement(TenantInviteEmail, {
         tenantFirstName: firstName ?? 'there',
         orgName,
@@ -141,7 +143,7 @@ export async function inviteUser(formData: {
       type: PINGRAM_EMAIL_TYPES.teamInvite,
       to: email,
       subject: `You've been invited to join ${orgName}`,
-      from: 'Canary PM <notifications@canarypm.ca>',
+      from: sender,
       template: createElement(TeamInviteEmail, {
         inviteeEmail: email,
         orgName,
@@ -212,10 +214,11 @@ export async function invitePersonToPortal(personId: string): Promise<ActionResu
 
   const { data: org } = await ctx.supabase
     .from('organizations')
-    .select('name')
+    .select('name, slug')
     .eq('id', orgId)
     .single()
-  const orgName = org?.name ?? 'Your property manager'
+  const orgName = org?.name ?? brandFromOrg(org).name
+  const sender = `${brandFromOrg(org).name} <${brandFromOrg(org).senderEmail}>`
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
   const signUpUrl = `${baseUrl}/invite/${inviteToken}`
 
@@ -272,7 +275,7 @@ export async function invitePersonToPortal(personId: string): Promise<ActionResu
           type: PINGRAM_EMAIL_TYPES.tenantInvite,
           to: target.email,
           subject: `Your tenancy invite from ${orgName}`,
-          from: 'Canary PM <notifications@canarypm.ca>',
+          from: sender,
           template: createElement(TenantInviteEmail, {
             tenantFirstName: target.first_name ?? 'there',
             orgName,
@@ -286,7 +289,7 @@ export async function invitePersonToPortal(personId: string): Promise<ActionResu
           type: PINGRAM_EMAIL_TYPES.teamInvite,
           to: target.email,
           subject: `You've been invited to join ${orgName}`,
-          from: 'Canary PM <notifications@canarypm.ca>',
+          from: sender,
           template: createElement(TeamInviteEmail, {
             inviteeEmail: target.email,
             orgName,

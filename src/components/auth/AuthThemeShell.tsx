@@ -52,18 +52,16 @@ export function AuthThemeShell({
       suppressHydrationWarning
     >
       <div className="auth-shell">
-        <Link href="/" className="auth-brand" title="Canary Property Management — home">
+        <Link href="/" className="auth-brand" title="Home">
           <Image
             src={dark ? '/landing/logo-white.png' : '/landing/logo-black.png'}
-            alt="Canary Property Management logo"
+            alt=""
             width={36}
             height={36}
             style={{ objectFit: 'contain' }}
             priority
           />
-          <span className="auth-brand-name">
-            Canary <span>PM</span>
-          </span>
+          <span className="auth-brand-name">Workspace</span>
         </Link>
         {children}
       </div>

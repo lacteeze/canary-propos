@@ -12,8 +12,9 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { seedTwoOrgs, signInAs, type SeedFixture } from '../helpers/seed'
+import { hasSupabaseTestEnv } from '../helpers/supabase-env'
 
-describe('vendor within-org isolation (FOUND-12)', () => {
+describe.skipIf(!hasSupabaseTestEnv())('vendor within-org isolation (FOUND-12)', () => {
   let fixture: SeedFixture
 
   beforeAll(async () => {

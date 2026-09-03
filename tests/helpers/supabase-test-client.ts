@@ -14,6 +14,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import { supabaseTestUrl } from './supabase-env'
 
 export type TestRole = 'manager' | 'employee' | 'tenant' | 'owner' | 'vendor' | 'admin'
 
@@ -25,12 +26,12 @@ export type TestRole = 'manager' | 'employee' | 'tenant' | 'owner' | 'vendor' | 
  * Throws if the sign-in fails (check env vars and that the test user exists).
  */
 export async function createTestClient(role: TestRole) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseUrl = supabaseTestUrl()
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(
-      'NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set to run integration tests.'
+      'SUPABASE_TEST_URL (or NEXT_PUBLIC_SUPABASE_URL) and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set to run integration tests.'
     )
   }
 

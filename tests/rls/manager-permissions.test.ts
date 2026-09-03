@@ -9,17 +9,18 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import { seedTwoOrgs, signInAs, type SeedFixture } from '../helpers/seed'
+import { hasSupabaseTestEnv, supabaseTestUrl } from '../helpers/supabase-env'
 import type { Database } from '@/types/supabase'
 
 function getServiceClient() {
   return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseTestUrl()!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } },
   )
 }
 
-describe('manager CRUD within own org (FOUND-08)', () => {
+describe.skipIf(!hasSupabaseTestEnv())('manager CRUD within own org (FOUND-08)', () => {
   let fixture: SeedFixture
   const insertedPersonIds: string[] = []
 

@@ -9,7 +9,7 @@ import { loadHospitableTasks } from '@/lib/canary/load-hospitable-tasks'
 import { loadOrgTasks } from '@/lib/canary/load-org-tasks'
 import { fetchAllProperties, isHospitableConfigured } from '@/lib/hospitable/client'
 import { createClient } from '@/lib/supabase/server'
-import type { CanaryRole, HospitableCalendarData, HospitableTasksData, OrgTasksData } from '@/lib/canary/types'
+import type { CanaryRole, HospitableCalendarData, HospitableTasksData } from '@/lib/canary/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,14 +37,7 @@ export default async function CanaryAppPage() {
   const isVendorOnly =
     caller.roles.includes('vendor') &&
     !caller.roles.some((r) => ['admin', 'manager', 'employee'].includes(r))
-  const db = await loadCanaryDb(caller.orgId, {
-    redactForVendor: isVendorOnly,
-    vendorPersonId: isVendorOnly ? caller.personId : undefined,
-  })
-  // STR/task matching should not bind to archived units (keeps them off the leasing timeline).
-  const activeProperties = db.properties.filter((p) => !p.archivedAt)
 
-  // Vendors never receive Hospitable STR/tasks (cross-org API key would leak Canary inventory).
   const emptyHospitableCalendar: HospitableCalendarData = {
     strBookings: [],
     ownerOccupiedBlocks: [],
@@ -59,44 +52,45 @@ export default async function CanaryAppPage() {
     openCount: 0,
   }
 
+  const [db, orgTasks, userAvatarUrl, hospitableProperties] = await Promise.all([
+    loadCanaryDb(caller.orgId, {
+      redactForVendor: isVendorOnly,
+      vendorPersonId: isVendorOnly ? caller.personId : undefined,
+    }),
+    loadOrgTasks(caller.orgId, {
+      assigneeOnlyPersonId: isVendorOnly ? caller.personId : undefined,
+    }),
+    caller.avatarPath
+      ? createClient().then((supabase) =>
+          supabase.storage
+            .from('org-assets')
+            .createSignedUrl(caller.avatarPath!, 3600)
+            .then(({ data }) => data?.signedUrl ?? null),
+        )
+      : Promise.resolve(null),
+    !isVendorOnly && isHospitableConfigured()
+      ? fetchAllProperties().catch((error) => {
+          console.error('[CanaryAppPage] Hospitable properties fetch failed', error)
+          return undefined
+        })
+      : Promise.resolve(undefined),
+  ])
+
+  const activeProperties = db.properties.filter((p) => !p.archivedAt)
+
   let hospitableCalendar: HospitableCalendarData = emptyHospitableCalendar
   let hospitableTasks: HospitableTasksData = emptyHospitableTasks
-
   if (!isVendorOnly) {
-    // One properties fetch shared by calendar + tasks loaders
-    let hospitableProperties: Awaited<ReturnType<typeof fetchAllProperties>> | undefined
-    if (isHospitableConfigured()) {
-      try {
-        hospitableProperties = await fetchAllProperties()
-      } catch (error) {
-        console.error('[CanaryAppPage] Hospitable properties fetch failed', error)
-      }
-    }
-
     hospitableCalendar = await loadHospitableCalendar(activeProperties, hospitableProperties)
     hospitableTasks = await loadHospitableTasks(
       activeProperties,
       hospitableCalendar.strBookings,
-      hospitableProperties
+      hospitableProperties,
     )
   }
 
-  // Team tasks: vendors only see tasks assigned/shared to them
-  const orgTasks: OrgTasksData = await loadOrgTasks(caller.orgId, {
-    assigneeOnlyPersonId: isVendorOnly ? caller.personId : undefined,
-  })
-
   const role = toCanaryRole(caller.roles)
   const canSwitchRoles = role === 'Admin' || role === 'Manager'
-
-  let userAvatarUrl: string | null = null
-  if (caller.avatarPath) {
-    const supabase = await createClient()
-    const { data } = await supabase.storage
-      .from('org-assets')
-      .createSignedUrl(caller.avatarPath, 3600)
-    userAvatarUrl = data?.signedUrl ?? null
-  }
 
   return (
     <CanaryApp

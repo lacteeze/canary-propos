@@ -206,7 +206,7 @@ const loadCanaryDbCached = cache(async function loadCanaryDbCached(
 
   // Safety caps keep a single Canary shell load from unbounded egress.
   // Portfolio tables (units/leases/people) stay generous so the app remains complete for ~150+ units.
-  const [orgRes, unitsRes, leasesRes, portfoliosRes, workOrdersRes, peopleRes, listingsRes, inquiriesRes, paymentsRes, expensesRes, mediaRes, socialStateRes, unmatchedPostsRes, auditRes] =
+  const [orgRes, unitsRes, leasesRes, portfoliosRes, workOrdersRes, peopleRes, listingsRes, inquiriesRes, paymentsRes, expensesRes, mediaRes, socialStateRes, unmatchedPostsRes, auditRes, onboardRes, receiptsRes, inquiryNotesRes] =
     await Promise.all([
       supabase.from('organizations').select('slug').eq('id', orgId).maybeSingle(),
       supabase
@@ -262,12 +262,12 @@ const loadCanaryDbCached = cache(async function loadCanaryDbCached(
       supabase
         .from('listings')
         .select(
-          `id, listing_title, listing_description, display_rent, status, available_from, available_until, highlights, updated_at, published_at, slug,
+          `id, listing_title, listing_description, display_rent, status, available_from, available_until, highlights, updated_at, published_at, slug, rental_credit, rental_credit_expiry,
            units!unit_id(id, unit_number, bedrooms, bathrooms, amenities,
              properties!property_id(id, street_address, city, listing_brief))`
         )
         .eq('org_id', orgId)
-        .in('status', ['draft', 'published', 'renewal_sent'])
+        .in('status', ['draft', 'published', 'renewal_sent', 'declined'])
         .limit(500),
       supabase
         .from('inquiries')
@@ -342,6 +342,26 @@ const loadCanaryDbCached = cache(async function loadCanaryDbCached(
         ])
         .order('changed_at', { ascending: false })
         .limit(800),
+      supabase
+        .from('property_onboarding')
+        .select('id, property_id, path, current_step, details_completed_at, completed_at, created_by, updated_at')
+        .eq('org_id', orgId)
+        .is('completed_at', null)
+        .limit(200),
+      supabase
+        .from('expense_receipts')
+        .select('expense_id')
+        .eq('org_id', orgId)
+        .limit(3000),
+      supabase
+        .from('inquiry_notes')
+        .select(
+          `id, inquiry_id, body, created_at,
+           people!author_id(first_name, last_name)`
+        )
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
+        .limit(500),
     ])
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -350,36 +370,13 @@ const loadCanaryDbCached = cache(async function loadCanaryDbCached(
   const portfolioRows = (portfoliosRes.data ?? []) as any[]
   const workOrderRows = (workOrdersRes.data ?? []) as any[]
   const peopleRows = (peopleRes.data ?? []) as any[]
-  let listingRows = (listingsRes.data ?? []) as any[]
-  const declinedListings = await supabase
-    .from('listings')
-    .select(
-      `id, listing_title, listing_description, display_rent, status, available_from, available_until, highlights, updated_at, published_at, slug,
-       units!unit_id(id, unit_number, bedrooms, bathrooms, amenities,
-         properties!property_id(id, street_address, city, listing_brief))`
-    )
-    .eq('org_id', orgId)
-    .eq('status', 'declined')
-    .limit(200)
-  if (!declinedListings.error && declinedListings.data?.length) {
-    listingRows = listingRows.concat(declinedListings.data)
-  }
+  const listingRows = (listingsRes.data ?? []) as any[]
   const listingCreditById = new Map<string, { rental_credit: number | null; rental_credit_expiry: string | null }>()
-  const listingIds = listingRows.map((d) => d.id as string).filter(Boolean)
-  if (listingIds.length) {
-    const creditsRes = await supabase
-      .from('listings')
-      .select('id, rental_credit, rental_credit_expiry')
-      .eq('org_id', orgId)
-      .in('id', listingIds)
-    if (!creditsRes.error) {
-      for (const row of creditsRes.data ?? []) {
-        listingCreditById.set(row.id, {
-          rental_credit: row.rental_credit,
-          rental_credit_expiry: row.rental_credit_expiry,
-        })
-      }
-    }
+  for (const row of listingRows) {
+    listingCreditById.set(row.id as string, {
+      rental_credit: row.rental_credit ?? null,
+      rental_credit_expiry: row.rental_credit_expiry ?? null,
+    })
   }
   const inquiryRows = (inquiriesRes.data ?? []) as any[]
   const paymentRows = (paymentsRes.data ?? []) as any[]
@@ -387,55 +384,28 @@ const loadCanaryDbCached = cache(async function loadCanaryDbCached(
   const mediaRows = (mediaRes.data ?? []) as any[]
   const orgSlug = (orgRes.data as { slug?: string } | null)?.slug ?? 'canary'
 
-  const onboardRes = await supabase
-    .from('property_onboarding')
-    .select('id, property_id, path, current_step, details_completed_at, completed_at, created_by, updated_at')
-    .eq('org_id', orgId)
-    .is('completed_at', null)
-    .limit(200)
   const onboardRows = (onboardRes.data ?? []) as any[]
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
   const receiptCountByExpense = new Map<string, number>()
-  const expenseIds = expenseRows.map((e) => e.id as string).filter(Boolean)
-  if (expenseIds.length) {
-    const receiptsRes = await supabase
-      .from('expense_receipts')
-      .select('expense_id')
-      .eq('org_id', orgId)
-      .in('expense_id', expenseIds)
-    for (const r of receiptsRes.data ?? []) {
-      const eid = (r as { expense_id?: string | null }).expense_id
-      if (!eid) continue
-      receiptCountByExpense.set(eid, (receiptCountByExpense.get(eid) ?? 0) + 1)
-    }
+  const expenseIds = new Set(expenseRows.map((e) => e.id as string).filter(Boolean))
+  for (const r of receiptsRes.data ?? []) {
+    const eid = (r as { expense_id?: string | null }).expense_id
+    if (!eid || !expenseIds.has(eid)) continue
+    receiptCountByExpense.set(eid, (receiptCountByExpense.get(eid) ?? 0) + 1)
   }
 
-  // Only fetch notes for the inquiries we already loaded (latest-per-inquiry in memory).
-  const inquiryIds = inquiryRows.map((i) => i.id as string).filter(Boolean)
-  let inquiryNoteRows: Array<{
+  const inquiryIds = new Set(inquiryRows.map((i) => i.id as string).filter(Boolean))
+  if (inquiryNotesRes.error) {
+    console.error('[loadCanaryDb:inquiry_notes]', inquiryNotesRes.error.message)
+  }
+  const inquiryNoteRows = ((inquiryNotesRes.data ?? []) as Array<{
     id: string
     inquiry_id: string
     body: string
     created_at: string
     people?: { first_name?: string | null; last_name?: string | null } | null
-  }> = []
-  if (inquiryIds.length) {
-    const inquiryNotesRes = await supabase
-      .from('inquiry_notes')
-      .select(
-        `id, inquiry_id, body, created_at,
-         people!author_id(first_name, last_name)`
-      )
-      .eq('org_id', orgId)
-      .in('inquiry_id', inquiryIds)
-      .order('created_at', { ascending: false })
-      .limit(500)
-    if (inquiryNotesRes.error) {
-      console.error('[loadCanaryDb:inquiry_notes]', inquiryNotesRes.error.message)
-    }
-    inquiryNoteRows = (inquiryNotesRes.data ?? []) as typeof inquiryNoteRows
-  }
+  }>).filter((row) => inquiryIds.has(row.inquiry_id))
 
   // Surface query failures — empty arrays from RLS/column errors look like "no data".
   for (const [label, res] of [
@@ -453,6 +423,9 @@ const loadCanaryDbCached = cache(async function loadCanaryDbCached(
     ['listing_social_state', socialStateRes],
     ['listing_social_posts', unmatchedPostsRes],
     ['audit_log', auditRes],
+    ['property_onboarding', onboardRes],
+    ['expense_receipts', receiptsRes],
+    ['inquiry_notes', inquiryNotesRes],
   ] as const) {
     if (res.error) {
       console.error(`[loadCanaryDb:${label}]`, res.error.message, res.error.code ?? '')

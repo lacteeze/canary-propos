@@ -775,8 +775,7 @@ export default function CanaryApp({
     setDraft(null)
     setDraftEndDirty(false)
     setView('leases')
-    startTransition(() => router.refresh())
-  }, [draft, draftSaving, router])
+  }, [draft, draftSaving])
 
   const removeDraft = useCallback(async () => {
     if (!draft?.id || draftSaving) return
@@ -787,8 +786,7 @@ export default function CanaryApp({
     setDraftOpen(false)
     setDraft(null)
     setDraftEndDirty(false)
-    startTransition(() => router.refresh())
-  }, [draft, draftSaving, router])
+  }, [draft, draftSaving])
 
   const activateDraft = useCallback(async () => {
     if (!draft || !draft.propId || draftSaving) return
@@ -814,8 +812,7 @@ export default function CanaryApp({
     setDraft(null)
     setDraftEndDirty(false)
     setView('leases')
-    startTransition(() => router.refresh())
-  }, [draft, draftSaving, router])
+  }, [draft, draftSaving])
 
   // ---------- payments ----------
   const emptyPayForm = useCallback((): PayFormState => ({
@@ -858,8 +855,7 @@ export default function CanaryApp({
     if (!res.success) { setPayError(res.error); return }
     setPayFormOpen(false)
     setPayForm(null)
-    startTransition(() => router.refresh())
-  }, [payForm, paySaving, router])
+  }, [payForm, paySaving])
 
   // ---------- chat (Ask via header search) ----------
   const sendChat = useCallback(async (text: string) => {
@@ -924,7 +920,6 @@ export default function CanaryApp({
 
         setAvatarUrl(result.avatarUrl ?? URL.createObjectURL(file))
         toast.success('Profile photo updated')
-        router.refresh()
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to upload photo.')
       } finally {
@@ -932,7 +927,7 @@ export default function CanaryApp({
         if (avatarInputRef.current) avatarInputRef.current.value = ''
       }
     },
-    [avatarUploading, router, userOrgId, userPersonId],
+    [avatarUploading, userOrgId, userPersonId],
   )
 
   const toggleSidebar = useCallback(() => {
@@ -1899,9 +1894,8 @@ export default function CanaryApp({
       }
       setSelectedPropIds([])
       setDrawer(null)
-      router.refresh()
     })
-  }, [selectedPropIds, router, startTransition])
+  }, [selectedPropIds, startTransition])
 
   const runBulkUnarchive = useCallback(() => {
     if (!selectedPropIds.length) return
@@ -1917,9 +1911,8 @@ export default function CanaryApp({
       }
       setSelectedPropIds([])
       setDrawer(null)
-      router.refresh()
     })
-  }, [selectedPropIds, router, startTransition])
+  }, [selectedPropIds, startTransition])
 
   const selectedPropRows = useMemo(
     () => props.filter((p) => selectedPropIds.includes(p.id)),
@@ -1942,9 +1935,8 @@ export default function CanaryApp({
       }
       setSelectedPropIds([])
       setDrawer(null)
-      router.refresh()
     })
-  }, [selectedPropIds, selectedPropRows, router, startTransition])
+  }, [selectedPropIds, selectedPropRows, startTransition])
 
   const openMergeModal = useCallback(() => {
     if (selectedPropIds.length < 2) return
@@ -1971,9 +1963,8 @@ export default function CanaryApp({
       setMergeOpen(false)
       setSelectedPropIds([])
       setDrawer(null)
-      router.refresh()
     })
-  }, [mergePrimaryId, selectedPropIds, selectedPropRows, router, startTransition])
+  }, [mergePrimaryId, selectedPropIds, selectedPropRows, startTransition])
 
   // kanban columns
   type KanCol = { title: string; count: string; more: boolean; moreLabel: string; cards: { title: string; sub: string; right: string; rightColor: string; onClick: (() => void) | null }[] }
@@ -2063,7 +2054,6 @@ export default function CanaryApp({
                 return
               }
               setDrawer(null)
-              router.refresh()
             })
           },
         })
@@ -2079,7 +2069,6 @@ export default function CanaryApp({
                 return
               }
               setDrawer(null)
-              router.refresh()
             })
           },
         })
@@ -2420,9 +2409,6 @@ export default function CanaryApp({
       if (viewParam === 'leases' && (propertyParam || listingParam)) {
         setPageViews((pv) => ({ ...pv, leases: 'pipeline' }))
       }
-      params.delete('view')
-      const next = params.toString()
-      window.history.replaceState({}, '', next ? `${window.location.pathname}?${next}` : window.location.pathname)
     }
     if (params.get('import') === 'payments') {
       setImportModalOpen(true)
@@ -3099,7 +3085,6 @@ export default function CanaryApp({
               focusPropertyId={pipelinePropertyId}
               focusListingId={pipelineListingId}
               onClearFocus={clearPipelineFocus}
-              onChanged={() => router.refresh()}
               onOpenProperty={({ propertyId, address }) => {
                 // Inquiry.propertyId is properties.id (propertyDbId). Drawer expects
                 // CanaryProperty.id (unit id). Also accept a unit id if passed.

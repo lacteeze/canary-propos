@@ -3,7 +3,6 @@
 import { addMonthsToIsoDate } from '@/lib/canary/lease-term'
 import type { ListingTermType } from '@/lib/landing/listing-term'
 import React, { useCallback, useMemo, useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
 import type { CanaryDraft, CanaryLease, CanaryOnboarding, CanaryPerson, CanaryPortfolio, CanaryProperty } from '@/lib/canary/types'
 import type { PropertyDetailsInput } from '@/app/actions/entity-updates'
 import {
@@ -82,7 +81,6 @@ export default function PropertySetupWizard({
   lease,
   onExit,
 }: WizardProps) {
-  const router = useRouter()
   const [, startTransition] = useTransition()
   const [step, setStep] = useState<OnboardingStep>(onboarding.currentStep || 'path')
   const [path, setPath] = useState<OnboardingPath | null>(onboarding.path)
@@ -135,20 +133,13 @@ export default function PropertySetupWizard({
   const [leaseRent, setLeaseRent] = useState(lease?.rent?.replace(/[^0-9.]/g, '') || rent)
   const [leaseDeposit, setLeaseDeposit] = useState(lease?.deposit?.replace(/[^0-9.]/g, '') || '')
 
-  const refresh = useCallback(() => {
-    startTransition(() => router.refresh())
-  }, [router])
-
   const done = useCallback(
     (completed?: boolean) => {
       if (completed) {
         onExit()
-        refresh()
-        return
       }
-      refresh()
     },
-    [onExit, refresh],
+    [onExit],
   )
 
   const steps = stepsForPath(path)
@@ -170,7 +161,6 @@ export default function PropertySetupWizard({
   const exit = async () => {
     await saveOnboardingStep(property.propertyDbId, step)
     onExit()
-    refresh()
   }
 
   const choosePath = async (path: OnboardingPath) => {
@@ -258,7 +248,6 @@ export default function PropertySetupWizard({
     setPortfolioId(res.id)
     setAddingPortfolio(false)
     setNewPortfolioName('')
-    refresh()
   }
 
   const saveListing = async () => {
@@ -578,7 +567,6 @@ export default function PropertySetupWizard({
                 onChanged={() => {
                   void recomputeOnboardingCompletion(property.propertyDbId).then((res) => {
                     if (res.success && res.completed) done(true)
-                    else refresh()
                   })
                 }}
               />

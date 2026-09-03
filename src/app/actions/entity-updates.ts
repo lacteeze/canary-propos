@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { str, writeAuditEntries } from '@/lib/canary/audit'
+import { primaryRoleFromClaim } from '@/lib/auth/role-redirect'
 import { addressesMatch, formatPropertyAddress } from '@/lib/canary/property-ops'
 import { normalizeLeaseTermType, validateLeaseDates } from '@/lib/canary/lease-term'
 import type { LeaseTermType } from '@/lib/canary/lease-term'
@@ -16,8 +17,6 @@ type LeaseUpdate = Database['public']['Tables']['leases']['Update']
 type PersonUpdate = Database['public']['Tables']['people']['Update']
 type WorkOrderUpdate = Database['public']['Tables']['work_orders']['Update']
 
-type ActionResult = { success: true } | { success: false; error: string }
-
 export type AuditEntry = {
   id: string
   fieldName: string
@@ -27,12 +26,83 @@ export type AuditEntry = {
   changedAt: string
 }
 
-async function getStaffContext() {
+type ActionResult =
+  | { success: true; audit?: AuditEntry[] }
+  | { success: false; error: string }
+
+type StaffPerson = {
+  id: string
+  org_id: string
+  role: string[]
+  first_name: string | null
+  last_name: string | null
+  email: string | null
+}
+
+type StaffContext = {
+  supabase: Awaited<ReturnType<typeof createClient>>
+  person: StaffPerson
+}
+
+function staffDisplayName(person: StaffPerson): string {
+  return [person.first_name, person.last_name].filter(Boolean).join(' ') || person.email || 'Staff'
+}
+
+async function recorded(
+  ctx: StaffContext,
+  tableName: string,
+  recordId: string,
+  changes: { field: string; oldValue: string | null; newValue: string | null }[],
+): Promise<{ success: true; audit: AuditEntry[] }> {
+  const rows = await writeAuditEntries(
+    ctx.supabase,
+    ctx.person.org_id,
+    tableName,
+    recordId,
+    ctx.person.id,
+    changes,
+  )
+  revalidatePath('/app')
+  return {
+    success: true,
+    audit: rows.map((row) => ({
+      id: row.id,
+      fieldName: row.field_name,
+      oldValue: row.old_value,
+      newValue: row.new_value,
+      changedByName: staffDisplayName(ctx.person),
+      changedAt: row.changed_at,
+    })),
+  }
+}
+
+async function getStaffContext(): Promise<StaffContext | null> {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return null
+
+  const meta = (user.app_metadata ?? {}) as {
+    org_id?: string
+    role?: string | string[]
+    person_id?: string
+  }
+  const claimedRole = primaryRoleFromClaim(meta.role)
+  if (meta.org_id && claimedRole && meta.person_id) {
+    if (claimedRole !== 'manager' && claimedRole !== 'admin') return null
+    return {
+      supabase,
+      person: {
+        id: meta.person_id,
+        org_id: meta.org_id,
+        role: Array.isArray(meta.role) ? meta.role : [claimedRole],
+        first_name: typeof user.user_metadata?.first_name === 'string' ? user.user_metadata.first_name : null,
+        last_name: typeof user.user_metadata?.last_name === 'string' ? user.user_metadata.last_name : null,
+        email: user.email ?? null,
+      },
+    }
+  }
 
   const { data: person } = await supabase
     .from('people')
@@ -44,7 +114,7 @@ async function getStaffContext() {
   if (!person) return null
   const roles = (person.role as unknown as string[]) ?? []
   if (!roles.includes('manager') && !roles.includes('admin')) return null
-  return { supabase, person }
+  return { supabase, person: { ...person, role: roles } }
 }
 
 export async function getAuditLog(tableName: string, recordId: string): Promise<AuditEntry[]> {
@@ -152,11 +222,9 @@ export async function updatePropertyField(
       return { success: false, error: 'Failed to update property type.' }
     }
     // Record against the unit so it surfaces in the drawer audit log.
-    await writeAuditEntries(ctx.supabase, ctx.person.org_id, 'units', unitId, ctx.person.id, [
+    return recorded(ctx, 'units', unitId, [
       { field: 'type', oldValue: prop.property_type, newValue: next },
     ])
-    revalidatePath('/app')
-    return { success: true }
   }
 
   if (field === 'status') {
@@ -222,9 +290,7 @@ export async function updatePropertyField(
     }
     return { success: false, error: 'Failed to update property.' }
   }
-  await writeAuditEntries(ctx.supabase, ctx.person.org_id, 'units', unitId, ctx.person.id, changes)
-  revalidatePath('/app')
-  return { success: true }
+  return recorded(ctx, 'units', unitId, changes)
 }
 
 /**
@@ -690,9 +756,7 @@ export async function updateLeaseField(
     console.error('[updateLeaseField]', error)
     return { success: false, error: 'Failed to update lease.' }
   }
-  await writeAuditEntries(ctx.supabase, ctx.person.org_id, 'leases', leaseId, ctx.person.id, changes)
-  revalidatePath('/app')
-  return { success: true }
+  return recorded(ctx, 'leases', leaseId, changes)
 }
 
 export async function deleteLease(leaseId: string): Promise<ActionResult> {
@@ -986,9 +1050,7 @@ export async function updatePersonField(
     console.error('[updatePersonField]', error)
     return { success: false, error: 'Failed to update person.' }
   }
-  await writeAuditEntries(ctx.supabase, ctx.person.org_id, 'people', personId, ctx.person.id, changes)
-  revalidatePath('/app')
-  return { success: true }
+  return recorded(ctx, 'people', personId, changes)
 }
 
 export async function updatePortfolioField(
@@ -1019,9 +1081,7 @@ export async function updatePortfolioField(
     console.error('[updatePortfolioField]', error)
     return { success: false, error: 'Failed to update portfolio.' }
   }
-  await writeAuditEntries(ctx.supabase, ctx.person.org_id, 'portfolios', portfolioId, ctx.person.id, changes)
-  revalidatePath('/app')
-  return { success: true }
+  return recorded(ctx, 'portfolios', portfolioId, changes)
 }
 
 export async function updateProjectField(
@@ -1089,9 +1149,7 @@ export async function updateProjectField(
     console.error('[updateProjectField]', error)
     return { success: false, error: 'Failed to update project.' }
   }
-  await writeAuditEntries(ctx.supabase, ctx.person.org_id, 'work_orders', projectId, ctx.person.id, changes)
-  revalidatePath('/app')
-  return { success: true }
+  return recorded(ctx, 'work_orders', projectId, changes)
 }
 
 export async function archiveProperties(unitIds: string[]): Promise<ActionResult> {

@@ -9,9 +9,10 @@ interface AuditLogPanelProps {
   tableName: string
   recordId: string
   canEdit: boolean
+  appendedEntries?: AuditEntry[]
 }
 
-export default function AuditLogPanel({ tableName, recordId, canEdit }: AuditLogPanelProps) {
+export default function AuditLogPanel({ tableName, recordId, canEdit, appendedEntries = [] }: AuditLogPanelProps) {
   const [minimized, setMinimized] = useState(true)
   const [entries, setEntries] = useState<AuditEntry[]>([])
   const [loading, setLoading] = useState(false)
@@ -30,6 +31,12 @@ export default function AuditLogPanel({ tableName, recordId, canEdit }: AuditLog
   useEffect(() => {
     if (!minimized && canEdit) load()
   }, [minimized, load, canEdit])
+
+  const visibleEntries = [
+    ...appendedEntries,
+    ...entries.filter((e) => !appendedEntries.some((a) => a.id === e.id)),
+  ]
+  const visibleCount = visibleEntries.length
 
   if (!canEdit) return null
 
@@ -54,16 +61,16 @@ export default function AuditLogPanel({ tableName, recordId, canEdit }: AuditLog
       >
         <span style={{ fontFamily: MONO, fontSize: 11 }}>{minimized ? '▸' : '▾'}</span>
         <span style={{ fontFamily: MONO, fontSize: '10.5px', letterSpacing: '.1em', textTransform: 'uppercase' }}>
-          Audit log {entries.length ? `(${entries.length})` : ''}
+          Audit log {visibleCount ? `(${visibleCount})` : ''}
         </span>
       </button>
       {!minimized && (
         <div style={{ maxHeight: 220, overflowY: 'auto', marginTop: 8 }}>
           {loading && <div style={{ color: 'var(--faint)', fontSize: 12, padding: 8 }}>Loading…</div>}
-          {!loading && !entries.length && (
+          {!loading && !visibleCount && (
             <div style={{ color: 'var(--faint)', fontSize: 12, padding: 8 }}>No changes recorded yet.</div>
           )}
-          {entries.map((e) => (
+          {visibleEntries.map((e) => (
             <div
               key={e.id}
               style={{

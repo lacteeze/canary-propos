@@ -9,7 +9,13 @@ export async function writeAuditEntries(
   recordId: string,
   changedBy: string,
   changes: { field: string; oldValue: string | null; newValue: string | null }[]
-): Promise<void> {
+): Promise<Array<{
+  id: string
+  field_name: string
+  old_value: string | null
+  new_value: string | null
+  changed_at: string
+}>> {
   const rows = changes
     .filter((c) => c.oldValue !== c.newValue)
     .map((c) => ({
@@ -21,9 +27,16 @@ export async function writeAuditEntries(
       new_value: c.newValue,
       changed_by: changedBy,
     }))
-  if (!rows.length) return
-  const { error } = await supabase.from('audit_log').insert(rows)
-  if (error) console.error('[writeAuditEntries]', error)
+  if (!rows.length) return []
+  const { data, error } = await supabase
+    .from('audit_log')
+    .insert(rows)
+    .select('id, field_name, old_value, new_value, changed_at')
+  if (error) {
+    console.error('[writeAuditEntries]', error)
+    return []
+  }
+  return data ?? []
 }
 
 export function str(v: unknown): string | null {

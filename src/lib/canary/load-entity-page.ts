@@ -81,22 +81,23 @@ export async function loadCanaryEntityContext(): Promise<CanaryEntityContext> {
 
   const isVendorOnly =
     caller.roles.includes('vendor') && !isStaffRoles(caller.roles)
-  const db = await loadCanaryDb(caller.orgId, {
-    redactForVendor: isVendorOnly,
-    vendorPersonId: isVendorOnly ? caller.personId : undefined,
-  })
+  const [db, userAvatarUrl] = await Promise.all([
+    loadCanaryDb(caller.orgId, {
+      redactForVendor: isVendorOnly,
+      vendorPersonId: isVendorOnly ? caller.personId : undefined,
+    }),
+    caller.avatarPath
+      ? createClient().then((supabase) =>
+          supabase.storage
+            .from('org-assets')
+            .createSignedUrl(caller.avatarPath!, 3600)
+            .then(({ data }) => data?.signedUrl ?? null),
+        )
+      : Promise.resolve(null),
+  ])
   const role = toCanaryRole(caller.roles)
   const scoped = scopeDb(db, role, caller.personId)
   const priv = role === 'Admin' || role === 'Manager'
-
-  let userAvatarUrl: string | null = null
-  if (caller.avatarPath) {
-    const supabase = await createClient()
-    const { data } = await supabase.storage
-      .from('org-assets')
-      .createSignedUrl(caller.avatarPath, 3600)
-    userAvatarUrl = data?.signedUrl ?? null
-  }
 
   return {
     db: scoped,

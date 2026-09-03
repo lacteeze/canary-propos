@@ -116,7 +116,7 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // CRITICAL: getUser() refreshes the session on every request — do not remove or replace with getSession()
+  // CRITICAL: getUser() validates the JWT — do not replace with getSession()
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -127,9 +127,14 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
+  let activeUser = user
+  const claims = (user?.app_metadata ?? {}) as { org_id?: string; role?: string }
+  const needsClaimSync = Boolean(user && (!claims.org_id || !claims.role))
+
   // After onboarding / invite accept, JWT may lack org_id/role even though a
-  // people row exists (or email can be linked). Sync claims + refresh for portals.
+  // people row exists (or email can be linked). Sync only when claims are missing.
   if (
+    needsClaimSync &&
     user &&
     (pathname.startsWith('/app') ||
       pathname.startsWith('/onboarding') ||
@@ -141,18 +146,18 @@ export async function middleware(request: NextRequest) {
       const {
         data: { session },
       } = await supabase.auth.getSession()
-      await ensureJwtClaimsFromPeople(supabase, user, session?.access_token)
+      const refreshed = await ensureJwtClaimsFromPeople(supabase, user, session?.access_token)
+      if (refreshed) {
+        const {
+          data: { session: nextSession },
+        } = await supabase.auth.getSession()
+        if (nextSession?.user) activeUser = nextSession.user
+      }
     } catch (err) {
       console.error('[middleware] JWT claim sync failed', err)
     }
   }
 
-  const {
-    data: { user: freshUser },
-  } = user
-    ? await supabase.auth.getUser()
-    : { data: { user: null } }
-  const activeUser = freshUser ?? user
   const role = activeUser?.app_metadata?.role as string | undefined
 
   // Unauthenticated user accessing a protected path → redirect to /login
@@ -241,5 +246,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon\\.ico).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon\\.ico|api/|auth/|.*\\.(?:png|jpg|jpeg|svg|ico|webp|css|js|txt|xml)$).*)',
+  ],
 }

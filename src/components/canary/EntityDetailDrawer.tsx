@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useCallback, useLayoutEffect, useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
 import {
   createTenantAndLinkToLease,
   deleteLease,
@@ -13,6 +12,7 @@ import {
   updatePropertyDetails,
   updatePropertyField,
   type PropertyDetailsInput,
+  type AuditEntry,
 } from '@/app/actions/entity-updates'
 import { getOrCreatePropertyThread, getThreadMessages, sendChatMessage, type ChatMessage } from '@/app/actions/chat'
 import { LEASE_TERM_LABELS } from '@/lib/canary/lease-term'
@@ -450,7 +450,6 @@ function PropertyChatSection({
   canEdit: boolean
   onOpenMessages?: (threadId: string) => void
 }) {
-  const router = useRouter()
   const [, startTransition] = useTransition()
   const [threadId, setThreadId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -477,7 +476,6 @@ function PropertyChatSection({
     startTransition(async () => {
       await sendChatMessage(threadId, body)
       setMessages(await getThreadMessages(threadId))
-      router.refresh()
     })
   }
 
@@ -994,8 +992,7 @@ export default function EntityDetailDrawer({
   onOpenListing,
   presentation = 'overlay',
 }: EntityDetailDrawerProps) {
-  const router = useRouter()
-  const [auditKey, setAuditKey] = useState(0)
+  const [appendedAudit, setAppendedAudit] = useState<AuditEntry[]>([])
   const [editingProperty, setEditingProperty] = useState(false)
   const [showPhotos, setShowPhotos] = useState(false)
   const [deletingLease, setDeletingLease] = useState(false)
@@ -1003,6 +1000,7 @@ export default function EntityDetailDrawer({
   React.useEffect(() => {
     setEditingProperty(false)
     setShowPhotos(false)
+    setAppendedAudit([])
   }, [drawer?.kind, drawer?.id])
 
   React.useEffect(() => {
@@ -1018,15 +1016,12 @@ export default function EntityDetailDrawer({
     return () => window.removeEventListener('keydown', onKey)
   }, [drawer, onClose, editingProperty, showPhotos])
 
-  const refresh = () => {
-    setAuditKey((k) => k + 1)
-    router.refresh()
-  }
-
-  const wrapSave = (fn: (v: string) => Promise<{ success: boolean; error?: string }>) =>
+  const wrapSave = (fn: (v: string) => Promise<{ success: boolean; error?: string; audit?: AuditEntry[] }>) =>
     async (v: string) => {
       const res = await fn(v)
-      if (res.success) refresh()
+      if (res.success && res.audit?.length) {
+        setAppendedAudit((prev) => [...res.audit!, ...prev])
+      }
       return res
     }
 
@@ -1176,7 +1171,7 @@ export default function EntityDetailDrawer({
           priv={priv}
           tenantNames={tenantNames}
           onNavigate={onNavigate}
-          onSaved={refresh}
+          onSaved={() => {}}
         />,
       ]
       const related = db.projects.filter((j) => j.property === l.property)
@@ -1311,7 +1306,7 @@ export default function EntityDetailDrawer({
           property={p}
           inquiries={db.inquiries}
           canEdit={canEdit}
-          onConverted={refresh}
+          onConverted={() => {}}
         />,
       ]
       propertyPhotoCount = p.listingPhotoPaths?.length ?? 0
@@ -1321,7 +1316,7 @@ export default function EntityDetailDrawer({
             propertyId={p.propertyDbId}
             orgId={db.orgId}
             gallery
-            onChanged={refresh}
+            onChanged={() => {}}
           />
         )
       }
@@ -1553,7 +1548,6 @@ export default function EntityDetailDrawer({
         return
       }
       onClose()
-      router.refresh()
     } finally {
       setDeletingLease(false)
     }
@@ -1632,7 +1626,7 @@ export default function EntityDetailDrawer({
           <div className={`cy-property-modal-body${showPhotos ? ' is-photos-open' : ''}`}>
             <div className="cy-property-modal-fields">
               {sections}
-              {auditTable && <AuditLogPanel key={auditKey} tableName={auditTable} recordId={auditId} canEdit={canEdit} />}
+              {auditTable && <AuditLogPanel tableName={auditTable} recordId={auditId} canEdit={canEdit} appendedEntries={appendedAudit} />}
             </div>
             {showPhotos && (
               <div className="cy-property-modal-media">
@@ -1652,7 +1646,7 @@ export default function EntityDetailDrawer({
             portfolios={db.portfolios.map((pf) => ({ id: pf.id, name: pf.name }))}
             owners={db.people.filter(isOwnerPerson)}
             onClose={() => setEditingProperty(false)}
-            onSaved={refresh}
+            onSaved={() => {}}
           />
         )}
       </>
@@ -1692,7 +1686,7 @@ export default function EntityDetailDrawer({
             )}
           </div>
           <div>{sections}</div>
-          {auditTable && <AuditLogPanel key={auditKey} tableName={auditTable} recordId={auditId} canEdit={canEdit} />}
+          {auditTable && <AuditLogPanel tableName={auditTable} recordId={auditId} canEdit={canEdit} appendedEntries={appendedAudit} />}
         </div>
         {editingProperty && propertyForEdit && canEdit && (
           <PropertyEditForm
@@ -1701,7 +1695,7 @@ export default function EntityDetailDrawer({
             portfolios={db.portfolios.map((pf) => ({ id: pf.id, name: pf.name }))}
             owners={db.people.filter(isOwnerPerson)}
             onClose={() => setEditingProperty(false)}
-            onSaved={refresh}
+            onSaved={() => {}}
           />
         )}
       </>
@@ -1739,7 +1733,7 @@ export default function EntityDetailDrawer({
           )}
         </div>
         <div style={{ flex: 1 }}>{sections}</div>
-        {auditTable && <AuditLogPanel key={auditKey} tableName={auditTable} recordId={auditId} canEdit={canEdit} />}
+        {auditTable && <AuditLogPanel tableName={auditTable} recordId={auditId} canEdit={canEdit} appendedEntries={appendedAudit} />}
       </aside>
       {editingProperty && propertyForEdit && canEdit && (
         <PropertyEditForm
@@ -1748,7 +1742,7 @@ export default function EntityDetailDrawer({
           portfolios={db.portfolios.map((pf) => ({ id: pf.id, name: pf.name }))}
           owners={db.people.filter(isOwnerPerson)}
           onClose={() => setEditingProperty(false)}
-          onSaved={refresh}
+          onSaved={() => {}}
         />
       )}
     </>

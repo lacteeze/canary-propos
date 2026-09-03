@@ -46,7 +46,6 @@ export default function PropertyDetailPage({
               window.alert(res.error)
               return
             }
-            router.refresh()
           })
         },
       })
@@ -61,7 +60,6 @@ export default function PropertyDetailPage({
               window.alert(res.error)
               return
             }
-            router.refresh()
           })
         },
       })

@@ -10,6 +10,7 @@
 import { google, type drive_v3 } from 'googleapis'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { DriveFolderListing, DriveListItem } from '@/lib/google-drive-types'
+import { getOrgIntegration, upsertOrgIntegration } from '@/lib/org-integrations'
 
 export type { DriveFolderListing, DriveListItem } from '@/lib/google-drive-types'
 
@@ -84,13 +85,13 @@ export function createDriveClient(accessToken: string): drive_v3.Drive {
 // getDriveAuthUrl
 // ---------------------------------------------------------------------------
 
-export function getDriveAuthUrl(orgId: string): string {
+export function getDriveAuthUrl(state: string): string {
   const oauth2Client = createOAuth2Client()
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: [DRIVE_READONLY_SCOPE],
     prompt: 'consent', // force refresh_token on every connect
-    state: orgId,
+    state,
   })
 }
 
@@ -128,30 +129,22 @@ export async function exchangeDriveCodeForTokens(code: string): Promise<{
 
 export async function refreshDriveTokenIfNeeded(
   orgId: string,
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
 ): Promise<string> {
-  const { data: org, error } = await supabase
-    .from('organizations')
-    .select('drive_access_token, drive_refresh_token, drive_token_expiry')
-    .eq('id', orgId)
-    .single()
+  const row = await getOrgIntegration(orgId, 'drive')
 
-  if (error || !org) {
-    throw new Error('Organization not found.')
-  }
-
-  if (!org.drive_access_token || !org.drive_refresh_token) {
+  if (!row?.access_token || !row.refresh_token) {
     throw new Error('Google Drive not connected. Please connect Drive from Settings.')
   }
 
-  const expiryMs: number = org.drive_token_expiry ?? 0
+  const expiryMs: number = row.token_expiry ?? 0
 
   if (Date.now() < expiryMs - 60_000) {
-    return org.drive_access_token
+    return row.access_token
   }
 
   const oauth2Client = createOAuth2Client()
-  oauth2Client.setCredentials({ refresh_token: org.drive_refresh_token })
+  oauth2Client.setCredentials({ refresh_token: row.refresh_token })
 
   const { credentials } = await oauth2Client.refreshAccessToken()
 
@@ -159,13 +152,12 @@ export async function refreshDriveTokenIfNeeded(
     throw new Error('Failed to refresh Drive access token.')
   }
 
-  await supabase
-    .from('organizations')
-    .update({
-      drive_access_token: credentials.access_token,
-      drive_token_expiry: credentials.expiry_date ?? Date.now() + 3600 * 1000,
-    })
-    .eq('id', orgId)
+  const tokenExpiry = credentials.expiry_date ?? Date.now() + 3600 * 1000
+  await upsertOrgIntegration(orgId, 'drive', {
+    access_token: credentials.access_token,
+    refresh_token: row.refresh_token,
+    token_expiry: tokenExpiry,
+  })
 
   return credentials.access_token
 }

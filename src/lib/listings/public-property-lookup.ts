@@ -50,7 +50,7 @@ async function selectPublicProperty(
   value: string,
 ): Promise<PropertyPublicProperty | null> {
   const query = client
-    .from('properties')
+    .from('public_properties')
     .select(PROPERTY_PUBLIC_SELECT)
     .eq('org_id', orgId)
 
@@ -79,7 +79,7 @@ async function loadPropertyByUnitId(
 ): Promise<PropertyPublicProperty | null> {
   if (!unitId) return null
   const { data: unit, error } = await client
-    .from('units')
+    .from('public_units')
     .select('property_id')
     .eq('id', unitId)
     .maybeSingle()
@@ -171,7 +171,7 @@ export async function loadUnitActiveLeaseEnd(
 export async function publicPropertyIsLeased(propertyId: string): Promise<boolean> {
   const client = publicPropertyLookupClient()
   const { data: units, error: unitsError } = await client
-    .from('units')
+    .from('public_units')
     .select('id, status')
     .eq('property_id', propertyId)
   if (unitsError) {

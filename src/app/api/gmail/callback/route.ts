@@ -1,56 +1,81 @@
-// src/app/api/gmail/callback/route.ts
-// Handles the Google OAuth redirect after the manager authorizes Gmail access.
-// Flow: Google → GET /api/gmail/callback?code=...&state=<orgId>
-//
-// Security (T-04-08): state=orgId ensures tokens are written only to the org
-// that initiated the OAuth flow. Admin client is required to bypass RLS for
-// the token write.
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { exchangeCodeForTokens } from '@/lib/gmail'
+import { upsertOrgIntegration } from '@/lib/org-integrations'
+import { OAUTH_STATE_COOKIE, clearOAuthStateCookie } from '@/lib/oauth-state'
+
+function isManagerOrAdmin(role: string[] | string | null | undefined): boolean {
+  const roles = Array.isArray(role) ? role : role ? [role] : []
+  return roles.some((r) => r.includes('manager') || r.includes('admin'))
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
   const code = searchParams.get('code')
-  const orgId = searchParams.get('state')
+  const state = searchParams.get('state')
+  const cookieState = request.cookies.get(OAUTH_STATE_COOKIE)?.value
 
-  if (!code || !orgId) {
-    return NextResponse.redirect(
-      new URL('/settings?gmail=error&reason=missing_params', request.url),
+  const fail = (reason: string) => {
+    const res = NextResponse.redirect(
+      new URL(`/settings?gmail=error&reason=${reason}`, request.url),
     )
+    clearOAuthStateCookie(res)
+    return res
   }
+
+  if (!code || !state || !cookieState || state !== cookieState) {
+    return fail('missing_params')
+  }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return fail('unauthorized')
+
+  const { data: person } = await supabase
+    .from('people')
+    .select('org_id, role')
+    .eq('user_id', user.id)
+    .eq('active', true)
+    .single()
+
+  if (!person || !isManagerOrAdmin(person.role)) return fail('unauthorized')
+
+  const orgId = person.org_id
 
   let tokens: { access_token: string; refresh_token: string; expiry_date: number }
   try {
     tokens = await exchangeCodeForTokens(code)
   } catch (err) {
     console.error('[gmail/callback] token exchange failed:', err)
-    return NextResponse.redirect(
-      new URL('/settings?gmail=error&reason=token_exchange', request.url),
-    )
+    return fail('token_exchange')
   }
 
-  // Admin client required — RLS would block writing to organizations row
-  // (T-04-09: refresh_token never returned to client; stays server-side only)
-  const admin = createAdminClient()
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (admin as any)
-    .from('organizations')
-    .update({
-      gmail_access_token: tokens.access_token,
-      gmail_refresh_token: tokens.refresh_token,
-      gmail_token_expiry: tokens.expiry_date,
-      gmail_connected_at: new Date().toISOString(),
+  try {
+    await upsertOrgIntegration(orgId, 'gmail', {
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      token_expiry: tokens.expiry_date,
     })
+  } catch (err) {
+    console.error('[gmail/callback] integration write failed:', err)
+    return fail('db_update')
+  }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('organizations')
+    .update({ gmail_connected_at: new Date().toISOString() })
     .eq('id', orgId)
 
   if (error) {
-    console.error('[gmail/callback] DB update failed:', error)
-    return NextResponse.redirect(
-      new URL('/settings?gmail=error&reason=db_update', request.url),
-    )
+    console.error('[gmail/callback] connected_at update failed:', error)
+    return fail('db_update')
   }
 
-  return NextResponse.redirect(new URL('/settings?gmail=connected', request.url))
+  const res = NextResponse.redirect(new URL('/settings?gmail=connected', request.url))
+  clearOAuthStateCookie(res)
+  return res
 }

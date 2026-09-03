@@ -940,11 +940,28 @@ export async function createTenantAndLinkToLease(
   return { success: true }
 }
 
+const PERSON_DISPLAY_FIELDS = [
+  'status',
+  'email',
+  'phone',
+  'company',
+  'notes',
+  'mailing_address',
+  'website',
+  'services',
+] as const
+
+type PersonDisplayField = (typeof PERSON_DISPLAY_FIELDS)[number]
+
 export async function updatePersonField(
   personId: string,
-  field: 'status' | 'email' | 'phone' | 'company' | 'notes' | 'mailing_address' | 'website' | 'services',
+  field: PersonDisplayField,
   value: string
 ): Promise<ActionResult> {
+  if (!(PERSON_DISPLAY_FIELDS as readonly string[]).includes(field)) {
+    return { success: false, error: 'That field cannot be updated here.' }
+  }
+
   const ctx = await getStaffContext()
   if (!ctx) return { success: false, error: 'Only managers can edit people.' }
 

@@ -7,6 +7,8 @@ import { CANADIAN_PROVINCES } from '@/lib/constants/provinces'
 import { getGmailAuthUrl } from '@/lib/gmail'
 import { getDriveAuthUrl } from '@/lib/google-drive'
 import { getTasksAuthUrl } from '@/lib/google-tasks'
+import { deleteOrgIntegration } from '@/lib/org-integrations'
+import { setOAuthStateCookie } from '@/lib/oauth-state'
 
 const provinceCodes = CANADIAN_PROVINCES.map((p) => p.value) as [string, ...string[]]
 
@@ -94,7 +96,9 @@ export async function getGmailConnectUrl(): Promise<UpdateOrgResult & { url?: st
   }
 
   try {
-    const url = getGmailAuthUrl(ctx.person.org_id)
+    const state = crypto.randomUUID()
+    await setOAuthStateCookie(state)
+    const url = getGmailAuthUrl(state)
     return { success: true, url }
   } catch (err) {
     console.error('[getGmailConnectUrl] failed:', err)
@@ -113,15 +117,16 @@ export async function disconnectGmail(_orgId?: string): Promise<UpdateOrgResult>
     return { success: false, error: 'Only managers can disconnect Gmail.' }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (ctx.supabase as any)
+  try {
+    await deleteOrgIntegration(ctx.person.org_id, 'gmail')
+  } catch (err) {
+    console.error('[disconnectGmail] integration:', err)
+    return { success: false, error: 'Failed to disconnect Gmail.' }
+  }
+
+  const { error } = await ctx.supabase
     .from('organizations')
-    .update({
-      gmail_access_token: null,
-      gmail_refresh_token: null,
-      gmail_token_expiry: null,
-      gmail_connected_at: null,
-    })
+    .update({ gmail_connected_at: null })
     .eq('id', ctx.person.org_id)
 
   if (error) {
@@ -145,7 +150,9 @@ export async function getDriveConnectUrl(): Promise<UpdateOrgResult & { url?: st
   }
 
   try {
-    const url = getDriveAuthUrl(ctx.person.org_id)
+    const state = crypto.randomUUID()
+    await setOAuthStateCookie(state)
+    const url = getDriveAuthUrl(state)
     return { success: true, url }
   } catch (err) {
     console.error('[getDriveConnectUrl] failed:', err)
@@ -168,14 +175,16 @@ export async function disconnectDrive(_orgId?: string): Promise<UpdateOrgResult>
     return { success: false, error: 'Only managers can disconnect Google Drive.' }
   }
 
+  try {
+    await deleteOrgIntegration(ctx.person.org_id, 'drive')
+  } catch (err) {
+    console.error('[disconnectDrive] integration:', err)
+    return { success: false, error: 'Failed to disconnect Google Drive.' }
+  }
+
   const { error } = await ctx.supabase
     .from('organizations')
-    .update({
-      drive_access_token: null,
-      drive_refresh_token: null,
-      drive_token_expiry: null,
-      drive_connected_at: null,
-    })
+    .update({ drive_connected_at: null })
     .eq('id', ctx.person.org_id)
 
   if (error) {
@@ -199,7 +208,9 @@ export async function getGoogleTasksConnectUrl(): Promise<UpdateOrgResult & { ur
   }
 
   try {
-    const url = getTasksAuthUrl(ctx.person.org_id)
+    const state = crypto.randomUUID()
+    await setOAuthStateCookie(state)
+    const url = getTasksAuthUrl(state)
     return { success: true, url }
   } catch (err) {
     console.error('[getGoogleTasksConnectUrl] failed:', err)
@@ -222,14 +233,16 @@ export async function disconnectGoogleTasks(_orgId?: string): Promise<UpdateOrgR
     return { success: false, error: 'Only managers can disconnect Google Tasks.' }
   }
 
+  try {
+    await deleteOrgIntegration(ctx.person.org_id, 'tasks')
+  } catch (err) {
+    console.error('[disconnectGoogleTasks] integration:', err)
+    return { success: false, error: 'Failed to disconnect Google Tasks.' }
+  }
+
   const { error } = await ctx.supabase
     .from('organizations')
-    .update({
-      tasks_access_token: null,
-      tasks_refresh_token: null,
-      tasks_token_expiry: null,
-      tasks_connected_at: null,
-    })
+    .update({ tasks_connected_at: null })
     .eq('id', ctx.person.org_id)
 
   if (error) {

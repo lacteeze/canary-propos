@@ -20,17 +20,67 @@ export async function getPublishedListings(
   const { data: listings } = await supabase
     .from('listings')
     .select(
-      `id, slug, listing_title, listing_description, display_rent, highlights, available_from, status, created_at,
-       units!unit_id(id, bedrooms, bathrooms, asking_rent, amenities,
-         properties!property_id(id, street_address, city, province, photo_paths, listing_brief))`
+      `id, slug, listing_title, listing_description, display_rent, highlights, available_from, status, created_at, unit_id`,
     )
     .eq('status', 'published')
     .eq('org_id', org.id)
 
-  const rows = (listings ?? []) as ListingRow[]
-  const propertyIds = rows
-    .map((r) => r.units?.properties?.id)
-    .filter((id): id is string => !!id)
+  const listingRows = listings ?? []
+  const unitIds = [
+    ...new Set(
+      listingRows
+        .map((row) => row.unit_id)
+        .filter((id): id is string => !!id),
+    ),
+  ]
+  const { data: units } = unitIds.length
+    ? await supabase
+        .from('public_units')
+        .select('id, bedrooms, bathrooms, amenities, property_id')
+        .in('id', unitIds)
+    : { data: [] as Array<{ id: string; bedrooms: number; bathrooms: number; amenities: string[] | null; property_id: string | null }> }
+  const unitsById = new Map((units ?? []).map((u) => [u.id, u]))
+  const propertyIds = [
+    ...new Set(
+      [...unitsById.values()]
+        .map((u) => u.property_id)
+        .filter((id): id is string => !!id),
+    ),
+  ]
+  const { data: properties } = propertyIds.length
+    ? await supabase
+        .from('public_properties')
+        .select('id, street_address, city, province, photo_paths, listing_brief')
+        .in('id', propertyIds)
+    : { data: [] as Array<{ id: string; street_address: string; city: string; province: string; photo_paths: string[] | null; listing_brief: unknown }> }
+  const propertiesById = new Map((properties ?? []).map((p) => [p.id, p]))
+
+  const rows: ListingRow[] = listingRows.map((listing) => {
+    const unit = listing.unit_id ? unitsById.get(listing.unit_id) : undefined
+    const property = unit?.property_id ? propertiesById.get(unit.property_id) : undefined
+    return {
+      ...listing,
+      units: unit
+        ? {
+            id: unit.id,
+            bedrooms: unit.bedrooms,
+            bathrooms: unit.bathrooms,
+            asking_rent: null,
+            amenities: unit.amenities,
+            properties: property
+              ? {
+                  id: property.id,
+                  street_address: property.street_address,
+                  city: property.city,
+                  province: property.province,
+                  photo_paths: property.photo_paths,
+                  listing_brief: property.listing_brief,
+                }
+              : null,
+          }
+        : null,
+    }
+  })
 
   const pathsByProperty = await getListingPhotoPathsByPropertyIds(propertyIds)
 

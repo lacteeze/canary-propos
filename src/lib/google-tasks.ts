@@ -10,6 +10,7 @@
 
 import { google, type tasks_v1 } from 'googleapis'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { getOrgIntegration, upsertOrgIntegration } from '@/lib/org-integrations'
 
 export const TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks'
 
@@ -60,13 +61,13 @@ export function createTasksClient(accessToken: string): tasks_v1.Tasks {
   return google.tasks({ version: 'v1', auth: oauth2Client })
 }
 
-export function getTasksAuthUrl(orgId: string): string {
+export function getTasksAuthUrl(state: string): string {
   const oauth2Client = createOAuth2Client()
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: [TASKS_SCOPE],
     prompt: 'consent',
-    state: orgId,
+    state,
   })
 }
 
@@ -96,30 +97,22 @@ export async function exchangeTasksCodeForTokens(code: string): Promise<{
 
 export async function refreshTasksTokenIfNeeded(
   orgId: string,
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
 ): Promise<string> {
-  const { data: org, error } = await supabase
-    .from('organizations')
-    .select('tasks_access_token, tasks_refresh_token, tasks_token_expiry')
-    .eq('id', orgId)
-    .single()
+  const row = await getOrgIntegration(orgId, 'tasks')
 
-  if (error || !org) {
-    throw new Error('Organization not found.')
-  }
-
-  if (!org.tasks_access_token || !org.tasks_refresh_token) {
+  if (!row?.access_token || !row.refresh_token) {
     throw new Error('Google Tasks not connected. Please connect Google Tasks from Settings.')
   }
 
-  const expiryMs: number = org.tasks_token_expiry ?? 0
+  const expiryMs: number = row.token_expiry ?? 0
 
   if (Date.now() < expiryMs - 60_000) {
-    return org.tasks_access_token
+    return row.access_token
   }
 
   const oauth2Client = createOAuth2Client()
-  oauth2Client.setCredentials({ refresh_token: org.tasks_refresh_token })
+  oauth2Client.setCredentials({ refresh_token: row.refresh_token })
 
   const { credentials } = await oauth2Client.refreshAccessToken()
 
@@ -127,13 +120,12 @@ export async function refreshTasksTokenIfNeeded(
     throw new Error('Failed to refresh Google Tasks access token.')
   }
 
-  await supabase
-    .from('organizations')
-    .update({
-      tasks_access_token: credentials.access_token,
-      tasks_token_expiry: credentials.expiry_date ?? Date.now() + 3600 * 1000,
-    })
-    .eq('id', orgId)
+  const tokenExpiry = credentials.expiry_date ?? Date.now() + 3600 * 1000
+  await upsertOrgIntegration(orgId, 'tasks', {
+    access_token: credentials.access_token,
+    refresh_token: row.refresh_token,
+    token_expiry: tokenExpiry,
+  })
 
   return credentials.access_token
 }

@@ -12,7 +12,7 @@ export async function getOrgBySlug(
 
   const supabase = createPublicClient()
   const { data, error } = await supabase
-    .from('organizations')
+    .from('public_organizations')
     .select('id, name')
     .eq('slug', slug)
     .single()

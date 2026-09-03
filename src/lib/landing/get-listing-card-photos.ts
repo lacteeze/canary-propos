@@ -13,10 +13,7 @@ export async function getListingCardPhotos(listingId: string): Promise<string[]>
   const supabase = createPublicClient()
   const { data: listing, error } = await supabase
     .from('listings')
-    .select(
-      `id, status,
-       units!unit_id(properties!property_id(id, photo_paths))`
-    )
+    .select('id, status, unit_id')
     .eq('id', id)
     .eq('status', 'published')
     .maybeSingle()
@@ -26,12 +23,20 @@ export async function getListingCardPhotos(listingId: string): Promise<string[]>
     return []
   }
 
-  const unit = listing.units as {
-    properties?: { id?: string; photo_paths?: string[] | null } | null
-  } | null
-  const property = unit?.properties
-  const propertyId = property?.id
+  if (!listing.unit_id) return []
+  const { data: unit } = await supabase
+    .from('public_units')
+    .select('property_id')
+    .eq('id', listing.unit_id)
+    .maybeSingle()
+  const propertyId = unit?.property_id
   if (!propertyId) return []
+  const { data: property } = await supabase
+    .from('public_properties')
+    .select('id, photo_paths')
+    .eq('id', propertyId)
+    .maybeSingle()
+  if (!property?.id) return []
 
   const fromMedia = await getListingPhotoPathsForProperty(propertyId)
   const fromLegacy = (property?.photo_paths ?? []).filter(

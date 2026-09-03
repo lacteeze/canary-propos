@@ -7,8 +7,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { AddUnitForm } from '@/components/properties/AddUnitForm'
 import { PropertyPhotoUpload } from '@/components/properties/PropertyPhotoUpload'
 import { ExpiryAlertCallout } from '@/components/leases/ExpiryAlertCallout'
-import { ListingForm } from '@/components/listings/ListingForm'
-import { toggleListingStatus } from '@/app/actions/listings'
 import { AnnouncementsSection } from './AnnouncementsSection'
 
 const PROPERTY_TYPE_LABELS: Record<string, string> = {
@@ -95,17 +93,6 @@ export default async function PropertyDetailPage({ params }: PageProps) {
 
   const leasesList = leases ?? []
 
-  // Fetch listings for units in this property
-  const { data: listings } = unitIds.length > 0
-    ? await supabase
-        .from('listings')
-        .select('id, unit_id, listing_title, listing_description, highlights, display_rent, available_from, available_until, status')
-        .in('unit_id', unitIds)
-        .eq('org_id', callerPerson.org_id)
-    : { data: [] }
-
-  const listingsList = listings ?? []
-
   // Fetch announcements for this property (newest first)
   const { data: announcementsData } = await supabase
     .from('announcements')
@@ -188,7 +175,6 @@ export default async function PropertyDetailPage({ params }: PageProps) {
           <TabsTrigger value="building-info">Building Info</TabsTrigger>
           <TabsTrigger value="units">Units {totalCount > 0 && `(${totalCount})`}</TabsTrigger>
           <TabsTrigger value="leases">Leases {leasesList.length > 0 && `(${leasesList.length})`}</TabsTrigger>
-          <TabsTrigger value="listings">Listings {listingsList.length > 0 && `(${listingsList.length})`}</TabsTrigger>
           <TabsTrigger value="announcements">Announcements {announcementsList.length > 0 && `(${announcementsList.length})`}</TabsTrigger>
         </TabsList>
 
@@ -444,121 +430,6 @@ export default async function PropertyDetailPage({ params }: PageProps) {
           )}
         </TabsContent>
 
-        {/* Listings Tab */}
-        <TabsContent value="listings">
-          {listingsList.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-stone-200 px-8 py-12 text-center">
-              <h2 className="mb-2 text-base font-semibold text-stone-900">No listing yet</h2>
-              <p className="mb-6 text-sm text-stone-500">
-                Create a listing for a unit in this property to attract tenants.
-              </p>
-              {isManager && unitsList.length > 0 && (
-                <ListingForm
-                  propertyId={propertyId}
-                  orgId={callerPerson.org_id}
-                  units={unitsList}
-                />
-              )}
-              {isManager && unitsList.length === 0 && (
-                <p className="text-sm text-stone-400">Add units to this property before creating a listing.</p>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {listingsList.map((listing) => {
-                const unit = unitsList.find((u) => u.id === listing.unit_id)
-                const statusBadge = {
-                  draft: { bg: 'bg-stone-100', text: 'text-stone-700', label: 'Draft' },
-                  renewal_sent: { bg: 'bg-violet-100', text: 'text-violet-700', label: 'Renewal sent' },
-                  declined: { bg: 'bg-rose-100', text: 'text-rose-700', label: 'Declined' },
-                  published: { bg: 'bg-green-100', text: 'text-green-700', label: 'Published' },
-                  unlisted: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Unlisted' },
-                }[listing.status as string] ?? { bg: 'bg-stone-100', text: 'text-stone-700', label: listing.status }
-
-                const nextStatus = listing.status === 'published' ? 'unlisted' : 'published'
-                const toggleLabel = listing.status === 'published' ? 'Unpublish' : 'Publish'
-
-                return (
-                  <div key={listing.id} className="rounded-xl border border-stone-200 bg-white p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-medium text-stone-900">{listing.listing_title}</h3>
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadge.bg} ${statusBadge.text}`}
-                          >
-                            {statusBadge.label}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-sm text-stone-500">
-                          Unit {unit?.unit_number ?? '—'}
-                          {listing.display_rent != null
-                            ? ` · ${new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 0 }).format(listing.display_rent)}/mo`
-                            : ' · Rent not set'}
-                          {listing.available_from ? ` · Available ${listing.available_from}` : ''}
-                          {listing.available_until ? ` · Lease ends ${listing.available_until}` : ''}
-                        </p>
-                        {listing.listing_description && (
-                          <p className="mt-2 text-sm text-stone-600 line-clamp-2">{listing.listing_description}</p>
-                        )}
-                        {listing.highlights && listing.highlights.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {listing.highlights.map((h, i) => (
-                              <span key={i} className="inline-flex items-center rounded-full bg-stone-100 px-2.5 py-0.5 text-xs text-stone-600">
-                                {h}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {isManager && (
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <form
-                            action={async (_fd: FormData) => { await toggleListingStatus(listing.id, nextStatus as 'draft' | 'published' | 'unlisted', propertyId) }}
-                          >
-                            <button
-                              type="submit"
-                              className="rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50"
-                            >
-                              {toggleLabel}
-                            </button>
-                          </form>
-                          <ListingForm
-                            propertyId={propertyId}
-                            orgId={callerPerson.org_id}
-                            units={unitsList}
-                            existingListing={{
-                              id: listing.id,
-                              unit_id: listing.unit_id,
-                              listing_title: listing.listing_title,
-                              listing_description: listing.listing_description,
-                              highlights: listing.highlights,
-                              display_rent: listing.display_rent,
-                              available_from: listing.available_from,
-                              available_until: listing.available_until,
-                              listing_status: listing.status,
-                            }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-
-              {/* Create additional listing */}
-              {isManager && (
-                <div className="pt-2">
-                  <ListingForm
-                    propertyId={propertyId}
-                    orgId={callerPerson.org_id}
-                    units={unitsList}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-        </TabsContent>
         {/* Announcements Tab */}
         <TabsContent value="announcements">
           <div className="rounded-xl border border-stone-200 bg-white p-6">

@@ -191,10 +191,10 @@ export interface CanaryPerson {
 }
 
 /** Timeline / composer status for draft listings (maps to listings.status). */
-export type DraftListingStatus = 'draft' | 'renewal_sent' | 'published' | 'declined'
+export type DraftListingStatus = 'draft' | 'renewal_sent' | 'published' | 'declined' | 'unlisted'
 
 export function toDraftListingStatus(status: string | null | undefined): DraftListingStatus {
-  if (status === 'renewal_sent' || status === 'published' || status === 'declined') return status
+  if (status === 'renewal_sent' || status === 'published' || status === 'declined' || status === 'unlisted') return status
   return 'draft'
 }
 
@@ -216,6 +216,9 @@ export function draftTimelineMeta(d: CanaryDraft) {
   if (d.status === 'declined') {
     return { label: 'Declined', title: ['Declined', rent].filter(Boolean).join(' · '), bg: 'transparent', color: 'var(--red)', borderStyle: '2px dashed var(--red)' as const }
   }
+  if (d.status === 'unlisted') {
+    return { label: 'Unlisted', title: ['Unlisted', rent].filter(Boolean).join(' · '), bg: 'transparent', color: 'var(--dim)', borderStyle: '2px dashed var(--dim)' as const }
+  }
   return { label: 'Draft lease', title: ['Draft', rent].filter(Boolean).join(' · '), bg: 'transparent', color: 'var(--accent)', borderStyle: '2px dashed var(--accent)' as const }
 }
 
@@ -223,6 +226,7 @@ export function draftStatusBadge(status: DraftListingStatus): { label: string; c
   if (status === 'published') return { label: 'PUBLIC', color: 'var(--green)' }
   if (status === 'renewal_sent') return { label: 'RENEWAL SENT', color: 'var(--purple)' }
   if (status === 'declined') return { label: 'DECLINED', color: 'var(--red)' }
+  if (status === 'unlisted') return { label: 'UNLISTED', color: 'var(--dim)' }
   return { label: 'DRAFT', color: 'var(--dim)' }
 }
 

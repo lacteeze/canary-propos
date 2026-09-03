@@ -2,6 +2,7 @@
 
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
+import { saveDraftListing } from '@/app/actions/canary'
 import { createClient } from '@/lib/supabase/server'
 import { allocateListingSlugPreferProperty } from '@/lib/listings/slugify'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -204,86 +205,32 @@ export async function updateListing(
     property_id: string
   }
 ): Promise<ActionResult> {
-  const ctx = await getCallerContext()
-  if (!ctx) return { success: false, error: 'You must be signed in.' }
-
-  if (!ctx.person.role?.includes('manager') && !ctx.person.role?.includes('admin')) {
-    return { success: false, error: 'Only managers can update listings.' }
-  }
-
   const parsed = listingSchema.safeParse(data)
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
   }
 
-  // T-03-08: org_id guard on update
-  const { data: existing, error: fetchError } = await ctx.supabase
-    .from('listings')
-    .select('id, slug, unit_id, listing_title, listing_description, display_rent, available_from, available_until, highlights, status, published_at')
-    .eq('id', id)
-    .eq('org_id', ctx.person.org_id)
-    .single()
-
-  if (fetchError || !existing) {
-    return { success: false, error: 'Listing not found.' }
+  const status = parsed.data.status
+  if (
+    status !== 'draft' &&
+    status !== 'renewal_sent' &&
+    status !== 'published' &&
+    status !== 'declined' &&
+    status !== 'unlisted'
+  ) {
+    return { success: false, error: 'Invalid status.' }
   }
 
-  // T-03-09: verify the unit belongs to this org
-  const { data: unit, error: unitError } = await ctx.supabase
-    .from('units')
-    .select('id')
-    .eq('id', parsed.data.unit_id)
-    .eq('org_id', ctx.person.org_id)
-    .single()
-
-  if (unitError || !unit) {
-    return { success: false, error: 'Unit not found or does not belong to your organization.' }
-  }
-
-  const unitChanged = existing.unit_id !== parsed.data.unit_id
-  const updatePayload: ListingUpdate = {
-    unit_id: parsed.data.unit_id,
-    listing_title: parsed.data.listing_title,
-    listing_description: parsed.data.listing_description ?? null,
-    highlights: parsed.data.highlights.length > 0 ? parsed.data.highlights : null,
-    display_rent: parsed.data.display_rent ?? null,
-    available_from: parsed.data.available_from || null,
-    available_until: parsed.data.available_until || null,
-    status: parsed.data.status,
-    updated_at: new Date().toISOString(),
-  }
-  if (parsed.data.status === 'published') {
-    updatePayload.published_at = existing.published_at ?? new Date().toISOString()
-  }
-
-  if (parsed.data.status === 'published') {
-    const slug = await slugForPublish({
-      supabase: ctx.supabase,
-      orgId: ctx.person.org_id,
-      unitId: parsed.data.unit_id,
-      excludeListingId: id,
-      existingSlug: existing.slug,
-      unitChanged: unitChanged || !existing.slug,
-    })
-    if (slug) updatePayload.slug = slug
-  }
-
-  const { error } = await ctx.supabase
-    .from('listings')
-    .update(updatePayload)
-    .eq('id', id)
-    .eq('org_id', ctx.person.org_id)
-
-  if (error) {
-    console.error('[updateListing]', error)
-    return { success: false, error: 'Failed to update listing. Please try again.' }
-  }
-
-  revalidatePath('/properties/' + data.property_id)
-  revalidatePath(`/listings/${id}`)
-  const publicSlug = updatePayload.slug ?? existing.slug
-  if (publicSlug) revalidatePath(`/${publicSlug}`)
-  return { success: true }
+  return saveDraftListing({
+    id,
+    unitId: parsed.data.unit_id,
+    listingTitle: parsed.data.listing_title,
+    description: parsed.data.listing_description,
+    rent: parsed.data.display_rent,
+    start: parsed.data.available_from,
+    end: parsed.data.available_until,
+    status,
+  })
 }
 
 // --- toggleListingStatus ---

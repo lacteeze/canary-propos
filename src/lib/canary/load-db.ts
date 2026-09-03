@@ -5,6 +5,7 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { hasGarage } from '@/lib/listings/browse-utils'
+import { staffPetsLabel, staffUtilitiesLabel } from '@/lib/listings/listing-write'
 import { normalizeLeaseTermType, toListingIsoDate } from './lease-term'
 import { deriveTermTypeFromHighlights } from '@/lib/landing/listing-term'
 import type {
@@ -128,21 +129,19 @@ function personRoleLabel(roles: string[] | null): string {
   return r ? r[0].toUpperCase() + r.slice(1) : 'Contact'
 }
 
-function petsLabel(amenities: string[] | null, description: string | null): string {
-  const text = [...(amenities ?? []), description ?? ''].join(' ')
-  if (/by\s*approval|considered/i.test(text)) return 'By approval'
-  if (/dog\s*friendly/i.test(text)) return 'Dog friendly'
-  if (/cat\s*friendly/i.test(text)) return 'Cat friendly'
-  if (/pet\s*friendly|pets?\s*(allowed|welcome)/i.test(text)) return 'Pet friendly'
-  return 'No pets'
+function petsLabel(
+  briefPets: string | null | undefined,
+  amenities: string[] | null,
+  description: string | null,
+): string {
+  return staffPetsLabel(briefPets, amenities, description)
 }
 
-function utilitiesLabel(description: string | null): string {
-  if (!description) return 'Not included'
-  if (/utilities?\s+included/i.test(description) && !/not\s+included/i.test(description)) {
-    return 'Included'
-  }
-  return 'Not included'
+function utilitiesLabel(
+  briefUtilities: string | null | undefined,
+  description: string | null,
+): string {
+  return staffUtilitiesLabel(briefUtilities, description)
 }
 
 export const getCaller = cache(async function getCaller(): Promise<Caller | 'no-user' | 'no-person'> {
@@ -530,7 +529,7 @@ const loadCanaryDbCached = cache(async function loadCanaryDbCached(
             p.listing_brief && typeof p.listing_brief === 'object' && !Array.isArray(p.listing_brief)
               ? String((p.listing_brief as { pets?: unknown }).pets ?? '').trim()
               : ''
-          return briefPets || petsLabel(u.amenities, null)
+          return petsLabel(briefPets, u.amenities, null)
         })(),
         hasGarage: hasGarage(u.amenities, null),
         utilitiesIncluded: '',
@@ -781,8 +780,27 @@ const loadCanaryDbCached = cache(async function loadCanaryDbCached(
         }
         return ''
       })(),
-      pets: petsLabel(d.units.amenities, d.listing_description),
-      utilities: utilitiesLabel(d.listing_description),
+      pets: petsLabel(
+        (() => {
+          const brief = d.units.properties?.listing_brief
+          if (brief && typeof brief === 'object' && !Array.isArray(brief)) {
+            return String((brief as { pets?: unknown }).pets ?? '').trim()
+          }
+          return ''
+        })(),
+        d.units.amenities,
+        d.listing_description,
+      ),
+      utilities: utilitiesLabel(
+        (() => {
+          const brief = d.units.properties?.listing_brief
+          if (brief && typeof brief === 'object' && !Array.isArray(brief)) {
+            return String((brief as { utilities?: unknown }).utilities ?? '').trim()
+          }
+          return ''
+        })(),
+        d.listing_description,
+      ),
       description: d.listing_description ?? '',
       status: toDraftListingStatus(d.status),
       sentAt: d.updated_at ? String(d.updated_at).slice(0, 10) : '',

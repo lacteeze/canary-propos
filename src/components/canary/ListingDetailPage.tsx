@@ -104,6 +104,8 @@ export default function ListingDetailPage({
       start: form.start || null,
       end: advertisedEnd,
       listingTerm: form.listingTerm,
+      listingTitle: form.title,
+      parking: form.parking,
       description: form.description || null,
       pets: form.pets,
       utilities: form.utilities,
@@ -237,6 +239,15 @@ export default function ListingDetailPage({
         </div>
 
         <div className="cy-entity-form-grid">
+          <label style={{ gridColumn: '1 / -1' }}>
+            <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Public title</span>
+            <input
+              value={form.title}
+              disabled={!canEdit}
+              onChange={setField('title')}
+              style={{ ...fieldStyle, marginTop: 4 }}
+            />
+          </label>
           <label>
             <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Monthly rent</span>
             <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
@@ -389,6 +400,8 @@ export default function ListingDetailPage({
             <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontWeight: 600 }}>Pets</span>
             <select className="cy-select cy-select--field" value={form.pets} disabled={!canEdit} onChange={setField('pets')} style={{ marginTop: 4, width: '100%' }}>
               <option>No pets</option>
+              <option>Pets OK</option>
+              <option>Pets by approval</option>
               <option>Pet friendly</option>
               <option>Dog friendly</option>
               <option>Cat friendly</option>
@@ -463,6 +476,7 @@ export default function ListingDetailPage({
               <option value="renewal_sent">Renewal sent</option>
               <option value="declined">Renewal Declined</option>
               <option value="published">Published to public site</option>
+              <option value="unlisted">Unlisted</option>
             </select>
           </label>
         </div>
@@ -526,6 +540,7 @@ function listingToForm(listing: CanaryDraft | undefined) {
     listingTerm: (listing?.listingTerm === 'mid' ? 'mid' : 'long') as ListingTermType,
     beds: listing?.beds ?? '',
     baths: listing?.baths ?? '',
+    title: listing?.title ?? listing?.address ?? '',
     parking: listing?.parking ?? '',
     pets: listing?.pets || 'No pets',
     utilities: listing?.utilities || 'Not included',

@@ -7,6 +7,12 @@ import { createClient } from '@/lib/supabase/server'
 import { normalizeLeaseTermType, validateLeaseDates } from '@/lib/canary/lease-term'
 import type { LeaseTermType } from '@/lib/canary/lease-term'
 import { allocateListingSlugPreferProperty } from '@/lib/listings/slugify'
+import {
+  addressListingTitle,
+  listingDescriptionOnly,
+  mergeListingBriefPatch,
+  resolveListingTitle,
+} from '@/lib/listings/listing-write'
 import { withListingTermHighlight, type ListingTermType } from '@/lib/landing/listing-term'
 import type { Database } from '@/types/supabase'
 import {
@@ -63,11 +69,13 @@ async function getStaffContext() {
 
 // ---------- Draft lease / listing ----------
 
-const draftListingStatusSchema = z.enum(['draft', 'renewal_sent', 'published', 'declined'])
+const draftListingStatusSchema = z.enum(['draft', 'renewal_sent', 'published', 'declined', 'unlisted'])
 
 const draftSchema = z.object({
   id: z.string().optional().nullable(),
   unitId: z.string().uuid('Property is required'),
+  listingTitle: z.string().optional().nullable(),
+  parking: z.string().optional().nullable(),
   rent: z.coerce.number().positive().optional().nullable(),
   rentalCredit: z.coerce.number().min(0).optional().nullable(),
   rentalCreditExpiry: z
@@ -89,6 +97,8 @@ const draftSchema = z.object({
 export async function saveDraftListing(input: {
   id?: string | null
   unitId: string
+  listingTitle?: string | null
+  parking?: string | null
   rent?: number | string | null
   rentalCredit?: number | string | null
   rentalCreditExpiry?: string | null
@@ -97,7 +107,7 @@ export async function saveDraftListing(input: {
   description?: string | null
   pets?: string | null
   utilities?: string | null
-  status: 'draft' | 'renewal_sent' | 'published' | 'declined'
+  status: 'draft' | 'renewal_sent' | 'published' | 'declined' | 'unlisted'
   listingTerm?: ListingTermType
 }): Promise<ActionResult> {
   const ctx = await getStaffContext()
@@ -117,7 +127,7 @@ export async function saveDraftListing(input: {
 
   const { data: unit } = await ctx.supabase
     .from('units')
-    .select('id, property_id, properties!property_id(id, street_address, city, slug)')
+    .select('id, property_id, properties!property_id(id, street_address, city, slug, listing_brief)')
     .eq('id', d.unitId)
     .eq('org_id', ctx.person.org_id)
     .single()
@@ -125,15 +135,7 @@ export async function saveDraftListing(input: {
 
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   const prop = (unit as any).properties
-  const title = prop ? `${prop.street_address}${prop.city ? ', ' + prop.city : ''}` : 'Listing'
-
-  const descriptionParts = [d.description?.trim()].filter(Boolean) as string[]
-  if (d.pets && d.pets !== 'No pets' && !/pet/i.test(d.description ?? '')) {
-    descriptionParts.push(`Pets: ${d.pets}.`)
-  }
-  if (d.utilities === 'Included' && !/utilit/i.test(d.description ?? '')) {
-    descriptionParts.push('Utilities included.')
-  }
+  const addressTitle = addressListingTitle(prop?.street_address, prop?.city)
 
   let existing: {
     listing_title: string
@@ -157,11 +159,18 @@ export async function saveDraftListing(input: {
     existing = data
   }
 
+  const title = resolveListingTitle({
+    inputTitle: d.listingTitle,
+    existingTitle: existing?.listing_title,
+    addressTitle,
+    isCreate: !existing,
+  })
+
   const record: ListingUpsert = {
     org_id: ctx.person.org_id,
     unit_id: d.unitId,
     listing_title: title,
-    listing_description: descriptionParts.join(' ') || null,
+    listing_description: listingDescriptionOnly(d.description),
     display_rent: d.rent ?? null,
     available_from: d.start || null,
     available_until: d.end || null,
@@ -206,6 +215,23 @@ export async function saveDraftListing(input: {
     }
   }
 
+  const persistListingBrief = async () => {
+    if (d.pets == null && d.utilities == null && d.parking == null) return
+    const propertyId = (prop?.id as string | undefined) ?? unit.property_id
+    if (!propertyId) return
+    const nextBrief = mergeListingBriefPatch(prop?.listing_brief, {
+      pets: d.pets,
+      utilities: d.utilities,
+      parking: d.parking,
+    })
+    const { error } = await ctx.supabase
+      .from('properties')
+      .update({ listing_brief: nextBrief, updated_at: new Date().toISOString() })
+      .eq('id', propertyId)
+      .eq('org_id', ctx.person.org_id)
+    if (error) console.error('[saveDraftListing:listing_brief]', error)
+  }
+
   if (d.id) {
     const { error } = await ctx.supabase
       .from('listings')
@@ -216,6 +242,7 @@ export async function saveDraftListing(input: {
       console.error('[saveDraftListing:update]', error)
       return { success: false, error: listingSaveError(error) }
     }
+    await persistListingBrief()
     revalidateListingSurfaces({ listingId: d.id, slug: record.slug ?? existing?.slug })
     return { success: true, id: d.id }
   }
@@ -230,6 +257,7 @@ export async function saveDraftListing(input: {
     console.error('[saveDraftListing:insert]', error)
     return { success: false, error: listingSaveError(error) }
   }
+  await persistListingBrief()
   revalidateListingSurfaces({ listingId: inserted?.id, slug: inserted?.slug ?? record.slug })
   return { success: true, id: inserted?.id }
 }

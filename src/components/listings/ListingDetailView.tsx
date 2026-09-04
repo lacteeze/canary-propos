@@ -69,6 +69,7 @@ export type ListingDetailViewProps = {
   }
 }
 
+/** Listing columns only. Hydrate units/properties via public_* views. */
 export const LISTING_DETAIL_SELECT = `
   id,
   org_id,
@@ -80,24 +81,7 @@ export const LISTING_DETAIL_SELECT = `
   display_rent,
   available_from,
   available_until,
-  status,
-  units (
-    bedrooms,
-    bathrooms,
-    sq_footage,
-    amenities,
-    asking_rent,
-    status,
-    hospitable_widget_property_id,
-    properties (
-      id,
-      street_address,
-      city,
-      province,
-      photo_paths,
-      listing_brief
-    )
-  )
+  status
 `
 
 export function ListingDetailView({

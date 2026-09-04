@@ -43,12 +43,13 @@ export async function getFeaturedListings(
         .filter((id): id is string => !!id),
     ),
   ]
-  const { data: units } = unitIds.length
+  const { data: units, error: unitsError } = unitIds.length
     ? await supabase
         .from('public_units')
         .select('id, bedrooms, bathrooms, amenities, property_id')
         .in('id', unitIds)
-    : { data: [] as Array<{ id: string; bedrooms: number; bathrooms: number; amenities: string[] | null; property_id: string | null }> }
+    : { data: [] as Array<{ id: string; bedrooms: number; bathrooms: number; amenities: string[] | null; property_id: string | null }>, error: null }
+  if (unitsError) console.error('[getFeaturedListings:units]', unitsError.message)
   const unitsById = new Map((units ?? []).map((u) => [u.id, u]))
   const propertyIds = [
     ...new Set(

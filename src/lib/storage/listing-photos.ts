@@ -6,7 +6,7 @@
 // - variant 'preview': Image Transformations (width/quality) for cards/thumbs.
 // - variant 'full' (default): untransformed originals for gallery/lightbox.
 
-import { createPublicClient } from '@/lib/supabase/public'
+import { publicPropertyLookupClient } from '@/lib/listings/public-property-lookup'
 
 const SIGNED_TTL_SECONDS = 60 * 60 // 1 hour
 /** Longer TTL for images embedded in outbound emails (recipients open later). */
@@ -346,7 +346,12 @@ export async function signListingPhotoPaths(
   paths: Array<string | null | undefined>,
   variant: ListingPhotoVariant = 'full'
 ): Promise<string[]> {
-  return signOrgAssetPaths(paths, createPublicClient(), 'signListingPhotoPaths', variant)
+  return signOrgAssetPaths(
+    paths,
+    publicPropertyLookupClient(),
+    'signListingPhotoPaths',
+    variant,
+  )
 }
 
 /**
@@ -359,7 +364,7 @@ export async function signListingPhotoPathsForEmail(
   const normalized = paths.map((p) => (p ?? '').trim())
   if (!normalized.some(Boolean)) return normalized.map(() => '')
 
-  const supabase = createPublicClient()
+  const supabase = publicPropertyLookupClient()
   const uniquePaths = [
     ...new Set(normalized.filter((p) => p.length > 0 && !isHttpUrl(p))),
   ]
@@ -413,7 +418,7 @@ export async function resolveListingGalleryPhotos(
   if (!paths.length) {
     return { hero: null, gallery: [], all: [], full: [] }
   }
-  const client = signer ?? createPublicClient()
+  const client = signer ?? publicPropertyLookupClient()
   const [previews, fulls] = await Promise.all([
     signOrgAssetPaths(paths, client, 'signListingPhotoPaths', 'preview'),
     signOrgAssetPaths(paths, client, 'signListingPhotoPaths', 'full'),

@@ -2514,6 +2514,7 @@ export type Database = {
       public_units: {
         Row: {
           amenities: string[] | null
+          asking_rent: number | null
           bathrooms: number
           bedrooms: number
           hospitable_property_id: string | null
@@ -2530,6 +2531,10 @@ export type Database = {
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       org_id: { Args: never; Returns: string }
       person_id: { Args: never; Returns: string }
+      property_is_publicly_marketed: {
+        Args: { p_property_id: string }
+        Returns: boolean
+      }
       public_property_id_for_listing: {
         Args: { p_listing_id: string; p_org_id: string }
         Returns: string | null

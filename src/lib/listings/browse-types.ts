@@ -56,6 +56,10 @@ export interface BrowseListing {
   photoCount: number
   createdAt: string
   availableFrom: string | null
+  /** Raw street line for neighborhood matching; falls back to shortAddress. */
+  streetAddress?: string
+  propertyType?: string | null
+  neighborhood?: string | null
 }
 
 export interface CityGroup {

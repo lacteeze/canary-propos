@@ -28,6 +28,7 @@ import { createPublicClient } from '@/lib/supabase/public'
 import { getListingPhotoPathsForProperty } from '@/lib/storage/property-listing-media'
 import { resolveListingGalleryPhotos } from '@/lib/storage/listing-photos'
 import { getHospitableSiteUuid } from '@/lib/hospitable/site-uuid'
+import { listingOfferJsonLd } from '@/lib/listing-groups/listing-offer-jsonld'
 
 export {
   loadPropertyById,
@@ -89,15 +90,21 @@ export async function renderPublishedListingPage(opts: {
   const hospitableSiteUuid = widgetId ? getHospitableSiteUuid() : null
 
   return (
-    <ListingDetailView
-      listing={listing}
-      listingPhotos={listingPhotos}
-      listingPhotosFull={listingPhotosFull}
-      carouselGroups={carouselGroups}
-      orgSlug={orgSlug}
-      hospitableSiteUuid={hospitableSiteUuid}
-      listingCardCopy={listingCardCopyFromLanding()}
-    />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(listingOfferJsonLd(listing)) }}
+      />
+      <ListingDetailView
+        listing={listing}
+        listingPhotos={listingPhotos}
+        listingPhotosFull={listingPhotosFull}
+        carouselGroups={carouselGroups}
+        orgSlug={orgSlug}
+        hospitableSiteUuid={hospitableSiteUuid}
+        listingCardCopy={listingCardCopyFromLanding()}
+      />
+    </>
   )
 }
 

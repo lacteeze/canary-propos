@@ -32,6 +32,17 @@ export async function getPublishedListings(
     .map((r) => r.units?.properties?.id)
     .filter((id): id is string => !!id)
 
+  const typeByProperty = new Map<string, string>()
+  if (propertyIds.length > 0) {
+    const { data: typeRows } = await supabase
+      .from('properties')
+      .select('id, property_type')
+      .in('id', propertyIds)
+    for (const row of typeRows ?? []) {
+      if (row.id && row.property_type) typeByProperty.set(row.id, row.property_type)
+    }
+  }
+
   const pathsByProperty = await getListingPhotoPathsByPropertyIds(propertyIds)
 
   const pathLists = rows.map((row) => {
@@ -53,8 +64,10 @@ export async function getPublishedListings(
     const paths = pathLists[index]
     const cover = signedCovers[index] || null
     const mapped = mapListingRow(row, '', orgQuery, index)
+    const propertyId = row.units?.properties?.id
     return {
       ...mapped,
+      propertyType: (propertyId ? typeByProperty.get(propertyId) : null) ?? mapped.propertyType ?? null,
       photo: cover,
       photos: cover ? [cover] : [],
       photoCount: paths.length,

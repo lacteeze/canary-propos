@@ -349,6 +349,7 @@ export type ListingRow = {
       province: string
       photo_paths: string[] | null
       listing_brief?: unknown
+      property_type?: string | null
     } | null
   } | null
 }
@@ -370,11 +371,17 @@ export function mapListingRow(
     property?.listing_brief &&
     typeof property.listing_brief === 'object' &&
     !Array.isArray(property.listing_brief)
-      ? (property.listing_brief as { parking?: unknown; pets?: unknown; utilities?: unknown })
+      ? (property.listing_brief as {
+          parking?: unknown
+          pets?: unknown
+          utilities?: unknown
+          neighborhood?: unknown
+        })
       : null
   const briefParking = brief ? String(brief.parking ?? '') : ''
   const briefPets = brief ? String(brief.pets ?? '').trim() : ''
   const briefUtilities = brief ? String(brief.utilities ?? '').trim() : ''
+  const briefNeighborhood = brief ? String(brief.neighborhood ?? '').trim() : ''
   const briefPetsActive = Boolean(briefPets && !/^no pets$/i.test(briefPets))
   const label = resolvePetLabel({
     briefPets,
@@ -447,6 +454,9 @@ export function mapListingRow(
     photoCount: photos.length,
     createdAt: listing.created_at,
     availableFrom: listing.available_from,
+    streetAddress: property?.street_address ?? shortAddress(property?.street_address ?? listing.listing_title),
+    propertyType: property?.property_type ?? null,
+    neighborhood: briefNeighborhood || null,
   }
 }
 

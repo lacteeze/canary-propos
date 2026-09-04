@@ -8,6 +8,7 @@ import { usePublicTheme } from '@/components/public/PublicThemeProvider'
 import { createClient } from '@/lib/supabase/client'
 
 const NAV = [
+  { href: '/rentals', label: 'Rentals' },
   { href: '/#homes', label: 'Homes' },
   { href: '/#how', label: 'For owners' },
   { href: '/#how', label: 'How it works' },

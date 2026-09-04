@@ -4,6 +4,8 @@ import { LandingPage } from '@/components/landing/landing-page'
 import { getHospitableStays } from '@/lib/landing/get-hospitable-stays'
 import { getPublishedListings } from '@/lib/landing/get-published-listings'
 import { getLandingStats } from '@/lib/landing/get-landing-stats'
+import { homepageItemListJsonLd } from '@/lib/listing-groups/schema'
+import { publicShareOrigin } from '@/lib/listings/public-share-metadata'
 
 /** Listings and rates change in Supabase — always fetch fresh on each request. */
 export const dynamic = 'force-dynamic'
@@ -19,15 +21,21 @@ const ibmPlexMono = IBM_Plex_Mono({
   variable: '--font-ibm-plex-mono',
 })
 
+const publicOrigin = publicShareOrigin()
+
 export const metadata: Metadata = {
   title: "Canary Property Management — Rentals & Stress-Free Property Management in St. John's, NL",
   description:
     "Canary Property Management leases and manages long-term rentals and Airbnbs in St. John's, Newfoundland. Browse verified homes for rent, or hand your rental property to a local team with month-to-month agreements, 24/7 tenant support, and transparent pricing.",
+  alternates: {
+    canonical: `${publicOrigin}/`,
+  },
   openGraph: {
     title: "Canary Property Management — St. John's, NL",
     description:
       "Verified homes for rent and stress-free property management in St. John's, Newfoundland.",
     type: 'website',
+    url: `${publicOrigin}/`,
   },
 }
 
@@ -68,6 +76,10 @@ export default async function HomePage() {
             ],
           }),
         }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(homepageItemListJsonLd(listings)) }}
       />
       <LandingPage
         listings={listings}

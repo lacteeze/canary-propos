@@ -32,8 +32,12 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
 /**
  * Service-role-only tables: RLS on, zero policies, by design.
  * org_integrations holds OAuth tokens (Track A). Do not add public policies.
+ * pingram_webhook_events is webhook idempotency (same spirit as stripe_events).
  */
-const RLS_NO_POLICY_ALLOWLIST = new Set(['org_integrations'])
+const RLS_NO_POLICY_ALLOWLIST = new Set([
+  'org_integrations',
+  'pingram_webhook_events',
+])
 
 const TABLES_RLS_NO_POLICIES_SQL = `
 SELECT COALESCE(json_agg(t), '[]'::json)

@@ -72,9 +72,8 @@ export interface SeedFixture {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-let _seedCounter = Date.now()
 function uid(): string {
-  return (++_seedCounter).toString(36)
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 function makeEmail(role: string, org: string): string {
@@ -116,7 +115,7 @@ async function createPersonRow(
     .insert({
       user_id: opts.userId,
       org_id: opts.orgId,
-      role: opts.role,
+      role: [opts.role],
       email: opts.email,
       first_name: opts.role,
       last_name: 'Test',

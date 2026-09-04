@@ -50,7 +50,7 @@ describe.skipIf(!hasSupabaseTestEnv())('manager CRUD within own org (FOUND-08)',
       .from('people')
       .insert({
         org_id: fixture.orgA.orgId,
-        role: 'tenant',
+        role: ['tenant'],
         email: `mgr-insert-${Date.now()}@test.invalid`,
         first_name: 'Invited',
         last_name: 'Tenant',
@@ -61,7 +61,7 @@ describe.skipIf(!hasSupabaseTestEnv())('manager CRUD within own org (FOUND-08)',
     expect(error).toBeNull()
     expect(data).toHaveLength(1)
     expect(data![0].org_id).toBe(fixture.orgA.orgId)
-    expect(data![0].role).toBe('tenant')
+    expect(data![0].role).toEqual(['tenant'])
     insertedPersonIds.push(data![0].id)
   })
 
@@ -120,7 +120,7 @@ describe.skipIf(!hasSupabaseTestEnv())('manager CRUD within own org (FOUND-08)',
       .from('people')
       .insert({
         org_id: fixture.orgA.orgId,
-        role: 'vendor',
+        role: ['vendor'],
         email: `mgr-delete-${Date.now()}@test.invalid`,
         active: true,
       })
@@ -154,7 +154,7 @@ describe.skipIf(!hasSupabaseTestEnv())('manager CRUD within own org (FOUND-08)',
       .from('people')
       .insert({
         org_id: fixture.orgB.orgId,
-        role: 'tenant',
+        role: ['tenant'],
         email: `cross-org-inject-${Date.now()}@test.invalid`,
         active: true,
       })

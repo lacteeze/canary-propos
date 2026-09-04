@@ -211,6 +211,26 @@ export function PublicHeader({ overlay = false }: PublicHeaderProps) {
               {item.label}
             </Link>
           ))}
+          {signedIn ? (
+            <Link
+              href="/app"
+              onClick={() => setMobileOpen(false)}
+              style={{ display: 'block', padding: '10px 4px', textDecoration: 'none', color: 'var(--text)', fontWeight: 600 }}
+            >
+              Open app
+            </Link>
+          ) : (
+            SIGN_IN_LINKS.map((link) => (
+              <Link
+                key={link.label}
+                href={link.href}
+                onClick={() => setMobileOpen(false)}
+                style={{ display: 'block', padding: '10px 4px', textDecoration: 'none', color: 'var(--text)', fontWeight: 600 }}
+              >
+                {link.label}
+              </Link>
+            ))
+          )}
           <button
             type="button"
             onClick={toggleTheme}

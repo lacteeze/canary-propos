@@ -1,7 +1,6 @@
--- Migration: 20260623000000_create_work_orders
--- Purpose: Create work_orders table for Phase 5 maintenance management.
--- Idempotent: 0025_create_work_orders.sql now creates the table first so 0034/0035
--- can run on a fresh `supabase start`. Production already applied this file.
+-- Create work_orders before 0034/0035, which previously ran before
+-- 20260623000000_create_work_orders (timestamp sorts after 0034).
+-- Idempotent: production already has the table from 20260623000000.
 
 DO $$ BEGIN
   CREATE TYPE work_order_priority AS ENUM ('low', 'medium', 'high', 'urgent');
@@ -53,43 +52,3 @@ CREATE INDEX IF NOT EXISTS idx_work_orders_assigned_vendor ON public.work_orders
 CREATE INDEX IF NOT EXISTS idx_work_orders_vendor_token ON public.work_orders (vendor_token);
 
 ALTER TABLE public.work_orders ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS managers_full_crud ON public.work_orders;
-CREATE POLICY managers_full_crud ON public.work_orders
-  FOR ALL
-  TO authenticated
-  USING (
-    org_id = (SELECT org_id FROM people WHERE user_id = auth.uid() AND active = true)
-    AND 'manager' = ANY(SELECT unnest(role) FROM people WHERE user_id = auth.uid() AND active = true)
-  )
-  WITH CHECK (
-    org_id = (SELECT org_id FROM people WHERE user_id = auth.uid() AND active = true)
-    AND 'manager' = ANY(SELECT unnest(role) FROM people WHERE user_id = auth.uid() AND active = true)
-  );
-
-DROP POLICY IF EXISTS tenants_insert ON public.work_orders;
-CREATE POLICY tenants_insert ON public.work_orders
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    org_id = (SELECT org_id FROM people WHERE user_id = auth.uid() AND active = true)
-    AND 'tenant' = ANY(SELECT unnest(role) FROM people WHERE user_id = auth.uid() AND active = true)
-  );
-
--- Do not recreate tenants_select_own: 0053/0054 replace it. Only add if missing.
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'work_orders'
-      AND policyname = 'tenants_select_own'
-  ) THEN
-    CREATE POLICY tenants_select_own ON public.work_orders
-      FOR SELECT
-      TO authenticated
-      USING (
-        created_by = (SELECT id FROM people WHERE user_id = auth.uid() AND active = true)
-      );
-  END IF;
-END $$;

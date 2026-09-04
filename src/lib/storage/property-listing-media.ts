@@ -1,16 +1,16 @@
 // src/lib/storage/property-listing-media.ts
 // Fetch listing-visibility photo paths for public pages (property_media).
 
-import { createPublicClient } from '@/lib/supabase/public'
+import { publicPropertyLookupClient } from '@/lib/listings/public-property-lookup'
 
 /** Listing photo paths for a property, ordered. Empty if none / not readable. */
 export async function getListingPhotoPathsForProperty(
   propertyId: string,
-  // Staff lookup client when anon RLS hides leased-home media.
+  // Service-role lookup when anon RLS hides marketed-home media after column grants.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   client?: { from: (table: string) => any },
 ): Promise<string[]> {
-  const supabase = client ?? createPublicClient()
+  const supabase = client ?? publicPropertyLookupClient()
   const { data, error } = await supabase
     .from('property_media')
     .select('storage_path, sort_order')
@@ -35,7 +35,7 @@ export async function getListingPhotoPathsByPropertyIds(
   const ids = [...new Set(propertyIds.filter(Boolean))]
   if (!ids.length) return map
 
-  const supabase = createPublicClient()
+  const supabase = publicPropertyLookupClient()
   const { data, error } = await supabase
     .from('property_media')
     .select('property_id, storage_path, sort_order')

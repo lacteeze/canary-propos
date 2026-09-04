@@ -12,6 +12,8 @@ export const CITY_DISPLAY: Record<string, string> = {
 const CITY_ALIASES: Record<string, string> = {
   "st. john's": 'st-johns',
   'st. johns': 'st-johns',
+  "st.john's": 'st-johns',
+  'st.johns': 'st-johns',
   "st john's": 'st-johns',
   'st johns': 'st-johns',
   "saint john's": 'st-johns',
@@ -55,14 +57,41 @@ export function normalizeCityKey(city: string | null | undefined): string {
 export function citySlugFromName(city: string | null | undefined): string | null {
   const key = normalizeCityKey(city)
   if (!key) return null
-  return CITY_ALIASES[key] ?? null
+  if (CITY_ALIASES[key]) return CITY_ALIASES[key]
+  const slugified = key.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  if (CITY_DISPLAY[slugified]) return slugified
+  for (const [alias, slug] of Object.entries(CITY_ALIASES)) {
+    if (key === alias || key.startsWith(`${alias},`) || key.startsWith(`${alias} `)) {
+      return slug
+    }
+  }
+  return null
+}
+
+/** Pull a city from "12 Water St, St. John's, NL A1C 1A1, Canada". */
+export function cityFromStreetAddress(address: string | null | undefined): string | null {
+  if (!address) return null
+  const parts = address.split(',').map((part) => part.trim()).filter(Boolean)
+  for (const part of parts.slice(1)) {
+    if (/^(NL|NS|NB|PE|QC|ON|MB|SK|AB|BC|YT|NT|NU)\b/i.test(part)) continue
+    if (/^canada$/i.test(part)) continue
+    if (/^[A-Z]\d[A-Z]/i.test(part)) continue
+    if (citySlugFromName(part)) return part
+  }
+  return null
 }
 
 export function listingMatchesCitySlug(
   city: string | null | undefined,
   citySlug: string,
+  streetAddress?: string | null,
 ): boolean {
-  return citySlugFromName(city) === citySlug
+  if (citySlugFromName(city) === citySlug) return true
+  const fromStreet = cityFromStreetAddress(streetAddress)
+  if (fromStreet && citySlugFromName(fromStreet) === citySlug) return true
+  const display = normalizeCityKey(CITY_DISPLAY[citySlug] ?? '')
+  if (display && normalizeCityKey(streetAddress).includes(display)) return true
+  return false
 }
 
 export function bedsGroupPath(beds: number): string {

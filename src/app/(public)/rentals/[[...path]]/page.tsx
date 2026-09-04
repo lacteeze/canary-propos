@@ -5,7 +5,6 @@ import { ListingGroupPage } from '@/components/listing-groups/ListingGroupPage'
 import { getLandingCopy } from '@/lib/landing/content'
 import { getPublishedListings } from '@/lib/landing/get-published-listings'
 import {
-  allListingGroupPaths,
   listingGroupByPath,
   listingGroupPathFromSegments,
 } from '@/lib/listing-groups/registry'
@@ -17,24 +16,25 @@ import { getOrgBySlug } from '@/lib/orgs'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
-export const dynamicParams = true
 
 interface PageProps {
   params: Promise<{ path?: string[] }>
   searchParams: Promise<{ org?: string }>
 }
 
-export function generateStaticParams() {
-  return allListingGroupPaths().map((path) => ({
-    path: path ? path.split('/') : [],
-  }))
+function usableOrgSlug(slug: string | null | undefined): string | null {
+  const value = slug?.trim() ?? ''
+  if (!value) return null
+  if (/^\d/.test(value)) return null
+  if (value === 'localhost' || value === 'www' || value === 'app') return null
+  return value
 }
 
 async function resolveOrgSlug(orgSlugParam?: string): Promise<string> {
   const headersList = await headers()
   return (
-    headersList.get('x-org-slug') ||
-    orgSlugParam ||
+    usableOrgSlug(orgSlugParam) ||
+    usableOrgSlug(headersList.get('x-org-slug')) ||
     process.env.NEXT_PUBLIC_DEFAULT_ORG_SLUG ||
     'canary'
   )

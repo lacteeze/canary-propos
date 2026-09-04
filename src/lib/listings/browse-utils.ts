@@ -1,4 +1,5 @@
 import { deriveTermTypeFromHighlights } from '@/lib/landing/listing-term'
+import { cityFromStreetAddress } from '@/lib/listing-groups/city'
 import { listingPublicHref } from '@/lib/listings/listing-href'
 import { parseListingBrief } from '@/lib/listings/listing-brief'
 import { listingMatchesAddressQuery } from '@/lib/listings/slug-aliases'
@@ -432,7 +433,11 @@ export function mapListingRow(
     id: listing.id,
     href: listingPublicHref({ id: listing.id, slug: listing.slug }, orgQuery),
     shortAddress: shortAddress(property?.street_address ?? listing.listing_title),
-    city: property?.city ?? "St. John's",
+    city:
+      property?.city ||
+      cityFromStreetAddress(property?.street_address) ||
+      cityFromStreetAddress(listing.listing_title) ||
+      "St. John's",
     province: property?.province ?? 'NL',
     rentN,
     rentFormatted: rentN ? formatCAD(rentN) : '—',

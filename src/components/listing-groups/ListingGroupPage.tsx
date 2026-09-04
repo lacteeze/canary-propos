@@ -5,6 +5,7 @@ import { PublicHeader } from '@/components/public/PublicHeader'
 import { listingGroupByPath } from '@/lib/listing-groups/registry'
 import { interpolateLead } from '@/lib/listing-groups/stats'
 import { formatCad, rentalsHref, type ListingGroupDef, type ListingGroupInventory } from '@/lib/listing-groups/types'
+import { groupListingsByCity } from '@/lib/listings/browse-utils'
 import './listing-group.css'
 
 export function ListingGroupPage({
@@ -21,9 +22,12 @@ export function ListingGroupPage({
   cardCopy: ListingCardCopy
 }) {
   const lead = interpolateLead(group, inventory)
+  const cityGroups = groupListingsByCity(inventory.listings, {
+    mergeOuterBay: group.kind === 'index',
+  })
 
   return (
-    <div className="cland2">
+    <>
       <PublicHeader />
       <main className="clg">
         <nav aria-label="Breadcrumb">
@@ -52,8 +56,34 @@ export function ListingGroupPage({
 
         {inventory.listings.length > 0 ? (
           <>
+            <div className="clg-homes">
+              {cityGroups.map((cityGroup) => (
+                <section key={cityGroup.city}>
+                  {cityGroups.length > 1 ? (
+                    <h2 className="clg-city">
+                      {cityGroup.city}
+                      <span>
+                        {cityGroup.listings.length}{' '}
+                        {cityGroup.listings.length === 1 ? 'home' : 'homes'}
+                      </span>
+                    </h2>
+                  ) : null}
+                  <div className="cl2-card-grid">
+                    {cityGroup.listings.map((listing, index) => (
+                      <LandingListingCard
+                        key={listing.id}
+                        listing={listing}
+                        copy={cardCopy}
+                        priority={cityGroup === cityGroups[0] && index < 4}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
             <div className="clg-table-wrap">
               <table className="clg-table">
+                <caption className="clg-table-caption">Current listings</caption>
                 <thead>
                   <tr>
                     <th scope="col">Address</th>
@@ -77,16 +107,6 @@ export function ListingGroupPage({
                   ))}
                 </tbody>
               </table>
-            </div>
-            <div className="clg-cards">
-              {inventory.listings.map((listing, index) => (
-                <LandingListingCard
-                  key={listing.id}
-                  listing={listing}
-                  copy={cardCopy}
-                  priority={index === 0}
-                />
-              ))}
             </div>
           </>
         ) : null}
@@ -137,7 +157,7 @@ export function ListingGroupPage({
           />
         </section>
       </main>
-    </div>
+    </>
   )
 }
 

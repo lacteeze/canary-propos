@@ -5,6 +5,8 @@ import { HospitableDirectBookingWidget } from '@/components/listings/HospitableD
 import { ListingPhotoGallery } from '@/components/listings/ListingPhotoGallery'
 import { SimilarListingsSection } from '@/components/landing/SimilarListingsCarousel'
 import { PublicHeader } from '@/components/public/PublicHeader'
+import { StaffEditDetailsLink } from '@/components/listings/StaffEditDetailsLink'
+import { staffListingEditHref } from '@/lib/listings/staff-public-edit'
 import { fontDisplay } from '@/lib/landing/typography'
 import type { CityGroup } from '@/lib/listings/browse-types'
 import { publicListingAmenityTags, resolveParkingDisplay } from '@/lib/listings/browse-utils'
@@ -200,20 +202,26 @@ export function ListingDetailView({
         fullPhotos={listingPhotosFull}
         title={listing.listing_title}
         topBar={
-          <Link
-            href={rentalsIndexHref}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              textDecoration: 'none',
-              color: 'rgba(244,239,230,.85)',
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
-            ← All available homes
-          </Link>
+          <>
+            <Link
+              href={rentalsIndexHref}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                textDecoration: 'none',
+                color: 'rgba(244,239,230,.85)',
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
+              ← All available homes
+            </Link>
+            <StaffEditDetailsLink
+              href={staffListingEditHref(listing.id)}
+              orgId={listing.org_id}
+            />
+          </>
         }
       >
         <p className="cpub-stat-pill cpub-listing-hero-eyebrow">

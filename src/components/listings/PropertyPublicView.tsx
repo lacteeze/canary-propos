@@ -4,6 +4,8 @@ import { HospitableDirectBookingWidget } from '@/components/listings/HospitableD
 import { ListingPhotoGallery } from '@/components/listings/ListingPhotoGallery'
 import { SimilarListingsSection } from '@/components/landing/SimilarListingsCarousel'
 import { PublicHeader } from '@/components/public/PublicHeader'
+import { StaffEditDetailsLink } from '@/components/listings/StaffEditDetailsLink'
+import { staffListingEditHref, staffPropertyEditHref } from '@/lib/listings/staff-public-edit'
 import { fontDisplay } from '@/lib/landing/typography'
 import type { CityGroup } from '@/lib/listings/browse-types'
 import { publicListingAmenityTags, resolveParkingDisplay } from '@/lib/listings/browse-utils'
@@ -125,20 +127,30 @@ export function PropertyPublicView({
         fullPhotos={photosFull}
         title={fullAddress}
         topBar={
-          <Link
-            href={homesHref}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              textDecoration: 'none',
-              color: 'rgba(244,239,230,.85)',
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
-            ← All available homes
-          </Link>
+          <>
+            <Link
+              href={homesHref}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                textDecoration: 'none',
+                color: 'rgba(244,239,230,.85)',
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
+              ← All available homes
+            </Link>
+            <StaffEditDetailsLink
+              href={
+                linkedListingId
+                  ? staffListingEditHref(linkedListingId)
+                  : staffPropertyEditHref(property.id)
+              }
+              orgId={orgId}
+            />
+          </>
         }
       >
         <p className="cpub-stat-pill cpub-listing-hero-eyebrow">{availabilityLabel}</p>

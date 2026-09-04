@@ -27,11 +27,13 @@ export function listingsForMatch(
     case 'all':
       return listings
     case 'city':
-      return listings.filter((listing) => listingMatchesCitySlug(listing.city, match.citySlug))
+      return listings.filter((listing) =>
+        listingMatchesCitySlug(listing.city, match.citySlug, listing.streetAddress),
+      )
     case 'neighborhood':
       return listings.filter(
         (listing) =>
-          listingMatchesCitySlug(listing.city, match.citySlug) &&
+          listingMatchesCitySlug(listing.city, match.citySlug, listing.streetAddress) &&
           resolveNeighborhood(listing) === match.neighborhood,
       )
     case 'beds':
@@ -43,7 +45,7 @@ export function listingsForMatch(
     case 'city-beds':
       return listings.filter(
         (listing) =>
-          listingMatchesCitySlug(listing.city, match.citySlug) &&
+          listingMatchesCitySlug(listing.city, match.citySlug, listing.streetAddress) &&
           listingMatchesBeds(listing, match.min, match.max),
       )
   }

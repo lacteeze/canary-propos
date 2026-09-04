@@ -29,13 +29,16 @@ export async function getListingPhotoPathsForProperty(
 
 /** Batch: property_id → ordered listing photo paths */
 export async function getListingPhotoPathsByPropertyIds(
-  propertyIds: string[]
+  propertyIds: string[],
+  // Staff lookup client when anon RLS hides listing media.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client?: { from: (table: string) => any },
 ): Promise<Map<string, string[]>> {
   const map = new Map<string, string[]>()
   const ids = [...new Set(propertyIds.filter(Boolean))]
   if (!ids.length) return map
 
-  const supabase = createPublicClient()
+  const supabase = client ?? createPublicClient()
   const { data, error } = await supabase
     .from('property_media')
     .select('property_id, storage_path, sort_order')

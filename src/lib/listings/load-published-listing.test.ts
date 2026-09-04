@@ -60,10 +60,16 @@ describe('published listing loaders', () => {
   it('do not embed units or properties tables (column grants break PostgREST joins)', () => {
     const src = readFileSync('src/lib/listings/load-published-listing.ts', 'utf8')
     const page = readFileSync('src/lib/listings/public-slug-page.tsx', 'utf8')
-    expect(src).not.toMatch(/units\s*\(/)
-    expect(src).not.toMatch(/properties\s*\(/)
+    const select = src.slice(
+      src.indexOf('export const PUBLISHED_LISTING_SELECT'),
+      src.indexOf('export type PublishedListingRow'),
+    )
+    expect(select).not.toMatch(/units\s*\(/)
+    expect(select).not.toMatch(/properties\s*\(/)
     expect(src).toContain("from('public_units')")
     expect(src).toContain("from('public_properties')")
+    expect(src).not.toContain("from('units')")
+    expect(src).not.toContain("from('properties')")
     expect(page).not.toContain('LISTING_DETAIL_SELECT')
     expect(page).toContain("from '@/lib/listings/load-published-listing'")
   })

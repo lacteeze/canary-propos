@@ -119,11 +119,12 @@ describe.skipIf(!hasSupabaseTestEnv())('employee scoped access (FOUND-09)', () =
   it('employee can SELECT units within their own org', async () => {
     // Seed a unit in Org A via service role so employee can read it
     const svc = getServiceClient()
-    const { data: unitData } = await svc
+    const { data: unitData, error: insertError } = await svc
       .from('units')
-      .insert({ org_id: fixture.orgA.orgId, label: 'Emp-test unit' })
+      .insert({ org_id: fixture.orgA.orgId, unit_number: 'Emp-test' })
       .select('id')
 
+    expect(insertError).toBeNull()
     expect(unitData).toHaveLength(1)
     const unitId = unitData![0].id
 

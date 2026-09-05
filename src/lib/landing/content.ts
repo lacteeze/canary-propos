@@ -53,7 +53,7 @@ export const REVIEWS = [
 ] as const
 
 export const SIGN_IN_LINKS = [
-  { label: 'Admin', href: '/login', dot: 'var(--accent)' },
+  { label: 'Admin portal', href: '/app', dot: 'var(--accent)' },
   { label: 'Manager', href: '/login', dot: 'var(--accent)' },
   { label: 'Owner portal', href: '/login', dot: 'var(--yellow)' },
   { label: 'Tenant portal', href: '/login', dot: 'var(--green)' },

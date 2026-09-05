@@ -18,6 +18,15 @@ describe('leased public URL lookup', () => {
     expect(page).not.toMatch(/\.rpc\(/)
   })
 
+  it('signs and reads listing photos with the service-role lookup client', () => {
+    const media = readFileSync('src/lib/storage/property-listing-media.ts', 'utf8')
+    const photos = readFileSync('src/lib/storage/listing-photos.ts', 'utf8')
+    expect(media).toContain('publicPropertyLookupClient')
+    expect(photos).toContain('publicPropertyLookupClient')
+    expect(media).not.toContain('createPublicClient')
+    expect(photos).not.toContain('createPublicClient')
+  })
+
   it('does not hide published listing details because the unit is occupied', () => {
     const page = readFileSync('src/lib/listings/public-slug-page.tsx', 'utf8')
     const start = page.indexOf('export function listingIsPubliclyAvailable')

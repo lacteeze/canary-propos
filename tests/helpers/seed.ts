@@ -19,17 +19,19 @@
 
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import { supabaseTestUrl } from './supabase-env'
 
 // ---------------------------------------------------------------------------
 // Service-role client (bypasses RLS — seeding only)
 // ---------------------------------------------------------------------------
 function getServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const url = supabaseTestUrl()
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!url || !serviceKey) {
     throw new Error(
-      'NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set to seed test fixtures.'
+      'SUPABASE_TEST_URL and SUPABASE_SERVICE_ROLE_KEY must be set to seed test fixtures. ' +
+        'RLS/auth/orgs suites skip when those vars are absent.'
     )
   }
 
@@ -70,9 +72,8 @@ export interface SeedFixture {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-let _seedCounter = Date.now()
 function uid(): string {
-  return (++_seedCounter).toString(36)
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 function makeEmail(role: string, org: string): string {
@@ -114,7 +115,7 @@ async function createPersonRow(
     .insert({
       user_id: opts.userId,
       org_id: opts.orgId,
-      role: opts.role,
+      role: [opts.role],
       email: opts.email,
       first_name: opts.role,
       last_name: 'Test',
@@ -302,12 +303,12 @@ export async function signInAs(
   email: string,
   password: string,
 ) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const url = supabaseTestUrl()
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!url || !anonKey) {
     throw new Error(
-      'NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set.'
+      'SUPABASE_TEST_URL (or NEXT_PUBLIC_SUPABASE_URL) and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set.'
     )
   }
 

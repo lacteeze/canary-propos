@@ -399,6 +399,17 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
                   {item.label}
                 </a>
               ))}
+              {signedIn ? (
+                <Link href="/app" onClick={() => setMobileOpen(false)} style={{ textDecoration: 'none', color: hdr.hdrText, fontWeight: 700, fontSize: 16, padding: '11px 2px', borderBottom: `1px solid ${hdr.hdrBorder}` }}>
+                  {copy.tOpenApp}
+                </Link>
+              ) : (
+                SIGN_IN_LINKS.map((link) => (
+                  <Link key={link.label} href={link.href} onClick={() => setMobileOpen(false)} style={{ textDecoration: 'none', color: hdr.hdrText, fontWeight: 700, fontSize: 16, padding: '11px 2px', borderBottom: `1px solid ${hdr.hdrBorder}` }}>
+                    {link.label}
+                  </Link>
+                ))
+              )}
             </nav>
             <button
               type="button"

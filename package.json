@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
+    "lint": "eslint .",
     "check:rls": "tsx scripts/check-rls.ts",
     "seed:listings": "tsx scripts/seed-listings.ts"
   },
@@ -45,6 +46,8 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.2.9",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
     "typescript": "^5",

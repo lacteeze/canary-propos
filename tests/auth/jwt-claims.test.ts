@@ -14,8 +14,9 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { seedTwoOrgs, signInAs, type SeedFixture } from '../helpers/seed'
+import { hasSupabaseTestEnv } from '../helpers/supabase-env'
 
-describe('JWT claim injection (FOUND-06)', () => {
+describe.skipIf(!hasSupabaseTestEnv())('JWT claim injection (FOUND-06)', () => {
   let fixture: SeedFixture
 
   beforeAll(async () => {

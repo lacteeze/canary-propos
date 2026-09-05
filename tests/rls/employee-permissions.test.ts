@@ -11,17 +11,18 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import { seedTwoOrgs, signInAs, type SeedFixture } from '../helpers/seed'
+import { hasSupabaseTestEnv, supabaseTestUrl } from '../helpers/supabase-env'
 import type { Database } from '@/types/supabase'
 
 function getServiceClient() {
   return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseTestUrl()!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } },
   )
 }
 
-describe('employee scoped access (FOUND-09)', () => {
+describe.skipIf(!hasSupabaseTestEnv())('employee scoped access (FOUND-09)', () => {
   let fixture: SeedFixture
 
   beforeAll(async () => {
@@ -118,11 +119,12 @@ describe('employee scoped access (FOUND-09)', () => {
   it('employee can SELECT units within their own org', async () => {
     // Seed a unit in Org A via service role so employee can read it
     const svc = getServiceClient()
-    const { data: unitData } = await svc
+    const { data: unitData, error: insertError } = await svc
       .from('units')
-      .insert({ org_id: fixture.orgA.orgId, label: 'Emp-test unit' })
+      .insert({ org_id: fixture.orgA.orgId, unit_number: 'Emp-test' })
       .select('id')
 
+    expect(insertError).toBeNull()
     expect(unitData).toHaveLength(1)
     const unitId = unitData![0].id
 

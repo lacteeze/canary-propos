@@ -2,22 +2,24 @@
  * POST /api/stripe/create-payment-intent
  *
  * Creates a Stripe PaymentIntent for rent collection.
- * Authenticated — requires valid user session.
- * Verifies lease belongs to caller's org before creating PaymentIntent.
+ * Amount is computed server-side from open charges (fallback: monthly rent).
+ * Client-supplied amount_cents is ignored.
  */
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { stripe } from '@/lib/stripe'
+import { paymentAmountCents } from '@/lib/billing/payment-amount'
 
 const bodySchema = z.object({
   lease_id: z.string().uuid(),
-  amount_cents: z.number().int().positive(),
+  amount_cents: z.number().int().positive().optional(),
 })
 
 export async function POST(req: Request) {
-  // 1. Get caller context — return 401 if no session
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -33,7 +35,6 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // 2. Parse + validate request body
   let body: z.infer<typeof bodySchema>
   try {
     const raw = await req.json()
@@ -42,31 +43,49 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  // 3. Verify lease belongs to caller's org (prevents cross-org payment creation)
   const { data: lease } = await supabase
     .from('leases')
-    .select('id, org_id, monthly_rent')
+    .select('id, org_id, monthly_rent, tenant_id')
     .eq('id', body.lease_id)
     .eq('org_id', person.org_id)
+    .eq('tenant_id', person.id)
     .single()
 
   if (!lease) {
     return Response.json({ error: 'Lease not found or access denied' }, { status: 403 })
   }
 
-  // 4. Create Stripe PaymentIntent
+  const { data: charges } = await supabase
+    .from('charges')
+    .select('amount, amount_paid')
+    .eq('lease_id', lease.id)
+    .eq('org_id', person.org_id)
+    .eq('status', 'open')
+
+  const amountCents = paymentAmountCents({
+    openCharges: charges ?? [],
+    monthlyRent: lease.monthly_rent,
+  })
+
+  if (amountCents <= 0) {
+    return Response.json({ error: 'Nothing is due on this lease.' }, { status: 400 })
+  }
+
   try {
     const pi = await stripe.paymentIntents.create({
-      amount: body.amount_cents,
+      amount: amountCents,
       currency: 'cad',
       payment_method_types: ['card'],
       metadata: {
-        lease_id: body.lease_id,
+        lease_id: lease.id,
         org_id: person.org_id,
       },
     })
 
-    return Response.json({ clientSecret: pi.client_secret })
+    return Response.json({
+      clientSecret: pi.client_secret,
+      amount_cents: amountCents,
+    })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create payment intent'
     console.error('Stripe PaymentIntent creation failed:', err)

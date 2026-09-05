@@ -61,74 +61,57 @@ export async function getPublishedListings(
     )
     .eq('status', 'published')
     .eq('org_id', org.id)
-
-  if (listingError) {
-    console.error('[getPublishedListings] listings', listingError.message)
+  if (listingsError) {
+    console.error('[getPublishedListings:listings]', listingsError.message)
   }
 
-  const listings = (listingRows ?? []) as ListingFlat[]
-  if (listings.length === 0) return []
-
+  const listingRows = listings ?? []
   const unitIds = [
     ...new Set(
-      listings
+      listingRows
         .map((row) => row.unit_id)
         .filter((id): id is string => !!id),
     ),
   ]
-
-  const unitsById = new Map<string, UnitFlat>()
-  if (unitIds.length > 0) {
-    const { data: unitRows, error: unitError } = await supabase
-      .from('public_units')
-      .select('id, bedrooms, bathrooms, asking_rent, amenities, property_id')
-      .in('id', unitIds)
-    if (unitError) {
-      console.error('[getPublishedListings] units', unitError.message)
-    }
-    for (const unit of (unitRows ?? []) as UnitFlat[]) {
-      unitsById.set(unit.id, unit)
-    }
+  const unitsRes = unitIds.length
+    ? await supabase
+        .from('public_units')
+        .select('id, bedrooms, bathrooms, amenities, property_id')
+        .in('id', unitIds)
+    : { data: [] as Array<{ id: string; bedrooms: number; bathrooms: number; amenities: string[] | null; property_id: string | null }>, error: null }
+  if (unitsRes.error) {
+    console.error('[getPublishedListings:units]', unitsRes.error.message)
   }
-
-  const propertyIds = [...new Set(
-    [...unitsById.values()]
-      .map((unit) => unit.property_id)
-      .filter((id): id is string => !!id),
-  )]
-
-  const propertiesById = new Map<string, PropertyFlat>()
-  if (propertyIds.length > 0) {
-    const { data: propertyRows, error: propertyError } = await supabase
-      .from('public_properties')
-      .select('id, street_address, city, province, photo_paths, listing_brief, property_type')
-      .in('id', propertyIds)
-    if (propertyError) {
-      console.error('[getPublishedListings] properties', propertyError.message)
-    }
-    for (const property of (propertyRows ?? []) as PropertyFlat[]) {
-      propertiesById.set(property.id, property)
-    }
+  const unitsById = new Map((unitsRes.data ?? []).map((u) => [u.id, u]))
+  const propertyIds = [
+    ...new Set(
+      [...unitsById.values()]
+        .map((u) => u.property_id)
+        .filter((id): id is string => !!id),
+    ),
+  ]
+  const propertiesRes = propertyIds.length
+    ? await supabase
+        .from('public_properties')
+        .select('id, street_address, city, province, photo_paths, listing_brief')
+        .in('id', propertyIds)
+    : { data: [] as Array<{ id: string; street_address: string; city: string; province: string; photo_paths: string[] | null; listing_brief: unknown }>, error: null }
+  if (propertiesRes.error) {
+    console.error('[getPublishedListings:properties]', propertiesRes.error.message)
   }
+  const propertiesById = new Map((propertiesRes.data ?? []).map((p) => [p.id, p]))
 
-  const rows: ListingRow[] = listings.map((listing) => {
+  const rows: ListingRow[] = listingRows.map((listing) => {
     const unit = listing.unit_id ? unitsById.get(listing.unit_id) : undefined
     const property = unit?.property_id ? propertiesById.get(unit.property_id) : undefined
     return {
-      id: listing.id,
-      slug: listing.slug,
-      listing_title: listing.listing_title,
-      listing_description: listing.listing_description,
-      display_rent: listing.display_rent,
-      highlights: listing.highlights,
-      available_from: listing.available_from,
-      created_at: listing.created_at,
+      ...listing,
       units: unit
         ? {
             id: unit.id,
             bedrooms: unit.bedrooms,
             bathrooms: unit.bathrooms,
-            asking_rent: unit.asking_rent,
+            asking_rent: null,
             amenities: unit.amenities,
             properties: property
               ? {
@@ -138,17 +121,12 @@ export async function getPublishedListings(
                   province: property.province,
                   photo_paths: property.photo_paths,
                   listing_brief: property.listing_brief,
-                  property_type: property.property_type,
                 }
               : null,
           }
         : null,
     }
   })
-
-  const resolvedPropertyIds = rows
-    .map((r) => r.units?.properties?.id)
-    .filter((id): id is string => !!id)
 
   const pathsByProperty = await getListingPhotoPathsByPropertyIds(
     resolvedPropertyIds,

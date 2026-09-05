@@ -13,6 +13,7 @@
 
 import { google } from 'googleapis'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { getOrgIntegration, upsertOrgIntegration } from '@/lib/org-integrations'
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -28,18 +29,16 @@ function createOAuth2Client() {
 
 // ---------------------------------------------------------------------------
 // getGmailAuthUrl
-// Returns the Google OAuth consent URL for the given org.
-// The orgId is passed through the `state` param so the callback can write
-// tokens to the correct organizations row.
+// Returns the Google OAuth consent URL. `state` is a CSRF nonce (not an org id).
 // ---------------------------------------------------------------------------
 
-export function getGmailAuthUrl(orgId: string): string {
+export function getGmailAuthUrl(state: string): string {
   const oauth2Client = createOAuth2Client()
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: ['https://mail.google.com/'],
     prompt: 'consent', // force refresh_token on every connect
-    state: orgId,
+    state,
   })
 }
 
@@ -82,33 +81,22 @@ export async function exchangeCodeForTokens(code: string): Promise<{
 
 export async function refreshTokenIfNeeded(
   orgId: string,
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
 ): Promise<string> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: org, error } = await (supabase as any)
-    .from('organizations')
-    .select('gmail_access_token, gmail_refresh_token, gmail_token_expiry')
-    .eq('id', orgId)
-    .single()
+  const row = await getOrgIntegration(orgId, 'gmail')
 
-  if (error || !org) {
-    throw new Error('Organization not found.')
-  }
-
-  if (!org.gmail_access_token || !org.gmail_refresh_token) {
+  if (!row?.access_token || !row.refresh_token) {
     throw new Error('Gmail not connected. Please connect Gmail from Settings.')
   }
 
-  const expiryMs: number = org.gmail_token_expiry ?? 0
+  const expiryMs: number = row.token_expiry ?? 0
 
-  // Token is still valid — return as-is
   if (Date.now() < expiryMs - 60_000) {
-    return org.gmail_access_token as string
+    return row.access_token
   }
 
-  // Token is expired or nearly expired — refresh it
   const oauth2Client = createOAuth2Client()
-  oauth2Client.setCredentials({ refresh_token: org.gmail_refresh_token as string })
+  oauth2Client.setCredentials({ refresh_token: row.refresh_token })
 
   const { credentials } = await oauth2Client.refreshAccessToken()
 
@@ -116,15 +104,12 @@ export async function refreshTokenIfNeeded(
     throw new Error('Failed to refresh Gmail access token.')
   }
 
-  // Persist the new token back to DB
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any)
-    .from('organizations')
-    .update({
-      gmail_access_token: credentials.access_token,
-      gmail_token_expiry: credentials.expiry_date ?? Date.now() + 3600 * 1000,
-    })
-    .eq('id', orgId)
+  const tokenExpiry = credentials.expiry_date ?? Date.now() + 3600 * 1000
+  await upsertOrgIntegration(orgId, 'gmail', {
+    access_token: credentials.access_token,
+    refresh_token: row.refresh_token,
+    token_expiry: tokenExpiry,
+  })
 
   return credentials.access_token
 }

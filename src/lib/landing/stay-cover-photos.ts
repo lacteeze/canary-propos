@@ -24,12 +24,13 @@ export type StayCoverLookup = {
 type UnitRow = {
   hospitable_property_id: string | null
   property_id: string
-  properties: {
-    id: string
-    street_address: string
-    slug: string | null
-    photo_paths: string[] | null
-  } | null
+}
+
+type PropertyRow = {
+  id: string
+  street_address: string
+  slug: string | null
+  photo_paths: string[] | null
 }
 
 export function streetKeysForHospitableProperty(property: HospitableProperty): string[] {
@@ -113,28 +114,32 @@ export async function loadStayCoverLookup(
   if (!org) return empty
 
   const supabase = createPublicClient()
-  const { data, error } = await supabase
-    .from('units')
-    .select(
-      `hospitable_property_id, property_id,
-       properties!property_id(id, street_address, slug, photo_paths)`
-    )
-    .eq('org_id', org.id)
-    .is('archived_at', null)
+  const [unitsRes, propertiesRes] = await Promise.all([
+    supabase
+      .from('public_units')
+      .select('hospitable_property_id, property_id'),
+    supabase
+      .from('public_properties')
+      .select('id, street_address, slug, photo_paths')
+      .eq('org_id', org.id),
+  ])
 
-  if (error) {
-    console.error('[loadStayCoverLookup]', error.message)
+  if (unitsRes.error) {
+    console.error('[loadStayCoverLookup]', unitsRes.error.message)
+    return empty
+  }
+  if (propertiesRes.error) {
+    console.error('[loadStayCoverLookup]', propertiesRes.error.message)
     return empty
   }
 
-  const rows = (data ?? []) as UnitRow[]
-  const propertyIds = [
-    ...new Set(
-      rows
-        .map((r) => r.properties?.id)
-        .filter((id): id is string => !!id)
-    ),
-  ]
+  const propertiesById = new Map(
+    ((propertiesRes.data ?? []) as PropertyRow[]).map((p) => [p.id, p]),
+  )
+  const rows = ((unitsRes.data ?? []) as UnitRow[]).filter(
+    (r) => r.property_id && propertiesById.has(r.property_id),
+  )
+  const propertyIds = [...propertiesById.keys()]
   const pathsByProperty = await getListingPhotoPathsByPropertyIds(propertyIds)
 
   const byHospitableId = new Map<string, string>()
@@ -142,7 +147,7 @@ export async function loadStayCoverLookup(
   const slugByHospitableId = new Map<string, string>()
   const slugByStreetKey = new Map<string, string>()
 
-  const indexStreetKeys = (property: NonNullable<UnitRow['properties']>, cover: string | null) => {
+  const indexStreetKeys = (property: PropertyRow, cover: string | null) => {
     const slug = property.slug!.trim()
     const street = canonicalStreetKey(property.street_address)
     if (street) {
@@ -171,7 +176,7 @@ export async function loadStayCoverLookup(
   }
 
   for (const row of rows) {
-    const property = row.properties
+    const property = propertiesById.get(row.property_id)
     if (!property?.id || !property.slug) continue
 
     const fromMedia = pathsByProperty.get(property.id) ?? []

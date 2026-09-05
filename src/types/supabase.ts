@@ -1149,20 +1149,14 @@ export type Database = {
       organizations: {
         Row: {
           created_at: string | null
-          drive_access_token: string | null
           drive_connected_at: string | null
-          drive_refresh_token: string | null
-          drive_token_expiry: number | null
           expense_hst_rate: number
           expense_labour_rate: number
           expense_markup_rate: number
-          gmail_access_token: string | null
           gmail_connected_at: string | null
           gmail_history_id: string | null
           gmail_last_sync_at: string | null
           gmail_last_sync_error: string | null
-          gmail_refresh_token: string | null
-          gmail_token_expiry: number | null
           id: string
           logo_path: string | null
           name: string
@@ -1172,28 +1166,19 @@ export type Database = {
           setup_completed_at: string | null
           slug: string
           stripe_customer_id: string | null
-          tasks_access_token: string | null
           tasks_connected_at: string | null
-          tasks_refresh_token: string | null
-          tasks_token_expiry: number | null
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
-          drive_access_token?: string | null
           drive_connected_at?: string | null
-          drive_refresh_token?: string | null
-          drive_token_expiry?: number | null
           expense_hst_rate?: number
           expense_labour_rate?: number
           expense_markup_rate?: number
-          gmail_access_token?: string | null
           gmail_connected_at?: string | null
           gmail_history_id?: string | null
           gmail_last_sync_at?: string | null
           gmail_last_sync_error?: string | null
-          gmail_refresh_token?: string | null
-          gmail_token_expiry?: number | null
           id?: string
           logo_path?: string | null
           name: string
@@ -1203,28 +1188,19 @@ export type Database = {
           setup_completed_at?: string | null
           slug: string
           stripe_customer_id?: string | null
-          tasks_access_token?: string | null
           tasks_connected_at?: string | null
-          tasks_refresh_token?: string | null
-          tasks_token_expiry?: number | null
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
-          drive_access_token?: string | null
           drive_connected_at?: string | null
-          drive_refresh_token?: string | null
-          drive_token_expiry?: number | null
           expense_hst_rate?: number
           expense_labour_rate?: number
           expense_markup_rate?: number
-          gmail_access_token?: string | null
           gmail_connected_at?: string | null
           gmail_history_id?: string | null
           gmail_last_sync_at?: string | null
           gmail_last_sync_error?: string | null
-          gmail_refresh_token?: string | null
-          gmail_token_expiry?: number | null
           id?: string
           logo_path?: string | null
           name?: string
@@ -1234,13 +1210,48 @@ export type Database = {
           setup_completed_at?: string | null
           slug?: string
           stripe_customer_id?: string | null
-          tasks_access_token?: string | null
           tasks_connected_at?: string | null
-          tasks_refresh_token?: string | null
-          tasks_token_expiry?: number | null
           updated_at?: string | null
         }
         Relationships: []
+      }
+      org_integrations: {
+        Row: {
+          access_token: string | null
+          connected_email: string | null
+          org_id: string
+          provider: string
+          refresh_token: string | null
+          token_expiry: number | null
+          updated_at: string
+        }
+        Insert: {
+          access_token?: string | null
+          connected_email?: string | null
+          org_id: string
+          provider: string
+          refresh_token?: string | null
+          token_expiry?: number | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string | null
+          connected_email?: string | null
+          org_id?: string
+          provider?: string
+          refresh_token?: string | null
+          token_expiry?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_integrations_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       org_meta_connections: {
         Row: {
@@ -2520,6 +2531,10 @@ export type Database = {
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       org_id: { Args: never; Returns: string }
       person_id: { Args: never; Returns: string }
+      property_is_publicly_marketed: {
+        Args: { p_property_id: string }
+        Returns: boolean
+      }
       public_property_id_for_listing: {
         Args: { p_listing_id: string; p_org_id: string }
         Returns: string | null

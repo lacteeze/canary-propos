@@ -9,17 +9,18 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import { seedTwoOrgs, signInAs, type SeedFixture } from '../helpers/seed'
+import { hasSupabaseTestEnv, supabaseTestUrl } from '../helpers/supabase-env'
 import type { Database } from '@/types/supabase'
 
 function getServiceClient() {
   return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseTestUrl()!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } },
   )
 }
 
-describe('manager CRUD within own org (FOUND-08)', () => {
+describe.skipIf(!hasSupabaseTestEnv())('manager CRUD within own org (FOUND-08)', () => {
   let fixture: SeedFixture
   const insertedPersonIds: string[] = []
 
@@ -49,7 +50,7 @@ describe('manager CRUD within own org (FOUND-08)', () => {
       .from('people')
       .insert({
         org_id: fixture.orgA.orgId,
-        role: 'tenant',
+        role: ['tenant'],
         email: `mgr-insert-${Date.now()}@test.invalid`,
         first_name: 'Invited',
         last_name: 'Tenant',
@@ -60,7 +61,7 @@ describe('manager CRUD within own org (FOUND-08)', () => {
     expect(error).toBeNull()
     expect(data).toHaveLength(1)
     expect(data![0].org_id).toBe(fixture.orgA.orgId)
-    expect(data![0].role).toBe('tenant')
+    expect(data![0].role).toEqual(['tenant'])
     insertedPersonIds.push(data![0].id)
   })
 
@@ -119,7 +120,7 @@ describe('manager CRUD within own org (FOUND-08)', () => {
       .from('people')
       .insert({
         org_id: fixture.orgA.orgId,
-        role: 'vendor',
+        role: ['vendor'],
         email: `mgr-delete-${Date.now()}@test.invalid`,
         active: true,
       })
@@ -153,7 +154,7 @@ describe('manager CRUD within own org (FOUND-08)', () => {
       .from('people')
       .insert({
         org_id: fixture.orgB.orgId,
-        role: 'tenant',
+        role: ['tenant'],
         email: `cross-org-inject-${Date.now()}@test.invalid`,
         active: true,
       })

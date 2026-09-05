@@ -1,6 +1,5 @@
 import { preload } from 'react-dom'
 import {
-  LISTING_DETAIL_SELECT,
   ListingDetailView,
   type ListingDetailListing,
 } from '@/components/listings/ListingDetailView'
@@ -23,7 +22,6 @@ import {
   publicPropertyIsLeased,
   publicPropertyLookupClient,
 } from '@/lib/listings/public-property-lookup'
-import { publicSlugLookupCandidates } from '@/lib/listings/slug-aliases'
 import { createPublicClient } from '@/lib/supabase/public'
 import { getListingPhotoPathsForProperty } from '@/lib/storage/property-listing-media'
 import { resolveListingGalleryPhotos } from '@/lib/storage/listing-photos'
@@ -36,6 +34,12 @@ export {
   loadPropertyForListingId,
   loadPropertyForPublicSlug,
 } from '@/lib/listings/public-property-lookup'
+
+export {
+  loadPublishedListingById,
+  loadPublishedListingBySlug,
+  loadPublishedListingForProperty,
+} from '@/lib/listings/load-published-listing'
 
 function listingCardCopyFromLanding() {
   const cardCopy = getLandingCopy('en')
@@ -106,64 +110,6 @@ export async function renderPublishedListingPage(opts: {
       />
     </>
   )
-}
-
-export async function loadPublishedListingBySlug(
-  orgId: string,
-  slug: string,
-): Promise<ListingDetailListing | null> {
-  const supabase = createPublicClient()
-  const { data } = await supabase
-    .from('listings')
-    .select(LISTING_DETAIL_SELECT)
-    .eq('org_id', orgId)
-    .eq('status', 'published')
-    .in('slug', publicSlugLookupCandidates(slug))
-  const rows = (data as ListingDetailListing[] | null) ?? []
-  const exact = rows.find((row) => row.slug === slug)
-  return exact ?? rows[0] ?? null
-}
-
-export async function loadPublishedListingById(
-  orgId: string,
-  id: string,
-): Promise<ListingDetailListing | null> {
-  const supabase = createPublicClient()
-  const { data } = await supabase
-    .from('listings')
-    .select(LISTING_DETAIL_SELECT)
-    .eq('id', id)
-    .eq('org_id', orgId)
-    .eq('status', 'published')
-    .maybeSingle()
-  return (data as ListingDetailListing | null) ?? null
-}
-
-export async function loadPublishedListingForProperty(
-  orgId: string,
-  propertyId: string,
-): Promise<ListingDetailListing | null> {
-  const supabase = createPublicClient()
-  const { data: units } = await supabase
-    .from('units')
-    .select('id')
-    .eq('property_id', propertyId)
-    .eq('org_id', orgId)
-
-  const unitIds = (units ?? []).map((u) => u.id)
-  if (!unitIds.length) return null
-
-  const { data } = await supabase
-    .from('listings')
-    .select(LISTING_DETAIL_SELECT)
-    .eq('org_id', orgId)
-    .eq('status', 'published')
-    .in('unit_id', unitIds)
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  return (data as ListingDetailListing | null) ?? null
 }
 
 export async function renderPropertyPublicPage(opts: {

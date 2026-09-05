@@ -24,7 +24,13 @@ function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(amount)
 }
 
-function PaymentForm({ monthlyRent, propertyAddress }: RentPaymentFormProps) {
+function PaymentForm({
+  monthlyRent,
+  propertyAddress,
+}: {
+  monthlyRent: number
+  propertyAddress: string
+}) {
   const stripe = useStripe()
   const elements = useElements()
   const [isLoading, setIsLoading] = useState(false)
@@ -88,27 +94,26 @@ function PaymentForm({ monthlyRent, propertyAddress }: RentPaymentFormProps) {
 
 export function RentPaymentForm({ leaseId, monthlyRent, propertyAddress }: RentPaymentFormProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [amountCents, setAmountCents] = useState<number | null>(null)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/stripe/create-payment-intent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        lease_id: leaseId,
-        amount_cents: Math.round(monthlyRent * 100),
-      }),
+      body: JSON.stringify({ lease_id: leaseId }),
     })
       .then((res) => res.json())
-      .then((data: { clientSecret?: string; error?: string }) => {
-        if (data.clientSecret) {
+      .then((data: { clientSecret?: string; amount_cents?: number; error?: string }) => {
+        if (data.clientSecret && typeof data.amount_cents === 'number') {
           setClientSecret(data.clientSecret)
+          setAmountCents(data.amount_cents)
         } else {
           setFetchError(data.error ?? 'Could not initialize payment.')
         }
       })
       .catch(() => setFetchError('Could not connect to payment service.'))
-  }, [leaseId, monthlyRent])
+  }, [leaseId])
 
   if (fetchError) {
     return <div className="cy-portal-alert cy-portal-alert--err">{fetchError}</div>
@@ -127,8 +132,7 @@ export function RentPaymentForm({ leaseId, monthlyRent, propertyAddress }: RentP
   return (
     <Elements stripe={stripePromise} options={{ clientSecret }}>
       <PaymentForm
-        leaseId={leaseId}
-        monthlyRent={monthlyRent}
+        monthlyRent={amountCents != null ? amountCents / 100 : monthlyRent}
         propertyAddress={propertyAddress}
       />
     </Elements>

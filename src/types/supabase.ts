@@ -2476,7 +2476,45 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      public_organizations: {
+        Row: {
+          id: string
+          logo_path: string | null
+          name: string
+          province: string
+          slug: string
+        }
+        Relationships: []
+      }
+      public_properties: {
+        Row: {
+          city: string
+          id: string
+          listing_brief: Json
+          org_id: string
+          photo_paths: string[] | null
+          property_type: Database["public"]["Enums"]["property_type_enum"]
+          province: string
+          slug: string | null
+          street_address: string
+        }
+        Relationships: []
+      }
+      public_units: {
+        Row: {
+          amenities: string[] | null
+          asking_rent: number | null
+          bathrooms: number
+          bedrooms: number
+          hospitable_property_id: string | null
+          hospitable_widget_property_id: string | null
+          id: string
+          property_id: string | null
+          sq_footage: number | null
+          status: string
+        }
+        Relationships: []
+      }
     }
     Functions: {
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }

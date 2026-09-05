@@ -17,6 +17,7 @@ type ListingFlat = {
   display_rent: number | null
   highlights: string[] | null
   available_from: string | null
+  status?: string | null
   created_at: string
   unit_id: string | null
 }
@@ -42,8 +43,8 @@ type PropertyFlat = {
 
 /**
  * Same published inventory the landing page cards use.
- * Fetches listings, then units, then properties as separate queries so an
- * embed/RLS failure on properties cannot hide the listings themselves.
+ * Uses public_units / public_properties so column-level grants cannot hide
+ * homes, then signs covers with the service-role lookup.
  */
 export async function getPublishedListings(
   orgSlug = process.env.NEXT_PUBLIC_DEFAULT_ORG_SLUG ?? 'canary'
@@ -56,7 +57,7 @@ export async function getPublishedListings(
   const { data: listingRows, error: listingError } = await supabase
     .from('listings')
     .select(
-      'id, slug, listing_title, listing_description, display_rent, highlights, available_from, created_at, unit_id',
+      'id, slug, listing_title, listing_description, display_rent, highlights, available_from, status, created_at, unit_id',
     )
     .eq('status', 'published')
     .eq('org_id', org.id)
@@ -68,14 +69,18 @@ export async function getPublishedListings(
   const listings = (listingRows ?? []) as ListingFlat[]
   if (listings.length === 0) return []
 
-  const unitIds = listings
-    .map((row) => row.unit_id)
-    .filter((id): id is string => !!id)
+  const unitIds = [
+    ...new Set(
+      listings
+        .map((row) => row.unit_id)
+        .filter((id): id is string => !!id),
+    ),
+  ]
 
   const unitsById = new Map<string, UnitFlat>()
   if (unitIds.length > 0) {
     const { data: unitRows, error: unitError } = await supabase
-      .from('units')
+      .from('public_units')
       .select('id, bedrooms, bathrooms, asking_rent, amenities, property_id')
       .in('id', unitIds)
     if (unitError) {
@@ -95,7 +100,7 @@ export async function getPublishedListings(
   const propertiesById = new Map<string, PropertyFlat>()
   if (propertyIds.length > 0) {
     const { data: propertyRows, error: propertyError } = await supabase
-      .from('properties')
+      .from('public_properties')
       .select('id, street_address, city, province, photo_paths, listing_brief, property_type')
       .in('id', propertyIds)
     if (propertyError) {

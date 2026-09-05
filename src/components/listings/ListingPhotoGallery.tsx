@@ -433,7 +433,18 @@ export function ListingPhotoGallery({
               if (target.closest('a, button')) e.stopPropagation()
             }}
           >
-            <div style={{ pointerEvents: 'auto', display: 'inline-flex' }}>{topBar}</div>
+            <div
+              style={{
+                pointerEvents: 'auto',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 12,
+                width: '100%',
+              }}
+            >
+              {topBar}
+            </div>
           </div>
         ) : null}
         <div

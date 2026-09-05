@@ -1,4 +1,4 @@
-import { createPublicClient } from '@/lib/supabase/public'
+import { publicPropertyLookupClient } from '@/lib/listings/public-property-lookup'
 import { unstable_noStore as noStore } from 'next/cache'
 import { getOrgBySlug } from '@/lib/orgs'
 import {
@@ -7,8 +7,45 @@ import {
 } from '@/lib/listings/browse-utils'
 import type { BrowseListing } from '@/lib/listings/browse-types'
 import { getListingPhotoPathsByPropertyIds } from '@/lib/storage/property-listing-media'
-import { signListingPhotoPaths } from '@/lib/storage/listing-photos'
+import { signOrgAssetPaths } from '@/lib/storage/listing-photos'
 
+type ListingFlat = {
+  id: string
+  slug: string | null
+  listing_title: string
+  listing_description: string | null
+  display_rent: number | null
+  highlights: string[] | null
+  available_from: string | null
+  status?: string | null
+  created_at: string
+  unit_id: string | null
+}
+
+type UnitFlat = {
+  id: string
+  bedrooms: number
+  bathrooms: number
+  asking_rent: number | null
+  amenities: string[] | null
+  property_id: string | null
+}
+
+type PropertyFlat = {
+  id: string
+  street_address: string
+  city: string
+  province: string
+  photo_paths: string[] | null
+  listing_brief: unknown
+  property_type: string | null
+}
+
+/**
+ * Same published inventory the landing page cards use.
+ * Uses public_units / public_properties so column-level grants cannot hide
+ * homes, then signs covers with the service-role lookup.
+ */
 export async function getPublishedListings(
   orgSlug = process.env.NEXT_PUBLIC_DEFAULT_ORG_SLUG ?? 'canary'
 ): Promise<BrowseListing[]> {
@@ -16,11 +53,11 @@ export async function getPublishedListings(
   const org = await getOrgBySlug(orgSlug)
   if (!org) return []
 
-  const supabase = createPublicClient()
-  const { data: listings, error: listingsError } = await supabase
+  const supabase = publicPropertyLookupClient()
+  const { data: listingRows, error: listingError } = await supabase
     .from('listings')
     .select(
-      `id, slug, listing_title, listing_description, display_rent, highlights, available_from, status, created_at, unit_id`,
+      'id, slug, listing_title, listing_description, display_rent, highlights, available_from, status, created_at, unit_id',
     )
     .eq('status', 'published')
     .eq('org_id', org.id)
@@ -91,7 +128,10 @@ export async function getPublishedListings(
     }
   })
 
-  const pathsByProperty = await getListingPhotoPathsByPropertyIds(propertyIds)
+  const pathsByProperty = await getListingPhotoPathsByPropertyIds(
+    resolvedPropertyIds,
+    supabase,
+  )
 
   const pathLists = rows.map((row) => {
     const propertyId = row.units?.properties?.id
@@ -102,9 +142,13 @@ export async function getPublishedListings(
     return (fromMedia?.length ? fromMedia : fromLegacy) as string[]
   })
 
-  // Sign only covers on initial load — remaining gallery URLs load on first carousel click.
   const coverPaths = pathLists.map((paths) => paths[0] ?? '')
-  const signedCovers = await signListingPhotoPaths(coverPaths, 'preview')
+  const signedCovers = await signOrgAssetPaths(
+    coverPaths,
+    supabase,
+    'getPublishedListings',
+    'preview',
+  )
 
   const orgQuery = orgSlug ? `?org=${orgSlug}` : ''
 

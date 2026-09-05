@@ -27,6 +27,7 @@ describe('isReservedListingSlug', () => {
   it('flags reserved path segments', () => {
     expect(isReservedListingSlug('login')).toBe(true)
     expect(isReservedListingSlug('property')).toBe(true)
+    expect(isReservedListingSlug('rentals')).toBe(true)
   })
 
   it('allows address-like slugs', () => {

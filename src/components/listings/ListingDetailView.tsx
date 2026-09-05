@@ -5,11 +5,15 @@ import { HospitableDirectBookingWidget } from '@/components/listings/HospitableD
 import { ListingPhotoGallery } from '@/components/listings/ListingPhotoGallery'
 import { SimilarListingsSection } from '@/components/landing/SimilarListingsCarousel'
 import { PublicHeader } from '@/components/public/PublicHeader'
+import { StaffEditDetailsLink } from '@/components/listings/StaffEditDetailsLink'
+import { staffListingEditHref } from '@/lib/listings/staff-public-edit'
 import { fontDisplay } from '@/lib/landing/typography'
 import type { CityGroup } from '@/lib/listings/browse-types'
 import { publicListingAmenityTags, resolveParkingDisplay } from '@/lib/listings/browse-utils'
 import { formatListingLeaseEnd } from '@/lib/listings/public-property-page'
 import { deriveTermTypeFromHighlights } from '@/lib/landing/listing-term'
+import { bedsGroupPath, citySlugFromName } from '@/lib/listing-groups/city'
+import { rentalsHref } from '@/lib/listing-groups/types'
 
 function formatCAD(n: number) {
   return new Intl.NumberFormat('en-CA', {
@@ -46,6 +50,7 @@ export type ListingDetailListing = {
       province: string
       photo_paths: string[] | null
       listing_brief?: unknown
+      property_type?: string | null
     } | null
   } | null
 }
@@ -126,7 +131,14 @@ export function ListingDetailView({
   const heroAddress = [streetLine, cityLine, provinceLine].filter(Boolean).join(', ')
   const fullAddress = heroAddress || listing.listing_title
 
-  const homesHref = orgSlug && orgSlug !== 'canary' ? `/?org=${orgSlug}#homes` : '/#homes'
+  const rentalsIndexHref = rentalsHref('', orgSlug)
+  const citySlug = citySlugFromName(city)
+  const cityHubHref = citySlug ? rentalsHref(citySlug, orgSlug) : null
+  const beds = typeof unit?.bedrooms === 'number' ? unit.bedrooms : null
+  const bedsHubHref =
+    beds != null && beds > 0
+      ? rentalsHref(citySlug === 'st-johns' ? `st-johns/${bedsGroupPath(beds)}` : bedsGroupPath(beds), orgSlug)
+      : null
 
   const availableLabel = listing.available_from
     ? new Date(listing.available_from).toLocaleDateString('en-CA', {
@@ -174,20 +186,26 @@ export function ListingDetailView({
         fullPhotos={listingPhotosFull}
         title={listing.listing_title}
         topBar={
-          <Link
-            href={homesHref}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              textDecoration: 'none',
-              color: 'rgba(244,239,230,.85)',
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
-            ← All available homes
-          </Link>
+          <>
+            <Link
+              href={rentalsIndexHref}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                textDecoration: 'none',
+                color: 'rgba(244,239,230,.85)',
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
+              ← All available homes
+            </Link>
+            <StaffEditDetailsLink
+              href={staffListingEditHref(listing.id)}
+              orgId={listing.org_id}
+            />
+          </>
         }
       >
         <p className="cpub-stat-pill cpub-listing-hero-eyebrow">
@@ -258,6 +276,25 @@ export function ListingDetailView({
           overflowX: 'clip',
         }}
       >
+        <nav aria-label="Breadcrumb" style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--dim)' }}>
+          <Link href="/" style={{ color: 'var(--dim)' }}>Home</Link>
+          {' / '}
+          <Link href={rentalsIndexHref} style={{ color: 'var(--dim)' }}>Rentals</Link>
+          {cityHubHref && city ? (
+            <>
+              {' / '}
+              <Link href={cityHubHref} style={{ color: 'var(--dim)' }}>{city}</Link>
+            </>
+          ) : null}
+          {bedsHubHref && beds != null ? (
+            <>
+              {' / '}
+              <Link href={bedsHubHref} style={{ color: 'var(--dim)' }}>
+                {beds >= 3 ? '3+ bedroom' : `${beds} bedroom`}
+              </Link>
+            </>
+          ) : null}
+        </nav>
         <div
           style={{
             display: 'grid',

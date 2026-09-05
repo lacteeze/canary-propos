@@ -517,6 +517,9 @@ export function LandingPage({ listings, stays, totalHomes, staysHref, staysCtaHr
       <section id="homes" data-screen-label="Available homes" style={{ maxWidth: 1380, margin: '0 auto', padding: '96px clamp(16px, 4vw, 26px) 30px', width: '100%', minWidth: 0 }}>
         <div style={{ marginBottom: 8 }}>
           <h2 style={{ margin: 0, fontSize: 'clamp(30px, 4.4vw, 54px)', fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.05 }}>{copy.tHomes1} <em style={displayAccentStyle}>{copy.tHomes2}</em></h2>
+          <a href="/rentals" style={{ display: 'inline-block', marginTop: 10, color: 'var(--accent)', fontWeight: 600, fontSize: 14.5 }}>
+            Browse all rentals
+          </a>
         </div>
         <LandingHomesBrowse
           listings={listings}

@@ -1,4 +1,5 @@
 import { deriveTermTypeFromHighlights } from '@/lib/landing/listing-term'
+import { cityFromStreetAddress } from '@/lib/listing-groups/city'
 import { listingPublicHref } from '@/lib/listings/listing-href'
 import { parseListingBrief } from '@/lib/listings/listing-brief'
 import { listingMatchesAddressQuery } from '@/lib/listings/slug-aliases'
@@ -349,6 +350,7 @@ export type ListingRow = {
       province: string
       photo_paths: string[] | null
       listing_brief?: unknown
+      property_type?: string | null
     } | null
   } | null
 }
@@ -370,11 +372,17 @@ export function mapListingRow(
     property?.listing_brief &&
     typeof property.listing_brief === 'object' &&
     !Array.isArray(property.listing_brief)
-      ? (property.listing_brief as { parking?: unknown; pets?: unknown; utilities?: unknown })
+      ? (property.listing_brief as {
+          parking?: unknown
+          pets?: unknown
+          utilities?: unknown
+          neighborhood?: unknown
+        })
       : null
   const briefParking = brief ? String(brief.parking ?? '') : ''
   const briefPets = brief ? String(brief.pets ?? '').trim() : ''
   const briefUtilities = brief ? String(brief.utilities ?? '').trim() : ''
+  const briefNeighborhood = brief ? String(brief.neighborhood ?? '').trim() : ''
   const briefPetsActive = Boolean(briefPets && !/^no pets$/i.test(briefPets))
   const label = resolvePetLabel({
     briefPets,
@@ -425,7 +433,11 @@ export function mapListingRow(
     id: listing.id,
     href: listingPublicHref({ id: listing.id, slug: listing.slug }, orgQuery),
     shortAddress: shortAddress(property?.street_address ?? listing.listing_title),
-    city: property?.city ?? "St. John's",
+    city:
+      property?.city ||
+      cityFromStreetAddress(property?.street_address) ||
+      cityFromStreetAddress(listing.listing_title) ||
+      "St. John's",
     province: property?.province ?? 'NL',
     rentN,
     rentFormatted: rentN ? formatCAD(rentN) : '—',
@@ -447,6 +459,9 @@ export function mapListingRow(
     photoCount: photos.length,
     createdAt: listing.created_at,
     availableFrom: listing.available_from,
+    streetAddress: property?.street_address ?? shortAddress(property?.street_address ?? listing.listing_title),
+    propertyType: property?.property_type ?? null,
+    neighborhood: briefNeighborhood || null,
   }
 }
 
